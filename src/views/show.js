@@ -41,7 +41,7 @@ export function renderShow(ctx, showId) {
       screen,
       el('div.section', null, [
         sectionHead('Setlist', el('span.badge.badge-set', { text: showStructure(index, show.show_id) || '' })),
-        el('div.card', null, setlistBlock(rows, { onSong: (id) => navigate(`#/song/${id}`) })),
+        el('div.card', null, setlistBlock(rows, { index, onSong: (id) => navigate(`#/song/${id}`) })),
       ]),
     );
   } else {

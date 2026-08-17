@@ -393,6 +393,14 @@ export function buildIndex(raw) {
       songs: songList.length,
       venues: venues.length,
       jamcharts: jamcharts.length,
+
+      // Full accounting for the gap denominator, so the Data panel can state
+      // it from live values rather than hardcoded numbers. Excluding shows
+      // with no setlist is a counting CONVENTION, not a cleanup detail: it
+      // makes every gap smaller than a convention counting all shows.
+      excludedNoSetlist: playedShows.filter((s) => !showsWithSetlists.has(Number(s.show_id))).length,
+      excludedFuture: futureShows.length,
+      excludedBadDate: shows.filter((s) => !/^(19|20)\d\d-/.test(String(s.showdate))).length,
     },
     newestShowdate: countedShows.length ? countedShows[countedShows.length - 1].showdate : null,
   };

@@ -208,6 +208,7 @@ a {
   display: flex;
   align-items: center;
   min-width: 0;
+  position: relative;
 }
 
 /* `min-width: 0` on both the shell and the row is load-bearing: a flex item's
@@ -280,15 +281,55 @@ a {
 
 /* Gap magnitude: opacity of ONE hue, never a rainbow. A multi-hue scale would
    imply thresholds the data does not have, and thresholds edge toward
-   prediction. */
+   prediction.
+
+   The figure is its own tap target so the number can explain how it was
+   counted -- a bare figure invites the reader to invent a meaning for it. */
 .gap-figure {
   flex: none;
   min-width: 58px;
+  min-height: var(--tap);
+  padding: var(--s-1) 0 var(--s-1) var(--s-2);
   text-align: right;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  justify-content: center;
   gap: 1px;
+}
+
+button.gap-figure:active {
+  background: var(--surface-up);
+  border-radius: var(--r-cell);
+}
+
+/* A quiet inline affordance: underlined, so it reads as tappable without
+   competing with yolk, which is reserved for the data itself. */
+.inline-link {
+  display: inline;
+  padding: 0;
+  color: var(--ink-dim);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--ink-faint);
+  font: inherit;
+  font-size: inherit;
+}
+.inline-link:active {
+  color: var(--yolk);
+}
+
+.stat-tappable {
+  text-align: left;
+  width: 100%;
+  display: block;
+}
+.stat-tappable:active {
+  background: var(--surface-up);
+}
+.stat-tappable .stat-label::after {
+  content: " ⓘ";
+  color: var(--ink-faint);
 }
 
 .gap-num {
@@ -359,7 +400,7 @@ a {
 .pick-btn[aria-pressed="true"] {
   color: var(--yolk);
 }
-.row-shell:has(.row[data-picked="true"]) {
+.row-shell[data-picked="true"] {
   background: var(--yolk-wash);
 }
 

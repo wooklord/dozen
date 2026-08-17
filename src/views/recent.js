@@ -54,6 +54,7 @@ export function renderRecent(ctx) {
             ],
           ),
           el('div', { style: { marginTop: '12px' } }, setlistBlock(rows, {
+            index,
             onSong: (id) => navigate(`#/song/${id}`),
           })),
           el('div', { style: { marginTop: '4px' } }, cartonLink(showPermalink(show), 'View on The Carton')),

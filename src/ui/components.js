@@ -30,6 +30,102 @@ export function venuePermalink(venue) {
 }
 
 /**
+ * How gap is counted, reachable from any gap figure in the app.
+ *
+ * Two things a reader needs and cannot infer from the number itself:
+ * what the denominator is, and why our figure can disagree with the gap
+ * quoted in one of Carton's own footnotes. Both are statements of method --
+ * this does not argue that our number is better.
+ *
+ * @param {object} index  live index, so counts are never hardcoded
+ * @param {boolean} withFootnoteNote  include the static-footnote explanation
+ */
+export function openGapExplainer(index, { withFootnoteNote = true } = {}) {
+  const c = index.counts;
+  return openSheet('How gap is counted', () =>
+    el('div', { style: { display: 'grid', gap: '12px' } }, [
+      el('p', { style: { margin: 0, fontSize: 'var(--t-sm)' } }, [
+        'Gap is the number of shows since a song was last played, counted across the ',
+        el('strong', { text: `${c.countedShows} shows` }),
+        ' in the archive that have a setlist recorded. 0 means it was played at the most recent show.',
+      ]),
+      el('div.card', null, [
+        el('div.section-title', { style: { marginBottom: '6px' }, text: 'The denominator' }),
+        el(
+          'ul.fn-list',
+          { style: { margin: 0 } },
+          [
+            [`${c.shows}`, 'shows in the archive'],
+            [`${c.countedShows}`, 'have a setlist recorded — these are counted'],
+            [`${c.excludedNoSetlist}`, 'were played but have no setlist recorded — not counted'],
+            [`${c.excludedFuture}`, 'are upcoming — not counted'],
+          ].map(([n, label]) =>
+            el('li', null, [
+              el('span.num', { style: { color: 'var(--yolk)', fontWeight: '700', minWidth: '38px' }, text: n }),
+              el('span', { text: label }),
+            ]),
+          ),
+        ),
+        el('p.note', {
+          style: { marginTop: '8px', marginBottom: 0 },
+          text:
+            'A show with no recorded setlist cannot establish that a song went unplayed, so counting ' +
+            'it would inflate every gap spanning it. This makes gap figures here smaller than a ' +
+            'count that included every show.',
+        }),
+        c.excludedBadDate
+          ? el('p.note', {
+              style: { marginTop: '6px', marginBottom: 0 },
+              text: `${c.excludedBadDate} of the uncounted shows has a corrupt date in the source data and has no setlist either.`,
+            })
+          : null,
+      ]),
+      withFootnoteNote
+        ? el('div.card', null, [
+            el('div.section-title', { style: { marginBottom: '6px' }, text: "The Carton's own gap notes" }),
+            el('p', {
+              style: { margin: 0, fontSize: 'var(--t-sm)', color: 'var(--ink-dim)' },
+              text:
+                'Setlist footnotes on The Carton sometimes quote a gap, like “LTP 3/7/2021 (111 show gap)”. ' +
+                'Those are written at publication time against the archive as it stood then, and shows have ' +
+                'been added since. That is why a footnote and the figure here can differ and both be right — ' +
+                'they describe different moments. Footnote text is shown exactly as The Carton wrote it.',
+            }),
+          ])
+        : null,
+    ]),
+  );
+}
+
+/** A gap figure that opens the explainer when tapped. */
+export function gapFigure(value, unit, index, { accent = true } = {}) {
+  return el(
+    'button.gap-figure',
+    {
+      type: 'button',
+      'aria-label': `${value === null ? 'no' : value} ${unit}. How gap is counted`,
+      onclick: (e) => {
+        e.stopPropagation();
+        openGapExplainer(index);
+      },
+    },
+    [
+      el(`div.gap-num${accent ? '' : '.plain'}.num`, { text: value === null ? '—' : String(value) }),
+      el('div.gap-unit', { text: unit }),
+    ],
+  );
+}
+
+/** Small inline affordance for screens that describe gap in prose. */
+export function gapExplainerLink(index, label = 'How gap is counted') {
+  return el('button.inline-link', {
+    type: 'button',
+    text: label,
+    onclick: () => openGapExplainer(index),
+  });
+}
+
+/**
  * Heat: opacity of one hue, scaled against the largest gap on screen.
  * Deliberately NOT a multi-hue scale -- that would imply thresholds the data
  * does not have, and thresholds edge toward prediction.
@@ -43,7 +139,7 @@ function heatFor(gap, maxGap) {
  * A song row. `figure` chooses which number sits on the right.
  * Every label describes what HAS happened -- never what will.
  */
-export function songRow(song, { figure = 'gap', maxGap = 1, onOpen } = {}) {
+export function songRow(song, { figure = 'gap', maxGap = 1, onOpen, index } = {}) {
   const picked = isPicked(song.song_id);
 
   let value;
@@ -88,7 +184,7 @@ export function songRow(song, { figure = 'gap', maxGap = 1, onOpen } = {}) {
         togglePick(song);
         const now = isPicked(song.song_id);
         pickBtn.setAttribute('aria-pressed', String(now));
-        row.dataset.picked = String(now);
+        shell.dataset.picked = String(now);
         window.dispatchEvent(new CustomEvent('dozen:picks-changed'));
       },
     },
@@ -102,22 +198,56 @@ export function songRow(song, { figure = 'gap', maxGap = 1, onOpen } = {}) {
       'data-picked': String(picked),
       onclick: () => onOpen?.(song),
     },
-    [
-      el('span.gap-bar', {
-        style: { '--heat': String(heatFor(value, maxGap)) },
-      }),
-      el('div.row-main', null, [
-        el('div.row-title', { text: song.name }),
-        meta,
-      ]),
-      el('div.gap-figure', null, [
-        el('div.gap-num.num', { text: value === null ? '—' : String(value) }),
-        el('div.gap-unit', { text: unit }),
-      ]),
-    ],
+    [el('div.row-main', null, [el('div.row-title', { text: song.name }), meta])],
   );
 
-  return el('li', null, [el('div.row-shell', null, [row, pickBtn])]);
+  // The gap figure is a SIBLING of the row button, not a child: a button
+  // cannot legally nest inside another button, and the figure needs its own
+  // tap target so it can explain how the number was counted.
+  const figureNode = index
+    ? gapFigure(value, unit, index)
+    : el('div.gap-figure', null, [
+        el('div.gap-num.num', { text: value === null ? '—' : String(value) }),
+        el('div.gap-unit', { text: unit }),
+      ]);
+
+  const shell = el('div.row-shell', { 'data-picked': String(picked) }, [
+    el('span.gap-bar', { style: { '--heat': String(heatFor(value, maxGap)) } }),
+    row,
+    figureNode,
+    pickBtn,
+  ]);
+
+  return el('li', null, [shell]);
+}
+
+/**
+ * A footnote, quoted exactly as The Carton wrote it.
+ *
+ * When the footnote quotes a gap or an LTP date, it sits right next to our own
+ * gap figures, so the explanation for why the two can differ has to be
+ * reachable from here rather than only from the gap column.
+ */
+export function openFootnote(text, index) {
+  const quotesGap = /LTP|show gap/i.test(text);
+  return openSheet('Footnote', () =>
+    el('div', { style: { display: 'grid', gap: '12px' } }, [
+      el('p', { text, style: { margin: 0 } }),
+      el('p.note', { style: { margin: 0 }, text: 'Shown exactly as written on The Carton.' }),
+      quotesGap && index
+        ? el('div', null, [
+            el('p.note', {
+              style: { marginBottom: '6px' },
+              text:
+                'This note quotes a gap recorded when the setlist was published. Shows have been ' +
+                'added to the archive since, so it can differ from the figure shown elsewhere in ' +
+                'this app — both are right about different moments.',
+            }),
+            gapExplainerLink(index),
+          ])
+        : null,
+    ]),
+  );
 }
 
 /**
@@ -127,7 +257,7 @@ export function songRow(song, { figure = 'gap', maxGap = 1, onOpen } = {}) {
  * and both survive to the screen. Footnotes become tappable markers rather than
  * inline clutter -- hover does not exist on a phone.
  */
-export function setlistBlock(rows, { onSong } = {}) {
+export function setlistBlock(rows, { onSong, index } = {}) {
   const wrap = el('div');
   const footnotes = [];
 
@@ -171,8 +301,7 @@ export function setlistBlock(rows, { onSong } = {}) {
               type: 'button',
               text: String(idx),
               'aria-label': `Footnote ${idx}`,
-              onclick: () =>
-                openSheet('Footnote', () => el('p', { text: n, style: { margin: 0 } })),
+              onclick: () => openFootnote(n, index),
             }),
           );
         }

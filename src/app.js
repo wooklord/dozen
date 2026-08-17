@@ -7,6 +7,7 @@ import { readArchive, writeArchive, isStale, cacheAge, mergeYear } from './data/
 import { buildIndex } from './data/index.js';
 import { formatAge, localYear } from './util/dates.js';
 import { count as pickCount } from './scratchpad.js';
+import { openGapExplainer } from './ui/components.js';
 
 import { renderUpcoming } from './views/upcoming.js';
 import { renderGap } from './views/gap.js';
@@ -210,6 +211,31 @@ function openCacheSheet() {
           'The quick refresh pulls only the current year. The Carton sometimes edits older ' +
           'setlists after the fact — a full rebuild is the only way to pick those up.',
       }),
+
+      // How gap is counted, stated plainly in a persistent panel. Excluding
+      // shows with no setlist is a convention that makes every gap figure
+      // smaller than one counting all shows, so it is stated, not buried.
+      el('div.card', null, [
+        el('div.section-title', { style: { marginBottom: '6px' }, text: 'How gap is counted' }),
+        el('p', {
+          style: { margin: '0 0 8px', fontSize: 'var(--t-sm)' },
+          text:
+            `Gap is counted across the ${i?.counts.countedShows ?? 0} shows that have setlist data. ` +
+            `${i?.counts.excludedNoSetlist ?? 0} shows in the archive were played but have no setlist ` +
+            `recorded and are not counted; ${i?.counts.excludedFuture ?? 0} upcoming shows are not counted either.`,
+        }),
+        i?.counts.excludedBadDate
+          ? el('p.note', {
+              style: { margin: '0 0 8px' },
+              text: `${i.counts.excludedBadDate} of the uncounted shows also has a corrupt date in The Carton's data.`,
+            })
+          : null,
+        el(
+          'button.btn.btn-block',
+          { type: 'button', onclick: () => { close(); openGapExplainer(app.index); } },
+          'More on gap',
+        ),
+      ]),
       el(
         'button.btn.btn-block',
         {

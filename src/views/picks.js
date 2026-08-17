@@ -4,7 +4,7 @@
 // localStorage and leaves this device only when the user copies it themselves.
 
 import { el, append, icon, ICONS, openSheet } from '../ui/dom.js';
-import { attribution, emptyState, sectionHead } from '../ui/components.js';
+import { attribution, emptyState, sectionHead, openGapExplainer } from '../ui/components.js';
 import { getPicks, removePick, reorder, clearPicks, asPlainText, copyToClipboard } from '../scratchpad.js';
 import { formatShowDateShort } from '../util/dates.js';
 
@@ -50,11 +50,14 @@ export function renderPicks(ctx) {
             el('div.row-title', { text: p.name }),
             song
               ? el('div.row-meta', null, [
-                  el('span', {
+                  el('button.inline-link', {
+                    type: 'button',
+                    'aria-label': 'How gap is counted',
                     text:
                       song.showsSinceLastPlayed === null
                         ? 'Never played'
                         : `${song.showsSinceLastPlayed} shows since last`,
+                    onclick: () => openGapExplainer(index),
                   }),
                   song.lastPlayed
                     ? el('span', { text: `· ${formatShowDateShort(song.lastPlayed)}` })

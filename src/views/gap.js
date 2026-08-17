@@ -8,7 +8,7 @@
 // test in CLAUDE.md.
 
 import { el, append, debounce } from '../ui/dom.js';
-import { songRow, attribution, emptyState } from '../ui/components.js';
+import { songRow, attribution, emptyState, gapExplainerLink } from '../ui/components.js';
 import { normalizeQuery } from '../data/normalize.js';
 
 const state = {
@@ -24,10 +24,10 @@ export function renderGap(ctx) {
   append(screen, el('h1.screen-title', { text: 'Rotation' }));
   append(
     screen,
-    el('p.screen-sub', {
-      text: 'Shows since each song was last played, counted across the ' +
-        `${index.counts.countedShows} shows that have setlist data.`,
-    }),
+    el('p.screen-sub', null, [
+      `Shows since each song was last played, counted across the ${index.counts.countedShows} shows that have setlist data. `,
+      gapExplainerLink(index, 'How this is counted'),
+    ]),
   );
 
   const listWrap = el('ul.rows');
@@ -124,7 +124,15 @@ export function renderGap(ctx) {
       return;
     }
     for (const s of songs) {
-      append(listWrap, songRow(s, { figure: 'gap', maxGap, onOpen: (song) => navigate(`#/song/${song.song_id}`) }));
+      append(
+        listWrap,
+        songRow(s, {
+          figure: 'gap',
+          maxGap,
+          index,
+          onOpen: (song) => navigate(`#/song/${song.song_id}`),
+        }),
+      );
     }
   }
 

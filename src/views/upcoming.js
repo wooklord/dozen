@@ -202,6 +202,7 @@ export function renderUpcoming(ctx) {
           text: formatShowDate(lastAtVenue.showdate),
         }),
         setlistBlock(index.setlistByShow.get(Number(lastAtVenue.show_id)) || [], {
+          index,
           onSong: (id) => navigate(`#/song/${id}`),
         }),
       ]),
@@ -229,6 +230,7 @@ export function renderUpcoming(ctx) {
           ]),
           el('div.note', { style: { marginBottom: '8px' }, text: `${s.venuename} · ${s.location}` }),
           setlistBlock(index.setlistByShow.get(Number(s.show_id)) || [], {
+            index,
             onSong: (id) => navigate(`#/song/${id}`),
           }),
         ]),

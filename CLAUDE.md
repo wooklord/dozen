@@ -68,6 +68,37 @@ The API sends `Access-Control-Allow-Origin: *` on `/api/v2/*`. Consequences that
   "view as Carton renders it" escape hatch only via an `<iframe>` or a plain link-out — never
   `fetch()`. Prefer structured data regardless; this is a fallback, not a data source.
 
+### Transfer size: wire vs parsed (measured 2026-08-17)
+
+**The archive is not 5 MB on the wire. It is about 400 KB.** The API serves compressed, and JSON
+of this shape compresses ~13x. Both numbers are recorded because they are different costs: the
+wire number is what a phone downloads, the parsed number is what has to fit in memory and
+IndexedDB.
+
+| Pull | Wire (gzip) | Parsed | Ratio |
+|---|---|---|---|
+| `setlists?limit=20000` | **403 KB** | 5343 KB | 13.3× |
+| `jamcharts` | 131 KB | 628 KB | 4.8× |
+| `shows` | 52 KB | 445 KB | 8.6× |
+| `venues` | 13 KB | 70 KB | 5.2× |
+| `songs` | 13 KB | 62 KB | 4.8× |
+| **Cold pull (5 requests)** | **0.60 MB** | **6.39 MB** | 10.7× |
+| Verification pass (14 requests) | 0.40 MB | 5.22 MB | — |
+| **Total cold start** | **1.00 MB** | 11.61 MB | — |
+
+Brotli is available and better: `Accept-Encoding: br` alone returns **319 KB** for setlists vs
+403 KB for gzip. With a browser-typical `gzip, deflate, br` the server chose gzip, so 403 KB is
+the realistic figure. Uncompressed (`identity`) is 5343 KB — that is the number to quote only when
+talking about memory, never about download.
+
+**The verification pass nearly doubles cold-start wire cost** (0.60 MB → 1.00 MB) because it
+re-pulls the whole archive a year at a time. That is the price of the integrity guarantee and it
+is accepted on full rebuilds only.
+
+**Do not design around a bandwidth problem until it is measured on a real phone.** ~1 MB over
+venue wifi is a different proposition from 5.4 MB, and progressive loading would add real
+complexity to solve something that may not exist.
+
 ### Politeness rules (non-negotiable)
 
 `https://thecarton.net/robots.txt` disallows `/api/` for crawlers (it allows only `/api/docs`).

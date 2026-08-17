@@ -4,7 +4,7 @@
 // ranked by how many jam chart entries they have, which is counting.
 
 import { el, append } from '../ui/dom.js';
-import { attribution, emptyState, cartonLink } from '../ui/components.js';
+import { attribution, emptyState, cartonLink, gapExplainerLink } from '../ui/components.js';
 import { formatShowDateShort } from '../util/dates.js';
 
 export function renderJams(ctx) {
@@ -14,9 +14,10 @@ export function renderJams(ctx) {
   append(screen, el('h1.screen-title', { text: 'Jam charts' }));
   append(
     screen,
-    el('p.screen-sub', {
-      text: `${index.counts.jamcharts} entries across ${index.songs.filter((s) => s.isJamChart).length} songs, as listed by The Carton.`,
-    }),
+    el('p.screen-sub', null, [
+      `${index.counts.jamcharts} entries across ${index.songs.filter((s) => s.isJamChart).length} songs, as listed by The Carton. `,
+      gapExplainerLink(index, 'How gap is counted'),
+    ]),
   );
 
   const songs = index.songs

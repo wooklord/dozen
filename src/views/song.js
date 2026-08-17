@@ -14,6 +14,8 @@ import {
   songPermalink,
   showPermalink,
   statTile,
+  openGapExplainer,
+  gapExplainerLink,
 } from '../ui/components.js';
 import { SLOT_LABELS, SLOTS, setLabel } from '../data/index.js';
 import { formatShowDate, formatShowDateShort } from '../util/dates.js';
@@ -75,15 +77,27 @@ export function renderSong(ctx, songId) {
     screen,
     el('div.section', null, [
       el('div.stat-grid', null, [
-        statTile(song.showsSinceLastPlayed ?? '—', 'shows since last', true),
+        // Tappable: the headline gap figure explains its own denominator.
+        el(
+          'button.stat.stat-tappable',
+          {
+            type: 'button',
+            'aria-label': 'How gap is counted',
+            onclick: () => openGapExplainer(index),
+          },
+          [
+            el('div.stat-value.accent.num', { text: String(song.showsSinceLastPlayed ?? '—') }),
+            el('div.stat-label', { text: 'shows since last' }),
+          ],
+        ),
         statTile(song.timesPlayed, song.timesPlayed === 1 ? 'time played' : 'times played'),
         statTile(song.lastPlayed ? formatShowDateShort(song.lastPlayed) : '—', 'last played'),
         statTile(song.firstPlayed ? formatShowDateShort(song.firstPlayed) : '—', 'first played'),
       ]),
-      el('p.note', {
-        style: { marginTop: '8px' },
-        text: `Gap counted across the ${index.counts.countedShows} shows in the archive that have setlist data.`,
-      }),
+      el('p.note', { style: { marginTop: '8px' } }, [
+        `Gap counted across the ${index.counts.countedShows} shows in the archive that have setlist data. `,
+        gapExplainerLink(index),
+      ]),
     ]),
   );
 

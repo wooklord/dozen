@@ -107,7 +107,7 @@ manifest's `scope` and `start_url` are `/`, assuming a subdomain rather than a `
 **GitHub Pages setup:**
 
 1. Create the repo on GitHub and push (see the checklist at the end of the session notes).
-2. Settings → Pages → Source: *Deploy from a branch*, branch `master`, folder `/ (root)`.
+2. Settings → Pages → Source: *Deploy from a branch*, branch `main`, folder `/ (root)`.
 3. Settings → Pages → Custom domain: `dozen.wooklord.net`. This reads the committed `CNAME`.
 4. Tick **Enforce HTTPS** once the certificate is issued (can take up to an hour).
 
