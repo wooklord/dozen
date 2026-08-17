@@ -16,8 +16,29 @@ Every response has three nodes:
 > **Correction to the published docs:** `error` is a JSON **boolean** (`false` / presumably `true`),
 > **not** the integer `0` / `1` the docs describe. Test it as `if (body.error)`, never `=== 0`.
 
-Failures and typos do **not** produce an HTTP error. A wrong column name or wrong case returns
-`error: false` with an empty `data` array. **Empty data is suspicious. Log the exact URL.**
+### How failures actually present (tested 2026-08-17 — corrects the published docs)
+
+The published docs say typos produce empty `data`. **They do not.** Observed behavior:
+
+| Request | Response |
+|---|---|
+| Valid method, valid column | `application/json`, `error: false`, rows |
+| **Unknown method** (`/v2/zzzz.json`) | **`text/html`** — no JSON envelope at all |
+| **Unknown column** (`/v2/songs/notacolumn/5.json`) | **`text/html`** — no JSON envelope at all |
+| Wrong *case* column (`/v2/songs/SLUG/yuck.json`) | works fine — **column names are case-insensitive** |
+| Valid method, genuinely no rows | `application/json`, `error: false`, `data: []` |
+
+Two consequences for the client:
+
+1. **`await res.json()` throws on a bad method or column** — the body is an HTML error page served
+   with `http=200`. Always check `content-type` is `application/json` before parsing, and report
+   the offending URL. A bare `res.json()` will surface as a confusing `SyntaxError`.
+2. **`error: false` + empty `data` genuinely means "no rows"**, not "you typo'd something." That
+   makes empty data a weaker signal than the docs imply — but still worth logging with the exact
+   URL, because it's how an unpopulated method (see `metadata`) looks.
+
+Note this makes HTTP status useless as a health check: **everything returns 200**, including error
+pages.
 
 ## Query parameters
 
@@ -283,17 +304,28 @@ Note `song_name` here vs `songname` in `setlists` vs `name` in `songs`. Three sp
 `show_id`, `showdate`, `artist_id`, `artist_name`, `person_id`, `personname`, `slug`,
 `appearance_type` (`"Guitar"`), `notes`. Guest sit-ins.
 
-## `metadata` — unavailable
+## `metadata` — real method, zero rows in this instance
 
-Returns `error: false` with **empty data** for every shape tried:
+`/api/docs` describes it as *"display setlist metadata."* It is a genuine, correctly-routed method
+that this Carton instance does not populate. **This was confirmed by control test, not assumed.**
 
 ```
-/v2/metadata.json                        -> 0 rows
-/v2/metadata/1.json                      -> 0 rows
-/v2/metadata/show_id/1633187309.json     -> 0 rows
+/v2/metadata.json                     -> application/json  error:false  0 rows
+/v2/metadata.json?limit=20000         -> application/json  error:false  0 rows
+/v2/metadata/1.json                   -> application/json  error:false  0 rows
+/v2/metadata/show_id/1633187309.json  -> application/json  error:false  0 rows
+/v2/metadata/showdate/2013-02-23.json -> application/json  error:false  0 rows
+/v2/metadata/song_id/71.json          -> application/json  error:false  0 rows
 ```
 
-Documented but unpopulated in this instance. **Do not build on it.**
+The discriminator: an unknown method returns **`text/html`** with no JSON envelope
+(`/v2/metadatas.json`, `/v2/zzzz.json` both do). `metadata` returns a proper JSON envelope, so the
+router recognizes it — the table behind it is simply empty. A misspelling would not have produced
+`error: false` and a `data` array.
+
+**Verdict: not a wrong column name. Nothing to build on, and nothing being missed.** The index does
+not depend on it. If it ever gets populated, it would appear as a non-empty `data` array with no
+code change needed to detect it.
 
 ## `list` — enumeration helper
 

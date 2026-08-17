@@ -119,7 +119,12 @@ and types. Notable corrections to the published docs already captured there:
   Those are computed from `setlists` + show ordering.
 - There is **no `gap` field anywhere.** Gap is computed.
 - `show_tags` exists on `shows` but is **empty on all 804 shows**. There are no show tags.
-- `metadata` returns empty data for every URL shape tried. Treat as unavailable.
+- `metadata` is a real method with **zero rows** in this instance (confirmed by control test, not
+  assumed — an unknown method returns HTML, `metadata` returns a valid JSON envelope). Nothing to
+  build on; nothing being missed.
+- **A bad method or column name returns `text/html`, not empty JSON** — so `await res.json()`
+  throws. Check `content-type` before parsing. Column names are case-insensitive. Everything
+  returns HTTP 200, including error pages, so status is useless as a health check.
 
 ---
 
