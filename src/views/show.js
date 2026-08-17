@@ -32,7 +32,19 @@ export function renderShow(ctx, showId) {
 
   append(screen, el('h1.screen-title', { text: formatShowDate(show.showdate) }));
   append(screen, el('p.screen-sub', { text: `${show.venuename} · ${show.location}` }));
-  append(screen, cartonLink(showPermalink(show)));
+  append(
+    screen,
+    el('div.card-actions', null, [
+      index.setlistByShow.has(Number(show.show_id))
+        ? el(
+            'button.btn.btn-small',
+            { type: 'button', onclick: () => navigate(`#/gapchart/${show.show_id}`) },
+            'Gap chart',
+          )
+        : null,
+      cartonLink(showPermalink(show)),
+    ]),
+  );
 
   const rows = index.setlistByShow.get(Number(show.show_id)) || [];
 

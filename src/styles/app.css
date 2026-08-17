@@ -215,11 +215,15 @@ a {
    automatic minimum size is its content, so without it a long cover credit
    widens the row and shoves the gap figure and pick button past the card edge
    instead of truncating. */
+/* `flex: 1 1 0` rather than `width: 100%`: as a flex item the row must yield
+   space to its siblings (gap figure, pick button). With width:100% it claims
+   the full shell and pushes the figure past the card edge on rows that have no
+   pick button. */
 .row {
   display: flex;
   align-items: center;
   gap: var(--s-3);
-  width: 100%;
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   min-height: var(--tap);
@@ -303,6 +307,12 @@ button.gap-figure:active {
   border-radius: var(--r-cell);
 }
 
+/* When no pick button follows (the per-show gap chart), the figure needs its
+   own right gutter or it sits flush against the card edge. */
+.gap-figure:last-child {
+  padding-right: var(--s-3);
+}
+
 /* A quiet inline affordance: underlined, so it reads as tappable without
    competing with yolk, which is reserved for the data itself. */
 .inline-link {
@@ -323,6 +333,55 @@ button.gap-figure:active {
   text-align: left;
   width: 100%;
   display: block;
+}
+
+/* A full-width stat outside the 2-up grid (longest observed gap). */
+.stat-wide {
+  border: 1px solid var(--line);
+  border-radius: var(--r-cell);
+}
+
+/* Secondary action strip under a card heading. */
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  margin-top: var(--s-2);
+}
+
+.btn-small {
+  min-height: 34px;
+  padding: 0 var(--s-3);
+  font-size: var(--t-sm);
+}
+
+/* Trailing icon action on a row, alongside the row's own navigation. */
+.row-action {
+  flex: none;
+  width: 42px;
+  min-height: var(--tap);
+  display: grid;
+  place-items: center;
+  color: var(--ink-faint);
+  border-radius: var(--r-cell);
+}
+.row-action:active {
+  background: var(--surface-up);
+  color: var(--yolk);
+}
+
+/* Filter row sits under the sort row and reads quieter -- sort is the
+   primary control on the Songs screen. */
+.sortbar-secondary {
+  top: auto;
+  position: static;
+  padding-top: 0;
+  margin-bottom: var(--s-2);
+}
+
+.chip-quiet {
+  font-weight: 500;
 }
 .stat-tappable:active {
   background: var(--surface-up);

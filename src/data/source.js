@@ -121,6 +121,12 @@ export async function fetchJamcharts() {
   return { rows: await fetchJson(url), url };
 }
 
+/** Album membership. Tiny table -- 13 track rows across 5 albums. */
+export async function fetchAlbums() {
+  const url = `${BASE}/albums.json?limit=${FULL_LIMIT}`;
+  return { rows: await fetchJson(url), url };
+}
+
 /**
  * The year list that drives the recount.
  *
@@ -262,6 +268,8 @@ export async function fetchFullArchive({ onProgress, verify = true } = {}) {
   const venues = await fetchVenues();
   step('jam charts');
   const jamcharts = await fetchJamcharts();
+  step('albums');
+  const albums = await fetchAlbums();
 
   const newestShow = shows.rows.reduce((max, r) => (r.showdate > max ? r.showdate : max), '');
 
@@ -299,6 +307,7 @@ export async function fetchFullArchive({ onProgress, verify = true } = {}) {
     songs: songs.rows,
     venues: venues.rows,
     jamcharts: jamcharts.rows,
+    albums: albums.rows,
     newestShow,
     verification,
     fetchedAt: Date.now(),

@@ -139,6 +139,39 @@ short or empty result.
 
 ---
 
+## `.nojekyll` — DO NOT DELETE
+
+The zero-byte `.nojekyll` file in the repo root is **load-bearing**. It has no visible purpose and
+will look like cruft; it is not.
+
+**Symptom without it:** the first GitHub Pages build fails and the site serves **404 at both
+`dozen.wooklord.net` and the `github.io` URL**. Jekyll runs by default on Pages and chokes on
+something in this tree even though there are no underscore-prefixed paths, which is the usual
+explanation. `.nojekyll` disables Jekyll processing entirely and the build succeeds.
+
+If a future cleanup removes it, the whole site 404s. Leave it.
+
+## Carton URL shapes (verified — the wrong prefix 404s)
+
+`permalink` from the API is a **bare filename**, not a path. It needs a section prefix, and the
+wrong prefix returns 404 rather than redirecting. These were shipped broken in 0.1.19 and fixed in
+0.1.20.
+
+| What | Correct | Wrong (404) |
+|---|---|---|
+| Show / setlist | `/setlists/{permalink}` | `/{permalink}` |
+| Per-show gap chart | `/gap-chart/{permalink}` | — |
+| Song | `/song/{slug}` (**singular**) | — |
+| Venue | `/venues/{slug}` (**plural**) | `/venue/{slug}` |
+
+`jamcharts.permalink` is the same bare filename as `shows.permalink` and needs `/setlists/` too.
+Song and venue slugs from the API match the live URLs exactly (verified against the sitemap: 366/366
+songs, 441/441 venues).
+
+**`/gap-chart/` is robots-disallowed — link to it, never fetch it.** The same applies to `/stats/`.
+URL shapes are discoverable from `sitemap-shows.xml`, `sitemap-songs.xml`, `sitemap-venues.xml` and
+`sitemap-pages.xml`, all of which are allowed.
+
 ## Field names
 
 **Do not guess field names anywhere in the code.** Every field the app reads must appear in

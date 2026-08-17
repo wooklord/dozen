@@ -9,7 +9,7 @@
 // Bump CACHE_VERSION whenever shell files change. It is tied to the BUILD
 // marker so a deploy is confirmable from the header.
 
-const CACHE_VERSION = 'dozen-shell-v19';
+const CACHE_VERSION = 'dozen-shell-v21';
 
 const SHELL = [
   './',
@@ -28,7 +28,8 @@ const SHELL = [
   './src/ui/dom.js',
   './src/ui/components.js',
   './src/views/upcoming.js',
-  './src/views/gap.js',
+  './src/views/songs.js',
+  './src/views/gapchart.js',
   './src/views/recent.js',
   './src/views/song.js',
   './src/views/show.js',

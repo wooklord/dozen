@@ -100,6 +100,7 @@ export async function writeArchive(archive) {
     songs: archive.songs,
     venues: archive.venues,
     jamcharts: archive.jamcharts,
+    albums: archive.albums || [],
     fetchedAt: archive.fetchedAt ?? Date.now(),
     fullFetchedAt: archive.fullFetchedAt ?? archive.fetchedAt ?? Date.now(),
     verification: archive.verification ?? null,

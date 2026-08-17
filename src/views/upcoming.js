@@ -201,6 +201,13 @@ export function renderUpcoming(ctx) {
           style: { marginBottom: '10px', fontWeight: '600' },
           text: formatShowDate(lastAtVenue.showdate),
         }),
+        el('div.card-actions', { style: { marginBottom: '10px' } }, [
+          el(
+            'button.btn.btn-small',
+            { type: 'button', onclick: () => navigate(`#/gapchart/${lastAtVenue.show_id}`) },
+            'Gap chart',
+          ),
+        ]),
         setlistBlock(index.setlistByShow.get(Number(lastAtVenue.show_id)) || [], {
           index,
           onSong: (id) => navigate(`#/song/${id}`),
@@ -229,6 +236,13 @@ export function renderUpcoming(ctx) {
             cartonLink(showPermalink(s), 'Carton'),
           ]),
           el('div.note', { style: { marginBottom: '8px' }, text: `${s.venuename} · ${s.location}` }),
+          el('div.card-actions', { style: { marginBottom: '8px' } }, [
+            el(
+              'button.btn.btn-small',
+              { type: 'button', onclick: () => navigate(`#/gapchart/${s.show_id}`) },
+              'Gap chart',
+            ),
+          ]),
           setlistBlock(index.setlistByShow.get(Number(s.show_id)) || [], {
             index,
             onSong: (id) => navigate(`#/song/${id}`),

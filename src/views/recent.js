@@ -57,7 +57,14 @@ export function renderRecent(ctx) {
             index,
             onSong: (id) => navigate(`#/song/${id}`),
           })),
-          el('div', { style: { marginTop: '4px' } }, cartonLink(showPermalink(show), 'View on The Carton')),
+          el('div.card-actions', null, [
+            el(
+              'button.btn.btn-small',
+              { type: 'button', onclick: () => navigate(`#/gapchart/${show.show_id}`) },
+              'Gap chart',
+            ),
+            cartonLink(showPermalink(show), 'View on The Carton'),
+          ]),
         ]),
       ]),
     );

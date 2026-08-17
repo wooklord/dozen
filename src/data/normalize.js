@@ -140,6 +140,33 @@ export function normalizeQuery(input) {
 }
 
 /**
+ * Does a song name match a search query?
+ *
+ * Deterministic, two rules, no relevance scoring and no fuzzy-match library:
+ *
+ *   1. Normalized substring  -- "moments notice" matches "A Moment's Notice"
+ *      (and matches whichever apostrophe was typed, or none at all).
+ *   2. All tokens present    -- every whitespace-separated token of the query
+ *      must appear somewhere in the normalized name, so "shape" finds
+ *      "The Shape I'm In" without leading with the article.
+ *
+ * Callers order results by the user's chosen sort, never by match quality --
+ * a hidden ranking would be a judgement the user did not ask for.
+ *
+ * @param {string} songkey  pre-normalized song name (from the index)
+ * @param {string} queryKey pre-normalized query (from normalizeQuery)
+ */
+export function matchesQuery(songkey, queryKey) {
+  if (!queryKey) return true;
+  if (!songkey) return false;
+  if (songkey.includes(queryKey)) return true;
+
+  const tokens = queryKey.split(' ').filter(Boolean);
+  if (tokens.length < 2) return false; // single token already tested above
+  return tokens.every((t) => songkey.includes(t));
+}
+
+/**
  * Venue/city display cleanup. Entity-decoded and whitespace-collapsed, but
  * case and punctuation preserved -- this is for DISPLAY, not matching.
  */

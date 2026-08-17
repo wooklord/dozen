@@ -10,10 +10,11 @@ import { count as pickCount } from './scratchpad.js';
 import { openGapExplainer } from './ui/components.js';
 
 import { renderUpcoming } from './views/upcoming.js';
-import { renderGap } from './views/gap.js';
+import { renderSongs } from './views/songs.js';
 import { renderRecent } from './views/recent.js';
 import { renderSong } from './views/song.js';
 import { renderShow } from './views/show.js';
+import { renderGapChart } from './views/gapchart.js';
 import { renderJams } from './views/jams.js';
 import { renderPicks } from './views/picks.js';
 
@@ -321,9 +322,12 @@ function renderError(err, { keepData = false } = {}) {
 
 // ------------------------------------------------------------------- router --
 
+// Five tabs, deliberately. Songs absorbed the old Rotation screen -- Rotation
+// was already "all songs sorted by gap", so it is a sort mode here rather than
+// a sixth tab.
 const TABS = [
   ['#/', 'Show', ICONS.calendar],
-  ['#/gap', 'Rotation', ICONS.gap],
+  ['#/songs', 'Songs', ICONS.gap],
   ['#/recent', 'Recent', ICONS.list],
   ['#/jams', 'Jams', ICONS.jam],
   ['#/picks', 'Picks', ICONS.picks],
@@ -365,10 +369,19 @@ function route() {
   const ctx = { index: app.index, navigate };
   const hash = location.hash || '#/';
 
+  // #/gap was the old Rotation route. It is kept as a redirect so bookmarks
+  // and the service-worker-cached shell on an already-installed phone keep
+  // working after Songs absorbed it.
+  if (hash === '#/gap' || hash.startsWith('#/gap?')) {
+    history.replaceState(null, '', '#/songs');
+    return route();
+  }
+
   let view;
   if (hash.startsWith('#/song/')) view = renderSong(ctx, hash.slice('#/song/'.length));
+  else if (hash.startsWith('#/songs')) view = renderSongs(ctx);
+  else if (hash.startsWith('#/gapchart/')) view = renderGapChart(ctx, hash.slice('#/gapchart/'.length));
   else if (hash.startsWith('#/show/')) view = renderShow(ctx, hash.slice('#/show/'.length));
-  else if (hash.startsWith('#/gap')) view = renderGap(ctx);
   else if (hash.startsWith('#/recent')) view = renderRecent(ctx);
   else if (hash.startsWith('#/jams')) view = renderJams(ctx);
   else if (hash.startsWith('#/picks')) view = renderPicks(ctx);

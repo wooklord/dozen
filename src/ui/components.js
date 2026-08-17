@@ -17,8 +17,16 @@ export function cartonLink(href, label = 'View on The Carton') {
   });
 }
 
+// Carton's real URL shapes, verified against its sitemap and by request.
+// The `permalink` field is a bare filename -- it needs a section prefix, and
+// the WRONG prefix returns a 404 rather than redirecting:
+//   /setlists/{permalink}   200
+//   /{permalink}            404   <- what this used to build
+//   /venues/{slug}          200
+//   /venue/{slug}           404
+//   /song/{slug}            200   (singular here, plural for venues)
 export function showPermalink(show) {
-  return show?.permalink ? `${CARTON}/${show.permalink}` : CARTON;
+  return show?.permalink ? `${CARTON}/setlists/${show.permalink}` : CARTON;
 }
 
 export function songPermalink(song) {
@@ -26,7 +34,17 @@ export function songPermalink(song) {
 }
 
 export function venuePermalink(venue) {
-  return venue?.slug ? `${CARTON}/venue/${venue.slug}` : CARTON;
+  return venue?.slug ? `${CARTON}/venues/${venue.slug}` : CARTON;
+}
+
+/**
+ * Carton's own per-show gap chart. Same permalink filename as the setlist
+ * page, different section.
+ *
+ * NOTE: /gap-chart/ is robots-disallowed, so we link to it but never fetch it.
+ */
+export function gapChartPermalink(show) {
+  return show?.permalink ? `${CARTON}/gap-chart/${show.permalink}` : CARTON;
 }
 
 /**
@@ -40,7 +58,7 @@ export function venuePermalink(venue) {
  * @param {object} index  live index, so counts are never hardcoded
  * @param {boolean} withFootnoteNote  include the static-footnote explanation
  */
-export function openGapExplainer(index, { withFootnoteNote = true } = {}) {
+export function openGapExplainer(index, { withFootnoteNote = true, atShow = false } = {}) {
   const c = index.counts;
   return openSheet('How gap is counted', () =>
     el('div', { style: { display: 'grid', gap: '12px' } }, [
@@ -49,6 +67,15 @@ export function openGapExplainer(index, { withFootnoteNote = true } = {}) {
         el('strong', { text: `${c.countedShows} shows` }),
         ' in the archive that have a setlist recorded. 0 means it was played at the most recent show.',
       ]),
+      atShow
+        ? el('p', {
+            style: { margin: 0, fontSize: 'var(--t-sm)', color: 'var(--ink-dim)' },
+            text:
+              'On a show’s gap chart the same counting is applied as of that show’s date rather ' +
+              'than today, so those figures are gaps at the time and will differ from a song’s ' +
+              'current gap.',
+          })
+        : null,
       el('div.card', null, [
         el('div.section-title', { style: { marginBottom: '6px' }, text: 'The denominator' }),
         el(
@@ -152,11 +179,23 @@ export function songRow(song, { figure = 'gap', maxGap = 1, onOpen, index } = {}
     unit = 'shows';
   }
 
+  // Every row carries name, gap and times played, whichever number is in the
+  // figure column, so a row can be judged without tapping through.
   const meta = el('div.row-meta');
   if (song.lastPlayed) {
     append(meta, el('span', { text: `Last ${formatShowDateShort(song.lastPlayed)}` }));
     append(meta, el('span.sep', { text: '·' }));
-    append(meta, el('span', { text: `${song.timesPlayed}×` }));
+    append(
+      meta,
+      el('span', {
+        text:
+          figure === 'times'
+            ? song.showsSinceLastPlayed === null
+              ? `${song.timesPlayed}×`
+              : `gap ${song.showsSinceLastPlayed}`
+            : `${song.timesPlayed}×`,
+      }),
+    );
   } else {
     append(meta, el('span', { text: 'Never played' }));
   }

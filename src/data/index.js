@@ -179,6 +179,37 @@ function emptySlotCounts() {
  * Build the full derived index.
  * @param {{setlists:Array, shows:Array, songs:Array, venues:Array, jamcharts:Array}} raw
  */
+/**
+ * Album membership, keyed by song.
+ *
+ * `albums` carries no song_id -- the join key is the slug inside `song_url`
+ * ("/song/in-it-for-the-ride"). Measured against live data: all 13 track rows
+ * match by slug, none need name matching, and slug and name never disagree.
+ *
+ * The table is thin: 13 tracks across 5 albums, covering 13 of 366 songs. Song
+ * detail therefore renders this section only when a song actually appears on
+ * one, rather than showing an empty panel for the other 96%.
+ */
+function buildAlbumIndex(albumRows, songsBySlug) {
+  const bySong = new Map();
+  for (const a of albumRows) {
+    const slug = String(a.song_url || '').replace(/^\/song\//, '').replace(/\/$/, '');
+    const song = songsBySlug.get(slug);
+    if (!song) continue;
+    const id = Number(song.id);
+    if (!bySong.has(id)) bySong.set(id, []);
+    bySong.get(id).push({
+      title: cleanDisplayText(a.album_displayname || a.album_title),
+      url: a.album_url || '',
+      releasedate: a.releasedate || '',
+      position: Number(a.position) || 0,
+      isLive: Number(a.islive) === 1,
+      discNumber: Number(a.disc_number) || 1,
+    });
+  }
+  return bySong;
+}
+
 export function buildIndex(raw) {
   const setlists = raw.setlists.map(ingestSetlistRow);
   const shows = raw.shows.map(ingestShowRow);
@@ -366,6 +397,13 @@ export function buildIndex(raw) {
     showsByVenue.get(id).push(s);
   }
 
+  // Album membership, joined on the slug inside albums.song_url.
+  const songsBySlug = new Map(songs.map((s) => [s.slug, s]));
+  const albumsBySong = buildAlbumIndex(raw.albums || [], songsBySlug);
+  for (const entry of bySong.values()) {
+    entry.albums = albumsBySong.get(entry.song_id) || [];
+  }
+
   const songList = [...bySong.values()].sort((a, b) => a.name.localeCompare(b.name));
   const songsByKey = new Map(songList.map((s) => [s.songkey, s]));
 
@@ -404,6 +442,116 @@ export function buildIndex(raw) {
     },
     newestShowdate: countedShows.length ? countedShows[countedShows.length - 1].showdate : null,
   };
+}
+
+/**
+ * Gap for one song AS OF a given show.
+ *
+ * THE ONE FUNCTION both gap views call. "Current gap" is this same
+ * computation evaluated at the newest counted show -- not a second code path.
+ * That is deliberate: gap-at-the-time and current gap are different numbers,
+ * and if they were computed separately they would eventually drift by a few
+ * and both would look broken.
+ *
+ * Counted under the identical convention as everything else: only shows that
+ * have setlist data are in the denominator.
+ *
+ * @returns {{gap: number|null, previous: object|null, isDebut: boolean}}
+ *   `isDebut` means there was no prior performance at all. That is NOT gap 0 --
+ *   gap 0 means "played at the immediately preceding counted show" -- and
+ *   conflating the two would be wrong.
+ */
+export function gapAtShow(index, songId, showId) {
+  const song = index.songsById.get(Number(songId));
+  const thisOrdinal = index.showOrdinal.get(Number(showId));
+  if (!song || thisOrdinal === undefined) {
+    return { gap: null, previous: null, isDebut: false };
+  }
+
+  // Performances are already in canonical show order, so walk back to the last
+  // one that happened strictly before this show and is in the counted universe.
+  let previous = null;
+  for (let i = song.performances.length - 1; i >= 0; i--) {
+    const p = song.performances[i];
+    const ord = index.showOrdinal.get(Number(p.show_id));
+    if (ord === undefined) continue; // show has no setlist data -- not counted
+    if (ord < thisOrdinal) {
+      previous = p;
+      break;
+    }
+  }
+
+  if (!previous) return { gap: null, previous: null, isDebut: true };
+  return {
+    gap: thisOrdinal - index.showOrdinal.get(Number(previous.show_id)),
+    previous,
+    isDebut: false,
+  };
+}
+
+/**
+ * Every song played at a given show with its gap at that moment -- the
+ * per-show gap chart. Distinct from archive-wide rotation.
+ */
+export function gapChartForShow(index, showId) {
+  const rows = index.setlistByShow.get(Number(showId)) || [];
+
+  // One entry per SONG, not per performance. 547 song/show pairs in the
+  // archive involve a song played more than once in a night (reprises, jams
+  // that return). Gap is a property of the song entering the show, so the
+  // repeat would carry an identical number and read as a second fact. The
+  // first occurrence sets the position; repeats are counted instead.
+  const seen = new Map();
+  for (const r of rows) {
+    const id = Number(r.song_id);
+    const existing = seen.get(id);
+    if (existing) {
+      existing.occurrences += 1;
+      if (!existing.alsoIn.includes(setLabel(r.settype, r.setnumber))) {
+        existing.alsoIn.push(setLabel(r.settype, r.setnumber));
+      }
+      continue;
+    }
+    const { gap, previous, isDebut } = gapAtShow(index, id, showId);
+    seen.set(id, {
+      row: r,
+      song: index.songsById.get(id) || null,
+      songname: r.songname,
+      song_id: id,
+      setLabel: setLabel(r.settype, r.setnumber),
+      alsoIn: [setLabel(r.settype, r.setnumber)],
+      occurrences: 1,
+      gap,
+      previous,
+      isDebut,
+    });
+  }
+  return [...seen.values()];
+}
+
+/**
+ * The longest gap a song has actually been through, as a max over its
+ * per-performance gaps.
+ *
+ * Each individual figure is a fact Carton renders on its own gap charts; this
+ * is the maximum of them. It describes something that HAPPENED -- it is
+ * labelled "longest observed gap" with the date, never a "record" and never a
+ * due-status, and it carries the same convention explanation as every other
+ * gap figure.
+ */
+export function longestObservedGap(index, songId) {
+  const song = index.songsById.get(Number(songId));
+  if (!song || song.performances.length < 2) return null;
+
+  let best = null;
+  for (const p of song.performances) {
+    const ord = index.showOrdinal.get(Number(p.show_id));
+    if (ord === undefined) continue;
+    const { gap, previous, isDebut } = gapAtShow(index, songId, p.show_id);
+    if (isDebut || gap === null) continue;
+    if (!best || gap > best.gap) best = { gap, at: p, previous };
+  }
+  return best;
 }
 
 /**

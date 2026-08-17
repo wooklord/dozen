@@ -17,7 +17,7 @@ import {
   openGapExplainer,
   gapExplainerLink,
 } from '../ui/components.js';
-import { SLOT_LABELS, SLOTS, setLabel } from '../data/index.js';
+import { SLOT_LABELS, SLOTS, setLabel, longestObservedGap } from '../data/index.js';
 import { formatShowDate, formatShowDateShort } from '../util/dates.js';
 import { isPicked, togglePick } from '../scratchpad.js';
 
@@ -72,6 +72,8 @@ export function renderSong(ctx, songId) {
 
   append(screen, el('div', { style: { marginTop: '4px' } }, cartonLink(songPermalink(song))));
 
+  const longest = longestObservedGap(index, song.song_id);
+
   // --- Headline stats -------------------------------------------------------
   append(
     screen,
@@ -98,6 +100,28 @@ export function renderSong(ctx, songId) {
         `Gap counted across the ${index.counts.countedShows} shows in the archive that have setlist data. `,
         gapExplainerLink(index),
       ]),
+
+      // Longest OBSERVED gap: a max over per-performance gaps, each of which
+      // Carton renders individually on its own gap charts. It describes
+      // something that happened -- never a "record", never a due-status.
+      longest
+        ? el('div', { style: { marginTop: '12px' } }, [
+            el(
+              'button.stat.stat-tappable.stat-wide',
+              {
+                type: 'button',
+                'aria-label': 'How gap is counted',
+                onclick: () => openGapExplainer(index),
+              },
+              [
+                el('div.stat-value.num', { text: String(longest.gap) }),
+                el('div.stat-label', {
+                  text: `longest observed gap — ended ${formatShowDateShort(longest.at.showdate)}`,
+                }),
+              ],
+            ),
+          ])
+        : null,
     ]),
   );
 
@@ -137,6 +161,35 @@ export function renderSong(ctx, songId) {
   }
   append(screen, slotSection);
 
+  // --- Album membership -----------------------------------------------------
+  // Rendered only when present. The albums table is thin -- 13 tracks across
+  // 5 albums -- so a permanent section would be empty for most songs.
+  if (song.albums?.length) {
+    const albumSection = el('div.section');
+    append(albumSection, sectionHead('Appears on'));
+    const list = el('ul.rows');
+    for (const a of song.albums) {
+      append(
+        list,
+        el('li', null, [
+          el('div.row', null, [
+            el('div.row-main', null, [
+              el('div.row-title', { text: a.title }),
+              el('div.row-meta', null, [
+                el('span', { text: a.releasedate ? a.releasedate.slice(0, 4) : '' }),
+                a.position ? el('span', { text: `· track ${a.position}` }) : null,
+                a.isLive ? el('span.badge', { text: 'Live' }) : null,
+              ]),
+            ]),
+            a.url ? cartonLink(a.url, 'Carton') : null,
+          ]),
+        ]),
+      );
+    }
+    append(albumSection, list);
+    append(screen, albumSection);
+  }
+
   // --- Jam chart entries ----------------------------------------------------
   if (song.jamcharts.length) {
     const jamSection = el('div.section');
@@ -153,7 +206,9 @@ export function renderSong(ctx, songId) {
           j.jamchartnote
             ? el('p', { style: { margin: '8px 0 0', fontSize: 'var(--t-sm)' }, text: j.jamchartnote })
             : null,
-          j.permalink ? cartonLink(j.permalink, 'Carton') : null,
+          // jamcharts.permalink is the same bare filename as shows.permalink
+          // and needs the /setlists/ prefix too.
+          j.permalink ? cartonLink(showPermalink({ permalink: j.permalink }), 'Carton') : null,
         ]),
       );
     }
@@ -173,19 +228,31 @@ export function renderSong(ctx, songId) {
       append(
         list,
         el('li', null, [
-          el(
-            'button.row',
-            { type: 'button', onclick: () => navigate(`#/show/${p.show_id}`) },
-            [
-              el('div.row-main', null, [
-                el('div.row-title', { text: formatShowDate(p.showdate) }),
-                el('div.row-meta', null, [
-                  el('span', { text: `${p.venuename}${p.city ? ` · ${p.city}, ${p.state}` : ''}` }),
+          el('div.row-shell', null, [
+            el(
+              'button.row',
+              { type: 'button', onclick: () => navigate(`#/show/${p.show_id}`) },
+              [
+                el('div.row-main', null, [
+                  el('div.row-title', { text: formatShowDate(p.showdate) }),
+                  el('div.row-meta', null, [
+                    el('span', { text: `${p.venuename}${p.city ? ` · ${p.city}, ${p.state}` : ''}` }),
+                  ]),
                 ]),
-              ]),
-              el('span.badge.badge-set', { text: setLabel(p.settype, p.setnumber) }),
-            ],
-          ),
+                el('span.badge.badge-set', { text: setLabel(p.settype, p.setnumber) }),
+              ],
+            ),
+            // Gap chart for that night, one tap from the history row.
+            el(
+              'button.row-action',
+              {
+                type: 'button',
+                'aria-label': `Gap chart for ${p.showdate}`,
+                onclick: () => navigate(`#/gapchart/${p.show_id}`),
+              },
+              icon(ICONS.gap, 18),
+            ),
+          ]),
         ]),
       );
     }
