@@ -40,6 +40,28 @@ export function compareSongsByName(a, b) {
 }
 
 /**
+ * The same ordering rules applied to bare name strings, so venues sort by the
+ * identical logic songs do (articles ignored, normalized comparison).
+ */
+export function compareNames(aName, bName) {
+  const ak = sortKeyForName(aName);
+  const bk = sortKeyForName(bName);
+  if (ak !== bk) return ak.localeCompare(bk);
+  return normalizeSongName(aName).localeCompare(normalizeSongName(bName));
+}
+
+/**
+ * Venue ordering. Ties break on venue_id, never on name: 9 venue names in this
+ * archive exist in more than one city (Brooklyn Bowl is in three), so name is
+ * not an identity.
+ */
+export function compareVenuesByName(a, b) {
+  const c = compareNames(a.venuename, b.venuename);
+  if (c !== 0) return c;
+  return (Number(a.venue_id) || 0) - (Number(b.venue_id) || 0);
+}
+
+/**
  * Explicit rank for `setnumber`. It is a string in the API ("1","2","3","e",
  * "e2"), so plain string sort would place "e" before "3". Never sort it
  * numerically or lexically -- use this map.

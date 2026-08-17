@@ -42,6 +42,11 @@ export function renderShow(ctx, showId) {
             'Gap chart',
           )
         : null,
+      el(
+        'button.btn.btn-small',
+        { type: 'button', onclick: () => navigate(`#/venue/${show.venue_id}`) },
+        'Venue history',
+      ),
       cartonLink(showPermalink(show)),
     ]),
   );

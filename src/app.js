@@ -11,9 +11,10 @@ import { openGapExplainer } from './ui/components.js';
 
 import { renderUpcoming } from './views/upcoming.js';
 import { renderSongs } from './views/songs.js';
-import { renderRecent } from './views/recent.js';
+import { renderShows } from './views/shows.js';
 import { renderSong } from './views/song.js';
 import { renderShow } from './views/show.js';
+import { renderVenue } from './views/venue.js';
 import { renderGapChart } from './views/gapchart.js';
 import { renderJams } from './views/jams.js';
 import { renderPicks } from './views/picks.js';
@@ -328,7 +329,7 @@ function renderError(err, { keepData = false } = {}) {
 const TABS = [
   ['#/', 'Show', ICONS.calendar],
   ['#/songs', 'Songs', ICONS.gap],
-  ['#/recent', 'Recent', ICONS.list],
+  ['#/shows', 'Shows', ICONS.list],
   ['#/jams', 'Jams', ICONS.jam],
   ['#/picks', 'Picks', ICONS.picks],
 ];
@@ -376,13 +377,22 @@ function route() {
     history.replaceState(null, '', '#/songs');
     return route();
   }
+  // #/recent was the old Shows route, kept for bookmarks and an already
+  // installed service worker.
+  if (hash === '#/recent' || hash.startsWith('#/recent?')) {
+    history.replaceState(null, '', '#/shows');
+    return route();
+  }
 
+  // Order matters: '#/show/' and '#/shows' share a prefix, and '#/songs' /
+  // '#/song/' likewise, so the more specific pattern is tested first.
   let view;
   if (hash.startsWith('#/song/')) view = renderSong(ctx, hash.slice('#/song/'.length));
   else if (hash.startsWith('#/songs')) view = renderSongs(ctx);
   else if (hash.startsWith('#/gapchart/')) view = renderGapChart(ctx, hash.slice('#/gapchart/'.length));
   else if (hash.startsWith('#/show/')) view = renderShow(ctx, hash.slice('#/show/'.length));
-  else if (hash.startsWith('#/recent')) view = renderRecent(ctx);
+  else if (hash.startsWith('#/shows')) view = renderShows(ctx);
+  else if (hash.startsWith('#/venue/')) view = renderVenue(ctx, hash.slice('#/venue/'.length));
   else if (hash.startsWith('#/jams')) view = renderJams(ctx);
   else if (hash.startsWith('#/picks')) view = renderPicks(ctx);
   else view = renderUpcoming(ctx);

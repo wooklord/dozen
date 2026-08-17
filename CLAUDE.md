@@ -189,6 +189,12 @@ and types. Notable corrections to the published docs already captured there:
 - **A bad method or column name returns `text/html`, not empty JSON** — so `await res.json()`
   throws. Check `content-type` before parsing. Column names are case-insensitive. Everything
   returns HTTP 200, including error pages, so status is useless as a health check.
+- **Venue names are NOT unique — always key on `venue_id`.** 9 names exist in more than one city;
+  `Brooklyn Bowl` is in Brooklyn NY, Las Vegas NV *and* Philadelphia PA. Grouping venues by name
+  silently merges distinct venues. (`9:30 Club` also appears twice with the city spelled
+  `Washington, D.C.` and `Washington, DC` — two `venue_id`s for what is likely one room.)
+- **Match `state` exactly, never as a substring.** A substring match on `ma` hits 18 venue names,
+  which buries a real state query.
 
 ---
 
