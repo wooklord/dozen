@@ -5,6 +5,16 @@
 
 import { el, append } from '../ui/dom.js';
 import { attribution, emptyState, cartonLink, gapExplainerLink } from '../ui/components.js';
+import { compareSongsByName } from '../data/index.js';
+
+// A-Z by default: the entry count is the useful fact on each row, but ranking
+// by it buries anything you are actually trying to look up.
+const state = { sort: 'alpha' };
+
+const JAM_SORTS = [
+  ['alpha', 'A–Z'],
+  ['entries', 'Most charted'],
+];
 import { formatShowDateShort } from '../util/dates.js';
 
 export function renderJams(ctx) {
@@ -20,19 +30,58 @@ export function renderJams(ctx) {
     ]),
   );
 
-  const songs = index.songs
-    .filter((s) => s.isJamChart)
-    .slice()
-    .sort((a, b) => b.jamcharts.length - a.jamcharts.length || a.name.localeCompare(b.name));
+  const jamSongs = index.songs.filter((s) => s.isJamChart);
 
-  if (!songs.length) {
+  if (!jamSongs.length) {
     append(screen, emptyState('No jam chart entries.'));
     append(screen, attribution());
     return screen;
   }
 
-  const max = songs[0].jamcharts.length;
+  // Entry count stays on every row -- it is the useful thing about this view.
+  // It just is not the ordering by default.
+  const max = jamSongs.reduce((m, s) => Math.max(m, s.jamcharts.length), 1);
+
   const list = el('ul.rows');
+
+  const sortChips = JAM_SORTS.map(([key, label]) =>
+    el(
+      'button.chip',
+      {
+        type: 'button',
+        'data-key': key,
+        'aria-pressed': String(state.sort === key),
+        onclick: () => {
+          state.sort = key;
+          for (const c of sortChips) c.setAttribute('aria-pressed', String(c.dataset.key === key));
+          paint();
+        },
+      },
+      label,
+    ),
+  );
+  append(screen, el('div.sortbar', null, sortChips));
+  append(screen, list);
+  append(
+    screen,
+    el('div', { style: { marginTop: '12px' } }, cartonLink('/jamcharts', 'Jam charts on The Carton')),
+  );
+  append(screen, attribution());
+
+  function paint() {
+    // Both branches resolve ties through the ONE shared comparator.
+    const songs = jamSongs.slice().sort((a, b) => {
+      if (state.sort === 'entries') {
+        return b.jamcharts.length - a.jamcharts.length || compareSongsByName(a, b);
+      }
+      return compareSongsByName(a, b);
+    });
+
+    list.replaceChildren();
+    renderRows(songs);
+  }
+
+  function renderRows(songs) {
   for (const s of songs) {
     const latest = s.jamcharts
       .slice()
@@ -64,12 +113,9 @@ export function renderJams(ctx) {
         ),
       ]),
     );
+    }
   }
-  append(screen, list);
-  append(
-    screen,
-    el('div', { style: { marginTop: '12px' } }, cartonLink('/jamcharts', 'Jam charts on The Carton')),
-  );
-  append(screen, attribution());
+
+  paint();
   return screen;
 }

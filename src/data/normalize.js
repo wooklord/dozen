@@ -134,6 +134,29 @@ export function stripParenthetical(input) {
   return stripped || normalized;
 }
 
+/**
+ * Alphabetical sort key: the normalized name with a leading article removed.
+ * "A Moment's Notice" files under M, "The Shape I'm In" under S.
+ *
+ * Scanning for a song by its distinctive word is how people actually look for
+ * one; without this, 15 of the 366 titles pile up under "The" and 2 more under
+ * "A", which defeats the point of an alphabetical list.
+ *
+ * THE TRAILING SPACE IN THE PATTERN IS LOAD-BEARING. Matching the bare prefix
+ * "a"/"an"/"the" would mangle real titles: "Althea" -> "lthea",
+ * "All The Way Down" -> "ll The Way Down", "These Days" -> "se Days",
+ * "They Love Each Other" -> "y Love Each Other". The catalog contains 15 such
+ * names, so this is a live hazard, not a hypothetical one.
+ *
+ * Display always uses the full name; only ordering uses this key.
+ */
+export function sortKeyForName(input) {
+  const normalized = normalizeSongName(input);
+  const stripped = normalized.replace(/^(?:a|an|the) /, '');
+  // A song named only "The" or "A" would otherwise sort as empty string.
+  return stripped || normalized;
+}
+
 /** Normalize free-text search input the same way song names are normalized. */
 export function normalizeQuery(input) {
   return normalizeSongName(input);

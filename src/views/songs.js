@@ -11,19 +11,24 @@
 import { el, append, debounce } from '../ui/dom.js';
 import { songRow, attribution, emptyState, gapExplainerLink } from '../ui/components.js';
 import { normalizeQuery, matchesQuery } from '../data/normalize.js';
+import { compareSongsByName } from '../data/index.js';
 
 // Module-level so the screen remembers its state across navigation.
+//
+// Default is A-Z, not gap: Songs is the look-anything-up tab, and a pick
+// session starts from the upcoming-show view. The cold-song list is still one
+// tap away under "Coldest first".
 const state = {
-  sort: 'gap-desc',
+  sort: 'alpha',
   filter: 'all',
   query: '',
 };
 
 const SORTS = [
+  ['alpha', 'A–Z', 'gap'],
   ['gap-desc', 'Coldest first', 'gap'],
   ['gap-asc', 'Hottest first', 'gap'],
   ['times', 'Most played', 'times'],
-  ['alpha', 'A–Z', 'gap'],
 ];
 
 const FILTERS = [
@@ -121,30 +126,32 @@ export function renderSongs(ctx) {
 
     // Songs that have never been played have no gap; they sort last under the
     // gap sorts rather than pretending to be at either extreme.
+    // Every branch falls back to the ONE shared comparator, so equal-valued
+    // songs are ordered identically here and on Jams.
     const gapOf = (s) => s.showsSinceLastPlayed;
     songs = songs.slice().sort((a, b) => {
       switch (state.sort) {
         case 'gap-asc': {
           const av = gapOf(a);
           const bv = gapOf(b);
-          if (av === null && bv === null) return a.name.localeCompare(b.name);
+          if (av === null && bv === null) return compareSongsByName(a, b);
           if (av === null) return 1;
           if (bv === null) return -1;
-          return av - bv || a.name.localeCompare(b.name);
+          return av - bv || compareSongsByName(a, b);
         }
         case 'times':
-          return b.timesPlayed - a.timesPlayed || a.name.localeCompare(b.name);
-        case 'alpha':
-          return a.name.localeCompare(b.name);
-        case 'gap-desc':
-        default: {
+          return b.timesPlayed - a.timesPlayed || compareSongsByName(a, b);
+        case 'gap-desc': {
           const av = gapOf(a);
           const bv = gapOf(b);
-          if (av === null && bv === null) return a.name.localeCompare(b.name);
+          if (av === null && bv === null) return compareSongsByName(a, b);
           if (av === null) return 1;
           if (bv === null) return -1;
-          return bv - av || a.name.localeCompare(b.name);
+          return bv - av || compareSongsByName(a, b);
         }
+        case 'alpha':
+        default:
+          return compareSongsByName(a, b);
       }
     });
 

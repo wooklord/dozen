@@ -13,8 +13,31 @@
 //   slot          = min/max `position` within a set, NOT transition_id
 //   show ordering = showdate asc, tie-broken by showorder asc
 
-import { cleanDisplayText, normalizeSongName } from './normalize.js';
+import { cleanDisplayText, normalizeSongName, sortKeyForName } from './normalize.js';
 import { localToday } from '../util/dates.js';
+
+/**
+ * THE alphabetical comparator. Every list of songs in the app orders through
+ * this one function -- Songs, Jams, and the canonical index order -- so two
+ * screens showing the same set can never disagree about its order.
+ *
+ * Same reasoning as gapAtShow(): one implementation, not two that drift.
+ *
+ * Leading articles are ignored (see sortKeyForName). Ties fall back to the
+ * full normalized name and then song_id, so the order is total and stable
+ * rather than dependent on input order.
+ */
+export function compareSongsByName(a, b) {
+  const ak = a.sortkey ?? sortKeyForName(a.name);
+  const bk = b.sortkey ?? sortKeyForName(b.name);
+  if (ak !== bk) return ak.localeCompare(bk);
+
+  const an = a.songkey ?? normalizeSongName(a.name);
+  const bn = b.songkey ?? normalizeSongName(b.name);
+  if (an !== bn) return an.localeCompare(bn);
+
+  return (Number(a.song_id) || 0) - (Number(b.song_id) || 0);
+}
 
 /**
  * Explicit rank for `setnumber`. It is a string in the API ("1","2","3","e",
@@ -99,6 +122,7 @@ function ingestSongRow(r) {
     name: cleanDisplayText(r.name),
     original_artist: cleanDisplayText(r.original_artist),
     songkey: normalizeSongName(r.name),
+    sortkey: sortKeyForName(r.name),
   };
 }
 
@@ -295,6 +319,7 @@ export function buildIndex(raw) {
         name: row.songname,
         slug: row.slug,
         songkey: row.songkey,
+        sortkey: sortKeyForName(row.songname),
         isOriginal: Number(row.isoriginal) === 1,
         originalArtist: row.original_artist || '',
         performances: [],
@@ -339,6 +364,10 @@ export function buildIndex(raw) {
     if (meta) {
       entry.name = meta.name || entry.name;
       entry.slug = meta.slug || entry.slug;
+      // The canonical name may differ from the one on the setlist row, so the
+      // derived keys have to follow it rather than keep the row's spelling.
+      entry.songkey = meta.songkey || entry.songkey;
+      entry.sortkey = meta.sortkey || entry.sortkey;
       entry.isOriginal = Number(meta.isoriginal) === 1;
       // `songs` reports "Eggy" as original_artist for originals while
       // `setlists` uses "". Trust isoriginal, not the string.
@@ -359,6 +388,7 @@ export function buildIndex(raw) {
       name: s.name,
       slug: s.slug,
       songkey: s.songkey,
+      sortkey: s.sortkey,
       isOriginal: Number(s.isoriginal) === 1,
       originalArtist: Number(s.isoriginal) === 1 ? '' : s.original_artist || '',
       performances: [],
@@ -404,7 +434,9 @@ export function buildIndex(raw) {
     entry.albums = albumsBySong.get(entry.song_id) || [];
   }
 
-  const songList = [...bySong.values()].sort((a, b) => a.name.localeCompare(b.name));
+  // Canonical order is alphabetical through the shared comparator, so any view
+  // that does not re-sort already matches the A-Z sort exactly.
+  const songList = [...bySong.values()].sort(compareSongsByName);
   const songsByKey = new Map(songList.map((s) => [s.songkey, s]));
 
   return {
