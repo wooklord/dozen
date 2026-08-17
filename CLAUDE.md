@@ -262,7 +262,51 @@ statistics. No writes to any database. No contact with the other two repos.
 
 ## Working protocol
 
-- For feature code: **show the change plan and get approval before editing.** Standing default.
+- For feature code: **show the change plan and get approval before editing.** Standing default,
+  loosened where a batch has been pre-approved.
 - Docs land in the repo the moment they're decided, not at the end of a session.
-- Anything requiring manual action (DNS, GitHub repo creation, pushing) is batched into one list
-  at the end of a session.
+
+### Commit, push, and verify the deploy — all three, every time
+
+**Committing and pushing is part of finishing a change, not something to hand over.** Never leave
+commits sitting ahead of `origin`, and never hand over git commands to run.
+
+Pages builds on push, so **pushing is deploying**. That is acceptable here: the app is read-only
+with no accounts and no database, so a bad deploy costs a reload.
+
+**A push is not finished until the deploy is verified.** After pushing, confirm the live site is
+serving the build that was just committed, and **report the number actually read back from the
+live host — never the number that was set locally.** Those are different claims, and only the
+first one is evidence.
+
+#### How to read the live BUILD number
+
+**The marker is not in the served HTML.** `index.html` ships an empty `<div id="header-status">`
+and `src/app.js` injects the marker at runtime. Fetching the page and grepping for "BUILD" finds
+nothing *even on a perfectly good deploy*, so that check would be worse than useless — it would
+report failure forever.
+
+Two checks that do work, in order:
+
+1. **Fetch `https://dozen.wooklord.net/src/version.js`** and read `BUILD = n`. This is the
+   deployed source of truth and needs no browser.
+2. **Render `https://dozen.wooklord.net` in a clean browser profile** and read the text of
+   `.build-marker`. This is what the user actually sees, and it additionally catches
+   service-worker and caching problems that a raw file fetch would miss. Use a fresh profile so no
+   previously-registered service worker serves a stale shell.
+
+Cache-bust the fetch (`?t=<timestamp>`) so a CDN copy is not mistaken for the new build.
+
+#### When it does not match
+
+Pages builds **can fail with a perfectly clean local tree** — the first build on this repo 404'd
+at both URLs until `.nojekyll` was added. So a clean `git status` proves nothing about the deploy.
+
+If the number does not match after a reasonable wait, or the fetch 404s: **check the Actions run
+and report what it says.** `gh run list` / `gh run view --log-failed`. Do not leave a failed
+deploy unreported — the live BUILD marker is the only deploy signal the user has; they do not
+watch the Actions tab and do not use dev tools.
+
+### What stays the user's
+
+Anything outside the repo: **GitHub settings, DNS, and testing on the phone.**
