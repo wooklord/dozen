@@ -207,13 +207,20 @@ a {
 .row-shell {
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
+/* `min-width: 0` on both the shell and the row is load-bearing: a flex item's
+   automatic minimum size is its content, so without it a long cover credit
+   widens the row and shoves the gap figure and pick button past the card edge
+   instead of truncating. */
 .row {
   display: flex;
   align-items: center;
   gap: var(--s-3);
   width: 100%;
+  min-width: 0;
+  overflow: hidden;
   min-height: var(--tap);
   padding: var(--s-2) var(--s-3);
   text-align: left;
@@ -255,7 +262,11 @@ a {
   flex: none;
 }
 
+/* The one meta item allowed to shrink. Without `flex: 0 1 auto` overriding
+   `.row-meta > *`, a long artist name pushes the gap figure and pick button
+   off the right edge of the card. */
 .cover-note {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
