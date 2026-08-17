@@ -238,8 +238,43 @@ Full treatment goes in `docs/design.md` at step 0. Committed direction:
   - observed set structures of **prior shows at that venue**,
   - what was played last time at that venue, "On This Date", and the venue's play count.
 
-**Gap unit.** "Shows since last played," counted against all shows in the archive. Carton's own
-footnotes phrase it as "(111 show gap)", so this matches.
+## Gap convention — settled by measurement
+
+**Definition shipped:** *shows since last played* = the number of shows in the canonical ordering
+between a song's most recent performance and the newest show, **counting only shows that have
+setlist data.** 0 means it was played at the most recent show.
+
+Two things were measured before settling this.
+
+**1. Carton's own footnote gaps are not reproducible, and we should stop trying.** 58 footnotes
+state an explicit `(N show gap)`. No single convention reproduces them:
+
+| Rule | Matches |
+|---|---|
+| all shows, difference | 9 / 58 |
+| all shows, difference − 1 | 29 / 58 |
+| shows-with-setlists, difference | 9 / 58 |
+| shows-with-setlists, difference − 1 | 28 / 58 |
+
+Footnotes days apart use different conventions (2026-08-06 matches one rule, 2026-08-08 the other),
+which means they are **static text written at different times against a growing archive** — not
+output of a live formula. Retroactive show additions have since shifted the counts.
+
+**Consequence:** we compute our own number under one documented convention and **always render
+Carton's footnote text verbatim beside it**, never overwriting it or trying to make the two agree.
+Both are true; they describe different moments.
+
+**2. The denominator excludes shows with no setlist data.** 194 of 804 shows have zero setlist rows
+(mostly 2013–2015). A show with no recorded setlist cannot establish that a song went unplayed —
+we simply don't know — so counting it would inflate every gap spanning it. This also drops one
+corrupt row in the `shows` table dated **`0015-08-28`**.
+
+The counted universe is **610 shows**. For modern songs both denominators converge, since nearly
+every recent show has a setlist; the choice only moves ancient bustout numbers (the coldest song
+reads 608 rather than 783).
+
+The UI states the convention and shows the counted-show total, so the number is never a bare
+figure the user has to take on faith.
 
 ## Out of scope — parked
 
