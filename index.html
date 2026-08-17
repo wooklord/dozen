@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>The Dozen — Eggy setlist reader</title>
+    <meta
+      name="description"
+      content="A fast, mobile-first reader for The Carton's Eggy setlist archive. Gap charts, rotation, recent setlists and jam charts."
+    />
+    <meta name="theme-color" content="#14110e" />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icons/icon-180.png" />
+    <link rel="stylesheet" href="./src/styles/tokens.css" />
+    <link rel="stylesheet" href="./src/styles/app.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1 class="app-title"><span class="the">The</span> Dozen</h1>
+      <div class="header-status" id="header-status"></div>
+    </header>
+
+    <main class="app-main" id="main">
+      <div class="loader">
+        <div class="carton">
+          <div class="carton-cell"></div><div class="carton-cell"></div>
+          <div class="carton-cell"></div><div class="carton-cell"></div>
+          <div class="carton-cell"></div><div class="carton-cell"></div>
+          <div class="carton-cell"></div><div class="carton-cell"></div>
+          <div class="carton-cell"></div><div class="carton-cell"></div>
+          <div class="carton-cell"></div><div class="carton-cell"></div>
+        </div>
+        <div class="loader-label">Starting up…</div>
+      </div>
+    </main>
+
+    <nav class="tabbar" id="tabbar" aria-label="Main"></nav>
+
+    <noscript>
+      <p style="padding: 24px; color: #a99f92">
+        The Dozen needs JavaScript. All setlist data comes from
+        <a href="https://thecarton.net" style="color: #f5a623">The Carton</a>.
+      </p>
+    </noscript>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>

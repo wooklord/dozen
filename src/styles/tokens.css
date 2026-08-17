@@ -1,0 +1,83 @@
+/* Design tokens. See docs/design.md for the reasoning behind every value. */
+
+:root {
+  /* --- Color: dark is the default and the design target --------------------
+     Warm near-black, closer to cardboard in shadow than to a terminal. The
+     warmth is the carton reference; it does the work an illustration would. */
+  --shell: #14110e;
+  --shell-alpha: rgba(20, 17, 14, 0.86);
+  --surface: #1c1815;
+  --surface-up: #262019;
+  --line: #332c25;
+  --line-soft: #262019;
+
+  --ink: #f5efe6;
+  --ink-dim: #a99f92;
+  --ink-faint: #6e655b;
+
+  /* ONE accent, load-bearing. Marks gap magnitude, active sort, and
+     scratchpad membership. Nothing else. */
+  --yolk: #f5a623;
+  --yolk-deep: #c77f14;
+  --yolk-wash: rgba(245, 166, 35, 0.12);
+  --yolk-line: rgba(245, 166, 35, 0.35);
+  --yolk-ink: #1a1206;
+
+  --danger: #e5734a;
+
+  /* --- Type --------------------------------------------------------------- */
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --t-xs: 11px;
+  --t-sm: 13px;
+  --t-md: 15px;
+  --t-lg: 19px;
+  --t-xl: 26px;
+
+  /* --- Space and shape ---------------------------------------------------- */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+
+  --r-cell: 10px;
+  --r-pill: 999px;
+
+  --tap: 44px; /* minimum touch target, enforced */
+
+  --header-h: 52px;
+  --tabs-h: 58px;
+
+  --shadow-up: 0 -1px 0 var(--line), 0 -8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-sheet: 0 -8px 40px rgba(0, 0, 0, 0.6);
+}
+
+/* Light is a courtesy, not the target: token overrides only, no layout
+   changes. Dark remains the default when no preference is expressed. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --shell: #faf6ef;
+    --shell-alpha: rgba(250, 246, 239, 0.9);
+    --surface: #ffffff;
+    --surface-up: #f2ece1;
+    --line: #e2d9ca;
+    --line-soft: #eee7db;
+
+    --ink: #1e1913;
+    --ink-dim: #6b6053;
+    --ink-faint: #968a7a;
+
+    --yolk: #b8720a;
+    --yolk-deep: #8f5806;
+    --yolk-wash: rgba(184, 114, 10, 0.1);
+    --yolk-line: rgba(184, 114, 10, 0.3);
+    --yolk-ink: #fffaf1;
+
+    --shadow-up: 0 -1px 0 var(--line), 0 -8px 24px rgba(0, 0, 0, 0.08);
+    --shadow-sheet: 0 -8px 40px rgba(0, 0, 0, 0.18);
+  }
+}

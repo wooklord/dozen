@@ -28,17 +28,37 @@ The published docs say typos produce empty `data`. **They do not.** Observed beh
 | Wrong *case* column (`/v2/songs/SLUG/yuck.json`) | works fine — **column names are case-insensitive** |
 | Valid method, genuinely no rows | `application/json`, `error: false`, `data: []` |
 
-Two consequences for the client:
+Three consequences for the client:
 
 1. **`await res.json()` throws on a bad method or column** — the body is an HTML error page served
-   with `http=200`. Always check `content-type` is `application/json` before parsing, and report
-   the offending URL. A bare `res.json()` will surface as a confusing `SyntaxError`.
+   with `http=200`. Report the offending URL; a bare `res.json()` surfaces as a confusing
+   `SyntaxError`.
 2. **`error: false` + empty `data` genuinely means "no rows"**, not "you typo'd something." That
    makes empty data a weaker signal than the docs imply — but still worth logging with the exact
    URL, because it's how an unpopulated method (see `metadata`) looks.
+3. **Content-type cannot be used as the test** — see the `list` method trap below.
 
 Note this makes HTTP status useless as a health check: **everything returns 200**, including error
 pages.
+
+### The `list` method serves JSON as `text/html`
+
+`/v2/list/year.json` returns **valid JSON** with `Content-Type: text/html; charset=UTF-8`:
+
+```
+/v2/list/year.json        -> text/html   {"error":0,...,"data":[{"field":2013},...]}
+/v2/songs.json?limit=1    -> application/json
+```
+
+So `text/html` means *either* "this is the `list` method working correctly" *or* "you used a bad
+method/column name." **Rejecting on content-type alone breaks `list` entirely.**
+
+**Parse first, then classify:** attempt `JSON.parse` on the body; if it fails, check whether the
+text starts with `<!doctype` / `<html` to distinguish a genuine error page from anything else.
+
+`list` also disagrees about the error field: it returns the **integer `0`** where the regular
+methods return the **boolean `false`**. Test truthiness (`if (body.error)`), never `=== false` or
+`=== 0`.
 
 ## Query parameters
 

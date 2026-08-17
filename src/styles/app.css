@@ -1,0 +1,812 @@
+/* The Dozen — application styles. Mobile-first, touch-first. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--shell);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: var(--t-md);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: contain;
+}
+
+/* Every number in this app is scanned vertically. Tabular figures are not a
+   detail -- ragged digit columns are the fastest way to feel cheap. */
+.num,
+time,
+td,
+th {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--yolk);
+  outline-offset: 2px;
+  border-radius: var(--s-1);
+}
+
+/* ---------------------------------------------------------------- header --- */
+
+.app-header {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: calc(var(--header-h) + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) var(--s-4) 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  background: var(--shell-alpha);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+  z-index: 40;
+}
+
+.app-title {
+  font-size: var(--t-md);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.app-title .the {
+  color: var(--ink-faint);
+  font-weight: 500;
+}
+
+.header-status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--t-xs);
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+/* The BUILD marker. This is how a deploy gets confirmed without dev tools,
+   so it is always visible -- never hidden behind a menu. */
+.build-marker {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  color: var(--ink-faint);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding: 2px 7px;
+}
+
+.refresh-btn {
+  min-width: 32px;
+  min-height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-pill);
+  color: var(--ink-dim);
+}
+.refresh-btn:active {
+  background: var(--surface-up);
+}
+.refresh-btn[data-busy="true"] svg {
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ------------------------------------------------------------------ main --- */
+
+.app-main {
+  padding: calc(var(--header-h) + env(safe-area-inset-top)) 0
+    calc(var(--tabs-h) + env(safe-area-inset-bottom) + var(--s-5));
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.screen {
+  padding: var(--s-4);
+}
+
+.screen-title {
+  font-size: var(--t-lg);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--s-1);
+}
+
+.screen-sub {
+  color: var(--ink-dim);
+  font-size: var(--t-sm);
+  margin: 0 0 var(--s-4);
+}
+
+.section {
+  margin-top: var(--s-5);
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-2);
+}
+
+.section-title {
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0;
+}
+
+/* Every number states its universe -- a bare figure invites the reader to
+   invent a meaning for it. */
+.note {
+  font-size: var(--t-xs);
+  color: var(--ink-faint);
+  line-height: 1.4;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-cell);
+  padding: var(--s-4);
+}
+
+/* ------------------------------------------------------------- song rows --- */
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-cell);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+/* The divider lives on the <li> so it spans the pick button too -- otherwise
+   the rule stops short and the row looks broken at the card edge. */
+.rows > li {
+  border-bottom: 1px solid var(--line-soft);
+}
+.rows > li:last-child {
+  border-bottom: none;
+}
+
+.row-shell {
+  display: flex;
+  align-items: center;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-3);
+  text-align: left;
+  position: relative;
+}
+.row:active {
+  background: var(--surface-up);
+}
+
+.row-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.row-title {
+  font-size: var(--t-md);
+  font-weight: 550;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* One line, truncated -- never wrapped. The rotation list is the densest
+   screen in the app and a wrapping meta line costs a whole row of results. */
+.row-meta {
+  font-size: var(--t-sm);
+  color: var(--ink-dim);
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: nowrap;
+  overflow: hidden;
+  white-space: nowrap;
+  margin-top: 1px;
+}
+
+.row-meta > * {
+  flex: none;
+}
+
+.cover-note {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.row-meta .sep {
+  color: var(--ink-faint);
+}
+
+/* Gap magnitude: opacity of ONE hue, never a rainbow. A multi-hue scale would
+   imply thresholds the data does not have, and thresholds edge toward
+   prediction. */
+.gap-figure {
+  flex: none;
+  min-width: 58px;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.gap-num {
+  font-size: var(--t-lg);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--yolk);
+}
+
+.gap-unit {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+
+.gap-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--yolk);
+  opacity: var(--heat, 0);
+}
+
+/* ---------------------------------------------------------------- badges --- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+
+.badge-jam {
+  color: var(--yolk);
+  border-color: var(--yolk-line);
+}
+
+.badge-set {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 1px 5px;
+}
+
+/* --------------------------------------------------------------- picking --- */
+
+.pick-btn {
+  flex: none;
+  width: 42px;
+  min-height: var(--tap);
+  display: grid;
+  place-items: center;
+  color: var(--ink-faint);
+  border-radius: var(--r-cell);
+}
+.pick-btn:active {
+  background: var(--surface-up);
+}
+.pick-btn[aria-pressed="true"] {
+  color: var(--yolk);
+}
+.row-shell:has(.row[data-picked="true"]) {
+  background: var(--yolk-wash);
+}
+
+/* ------------------------------------------------------------------ tabs --- */
+
+.tabbar {
+  position: fixed;
+  inset: auto 0 0 0;
+  height: calc(var(--tabs-h) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  background: var(--shell-alpha);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-up);
+  z-index: 40;
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+  text-decoration: none;
+  min-height: var(--tap);
+  position: relative;
+}
+
+.tab svg {
+  width: 21px;
+  height: 21px;
+}
+
+.tab[aria-current="page"] {
+  color: var(--yolk);
+}
+
+.tab-count {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  margin-left: 6px;
+  background: var(--yolk);
+  color: var(--yolk-ink);
+  font-size: 9px;
+  font-weight: 800;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: var(--r-pill);
+  display: grid;
+  place-items: center;
+}
+
+/* ----------------------------------------------------------- sort / sheet --- */
+
+.sortbar {
+  position: sticky;
+  top: calc(var(--header-h) + env(safe-area-inset-top));
+  z-index: 30;
+  display: flex;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-4);
+  margin: 0 calc(var(--s-4) * -1) var(--s-3);
+  background: var(--shell-alpha);
+  backdrop-filter: blur(12px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sortbar::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  flex: none;
+  min-height: 34px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-dim);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+.chip[aria-pressed="true"] {
+  color: var(--yolk);
+  border-color: var(--yolk-line);
+  background: var(--yolk-wash);
+}
+
+.search {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--s-3);
+  border-radius: var(--r-cell);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-md);
+}
+.search::placeholder {
+  color: var(--ink-faint);
+}
+
+/* Bottom sheet: reachable, and it doesn't require precise aiming. */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 50;
+}
+
+.sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 51;
+  background: var(--surface);
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+  box-shadow: var(--shadow-sheet);
+  padding: var(--s-3) var(--s-4)
+    calc(env(safe-area-inset-bottom) + var(--s-4));
+  max-height: 80vh;
+  overflow-y: auto;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.sheet-grip {
+  width: 36px;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--line);
+  margin: 0 auto var(--s-3);
+}
+
+.sheet h2 {
+  font-size: var(--t-md);
+  margin: 0 0 var(--s-3);
+}
+
+.sheet-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  min-height: var(--tap);
+  padding: var(--s-2) 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: var(--t-md);
+}
+.sheet-item:last-child {
+  border-bottom: none;
+}
+
+/* --------------------------------------------------------------- setlist --- */
+
+.setlist-set {
+  margin-bottom: var(--s-4);
+}
+
+.setlist-label {
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--yolk);
+  margin-bottom: var(--s-1);
+}
+
+/* Carton's notation renders verbatim. "->" and ">" are different marks and
+   both survive to the screen -- they are never normalized together. */
+.setlist-flow {
+  font-size: var(--t-md);
+  line-height: 1.7;
+  color: var(--ink);
+}
+
+.setlist-song {
+  color: var(--ink);
+  border-bottom: 1px solid transparent;
+}
+.setlist-song:active {
+  border-bottom-color: var(--yolk);
+}
+
+/* "->" must never break across lines into "-" and ">". They are one mark. */
+.segue {
+  color: var(--yolk);
+  font-weight: 700;
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  padding: 0 2px;
+  white-space: nowrap;
+}
+
+.comma {
+  color: var(--ink-faint);
+}
+
+/* Footnotes are tappable, not tooltips -- hover does not exist on a phone. */
+.fn-marker {
+  color: var(--yolk);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  vertical-align: super;
+  line-height: 0;
+  padding: 0 1px;
+}
+
+.fn-list {
+  margin: var(--s-3) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--t-sm);
+  color: var(--ink-dim);
+}
+.fn-list li {
+  display: flex;
+  gap: var(--s-2);
+  padding: var(--s-1) 0;
+}
+
+/* -------------------------------------------------------------- big stat --- */
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--r-cell);
+  overflow: hidden;
+}
+
+.stat {
+  background: var(--surface);
+  padding: var(--s-3);
+}
+
+.stat-value {
+  font-size: var(--t-xl);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.stat-value.accent {
+  color: var(--yolk);
+}
+
+.stat-label {
+  font-size: var(--t-xs);
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+}
+
+/* ------------------------------------------------------------ attribution --- */
+
+.attrib {
+  margin-top: var(--s-5);
+  padding: var(--s-4);
+  border-top: 1px solid var(--line);
+  font-size: var(--t-sm);
+  color: var(--ink-faint);
+  line-height: 1.6;
+}
+
+.attrib a {
+  color: var(--ink-dim);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.carton-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: var(--tap);
+  font-size: var(--t-sm);
+  color: var(--ink-dim);
+  text-decoration: none;
+  font-weight: 600;
+}
+.carton-link::after {
+  content: "↗";
+  font-size: var(--t-xs);
+}
+
+/* ------------------------------------------------- loading: the 12 cells --- */
+
+/* The only literal carton reference in the app. It appears exactly when the
+   user has nothing to do but wait, and doubles as real progress feedback for
+   a ~5MB download. */
+.loader {
+  display: grid;
+  place-items: center;
+  min-height: 60vh;
+  gap: var(--s-4);
+  padding: var(--s-4);
+  text-align: center;
+}
+
+.carton {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 7px;
+  padding: 11px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  width: min(280px, 78vw);
+}
+
+.carton-cell {
+  aspect-ratio: 1 / 1.15;
+  border-radius: 50% 50% 46% 46% / 56% 56% 44% 44%;
+  background: var(--surface-up);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+  transition: background 0.35s ease, transform 0.35s ease;
+}
+
+.carton-cell[data-filled="true"] {
+  background: var(--yolk);
+  transform: scale(1.04);
+}
+
+.loader-label {
+  font-size: var(--t-sm);
+  color: var(--ink-dim);
+}
+
+.loader-sub {
+  font-size: var(--t-xs);
+  color: var(--ink-faint);
+}
+
+/* ----------------------------------------------------------- error state --- */
+
+.banner {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--danger);
+  background: var(--surface);
+  border-radius: var(--r-cell);
+  padding: var(--s-3);
+  margin-bottom: var(--s-4);
+  font-size: var(--t-sm);
+  color: var(--ink-dim);
+}
+
+.banner strong {
+  color: var(--ink);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.banner code {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+  word-break: break-all;
+}
+
+.btn {
+  min-height: var(--tap);
+  padding: 0 var(--s-4);
+  border-radius: var(--r-cell);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--t-md);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+}
+.btn:active {
+  background: var(--surface-up);
+}
+.btn-accent {
+  background: var(--yolk);
+  border-color: var(--yolk);
+  color: var(--yolk-ink);
+}
+.btn-accent:active {
+  background: var(--yolk-deep);
+}
+.btn-block {
+  width: 100%;
+}
+
+.empty {
+  text-align: center;
+  padding: var(--s-6) var(--s-4);
+  color: var(--ink-faint);
+  font-size: var(--t-sm);
+}
+
+/* --------------------------------------------------------------- picks --- */
+
+.pick-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  min-height: var(--tap);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.pick-item[data-dragging="true"] {
+  background: var(--surface-up);
+  opacity: 0.9;
+}
+
+.pick-ordinal {
+  flex: none;
+  width: 22px;
+  font-size: var(--t-sm);
+  font-weight: 700;
+  color: var(--yolk);
+}
+
+.drag-handle {
+  flex: none;
+  width: 34px;
+  min-height: var(--tap);
+  display: grid;
+  place-items: center;
+  color: var(--ink-faint);
+  cursor: grab;
+  touch-action: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Desktop is a courtesy, not the target. */
+@media (min-width: 720px) {
+  .app-main {
+    padding-bottom: var(--s-6);
+  }
+  .stat-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}

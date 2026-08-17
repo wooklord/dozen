@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- The Dozen. Warm carton ground, one yolk. No illustration beyond this. -->
+  <rect width="512" height="512" rx="112" fill="#14110E"/>
+  <!-- carton cell shadow -->
+  <ellipse cx="256" cy="268" rx="150" ry="166" fill="#241E18"/>
+  <!-- the egg -->
+  <path d="M256 96c62 0 116 78 116 152 0 70-50 118-116 118s-116-48-116-118c0-74 54-152 116-152z" fill="#F5EFE6"/>
+  <!-- the yolk -->
+  <circle cx="256" cy="256" r="52" fill="#F5A623"/>
+</svg>

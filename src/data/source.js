@@ -41,6 +41,12 @@ export class DataSourceError extends Error {
 /**
  * Fetch one API URL and return its `data` array.
  * No headers, ever -- see constraint 1 above.
+ *
+ * Content-type is a HINT here, not the test. The `list` special method returns
+ * perfectly valid JSON served as `text/html; charset=UTF-8`, while a bad method
+ * or column name also returns `text/html` -- but with an actual HTML document
+ * in it. So we parse first and use the shape of the body to tell them apart.
+ * Testing content-type alone would reject `list` outright.
  */
 async function fetchJson(url) {
   let res;
@@ -50,24 +56,25 @@ async function fetchJson(url) {
     throw new DataSourceError(`Network request failed: ${url}`, { url, cause });
   }
 
-  const contentType = res.headers.get('content-type') || '';
-  if (!contentType.includes('application/json')) {
-    // An unknown method or column name lands here: HTML body, HTTP 200.
-    throw new DataSourceError(
-      `Expected JSON but got "${contentType || 'unknown'}" -- likely a bad method or column name.`,
-      { url, detail: `http=${res.status}` },
-    );
-  }
+  const text = await res.text();
 
   let body;
   try {
-    body = await res.json();
-  } catch (cause) {
-    throw new DataSourceError(`Response was not parseable JSON: ${url}`, { url, cause });
+    body = JSON.parse(text);
+  } catch {
+    // Not JSON at all. An unknown method or column lands here: an HTML error
+    // page served with HTTP 200. Report the URL that caused it.
+    const looksHtml = /^\s*(<!doctype|<html)/i.test(text);
+    throw new DataSourceError(
+      looksHtml
+        ? 'Got an HTML page instead of data — likely a bad method or column name.'
+        : 'Response was not parseable JSON.',
+      { url, detail: `http=${res.status} first80=${text.slice(0, 80)}` },
+    );
   }
 
-  // `error` is a JSON boolean here, NOT the 0/1 integer the published docs
-  // describe. Truthiness covers both spellings anyway.
+  // `error` is a JSON boolean (`false`) on the regular methods but the integer
+  // `0` on the `list` method. Truthiness covers both spellings.
   if (body.error) {
     throw new DataSourceError(body.error_message || 'API reported an error', {
       url,
@@ -114,12 +121,30 @@ export async function fetchJamcharts() {
   return { rows: await fetchJson(url), url };
 }
 
-/** The authoritative year list, used to drive the recount. */
-export async function fetchYears() {
-  const url = `${BASE}/list/year.json`;
-  const rows = await fetchJson(url);
-  // The `list` method returns a flat array of { field: value }.
-  return { years: rows.map((r) => Number(r.field)).filter(Number.isFinite).sort(), url };
+/**
+ * The year list that drives the recount.
+ *
+ * NOT from /list/year.json. The `list` special method sends NO
+ * Access-Control-Allow-Origin header -- unlike every regular method, which
+ * sends `*` -- so it is unreachable from a browser and fetch() rejects
+ * outright. Verified against the live API.
+ *
+ * Deriving years from the `shows` payload is actually the better cross-check:
+ * it is independent of the setlists pull (which is the thing being verified),
+ * costs no extra request, and is the authoritative list of years that have
+ * shows.
+ *
+ * Note `shows` spells it `show_year`, while `setlists` uses `showyear`.
+ * Implausible years are dropped -- the shows table contains one corrupt row
+ * dated 0015-08-28.
+ */
+export function yearsFromShows(showRows) {
+  const years = new Set();
+  for (const s of showRows) {
+    const y = Number(s.show_year ?? String(s.showdate).slice(0, 4));
+    if (Number.isFinite(y) && y >= 2000 && y <= 2100) years.add(y);
+  }
+  return [...years].sort((a, b) => a - b);
 }
 
 // --- Integrity ---------------------------------------------------------------
@@ -162,11 +187,10 @@ export function quickTruncationCheck(rows, url, newestKnownShowdate) {
  *
  * @param {Function} [onProgress] called as (done, total)
  */
-export async function verifyArchive(fullRows, fullUrl, onProgress) {
-  const { years, url: yearsUrl } = await fetchYears();
-  if (!years.length) {
+export async function verifyArchive(fullRows, fullUrl, years, onProgress) {
+  if (!years?.length) {
     throw new DataSourceError('Year list came back empty; cannot verify the archive.', {
-      url: yearsUrl,
+      url: fullUrl,
     });
   }
 
@@ -255,8 +279,9 @@ export async function fetchFullArchive({ onProgress, verify = true } = {}) {
 
   let verification = null;
   if (verify) {
-    onProgress?.({ phase: 'verify', label: 'verifying archive', done: 0, total: 14 });
-    verification = await verifyArchive(setlists.rows, setlists.url, (done, total) =>
+    const years = yearsFromShows(shows.rows);
+    onProgress?.({ phase: 'verify', label: 'verifying archive', done: 0, total: years.length });
+    verification = await verifyArchive(setlists.rows, setlists.url, years, (done, total) =>
       onProgress?.({ phase: 'verify', label: 'verifying archive', done, total }),
     );
     if (!verification.ok) {
