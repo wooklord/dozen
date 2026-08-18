@@ -1,2 +1,5 @@
 NOTES.local.md
 docs/local_notes/
+
+# stray headless-Chrome profile from an early smoke run (now uses os.tmpdir)
+.smoke-profile-*/

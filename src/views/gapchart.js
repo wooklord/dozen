@@ -16,6 +16,7 @@ import {
   emptyState,
   sectionHead,
   openGapExplainer,
+  venueLine,
 } from '../ui/components.js';
 import { gapChartForShow, showStructure } from '../data/index.js';
 import { formatShowDate, formatShowDateShort } from '../util/dates.js';

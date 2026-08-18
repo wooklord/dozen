@@ -272,6 +272,60 @@ statistics. No writes to any database. No contact with the other two repos.
   loosened where a batch has been pre-approved.
 - Docs land in the repo the moment they're decided, not at the end of a session.
 
+### Run the route smoke test before pushing
+
+```sh
+node scripts/smoke.mjs     # exits non-zero on failure
+```
+
+**`node --test` cannot catch the most common failure in this app.** The unit
+tests cover pure functions; they never render a view. A view that throws — a
+missing import, a renamed export — passes every unit test and then does nothing
+at all when tapped.
+
+That exact bug shipped in **three consecutive releases**: `views/gapchart.js`
+called `venueLine()` without importing it, so `route()` threw, `clear(main)`
+never ran, and the screen stayed on whatever was there before. A dead-looking
+button and no error.
+
+Two things let it through, and the smoke test exists because of both:
+
+1. **The ad-hoc checks did not visit every route.** The gap chart was not in
+   the sweep after the regression landed.
+2. **Screenshotting a broken route still "succeeded"**, because the previous
+   screen was still on display. The run was green and proved nothing.
+
+So the smoke test visits **every** route, and each must render a marker unique
+to *itself* — never just "a screenshot happened". Uncaught exceptions,
+`console.error`, and the error boundary appearing anywhere are all failures.
+
+**A smoke test is only worth its runtime if it fails on the real bug.** After
+writing it, re-introduce the fault and confirm it goes red. This one was
+verified that way: with the import removed it reports 7 failures and exits 1;
+with it restored, 0 and exits 0.
+
+### Views must never fail silently
+
+`route()` wraps view construction in a try/catch and renders `renderViewError`.
+A thrown view shows the error text, the route, the top stack frame and the BUILD
+number, and leaves the tab bar working.
+
+This is not decoration. **There are no dev tools in this project's loop** — the
+screen is the only error report there is, so a silent failure is invisible until
+someone happens to tap the right button. Never "handle" a render error by
+swallowing it.
+
+### Grepping for a symbol does not prove it is imported
+
+The regression was introduced *and* mis-verified by the same mistake: a check
+that searched a file for `venueLine` matched the **call site**, not the import,
+and reported success. An automated edit that skipped files "already containing"
+the name skipped this one for the same reason.
+
+When checking imports, match the import statement, or run
+`scratchpad/undefaudit.mjs`-style analysis that compares imported names against
+called names. Better: run the smoke test, which executes the code.
+
 ### Commit, push, and verify the deploy — all three, every time
 
 **Committing and pushing is part of finishing a change, not something to hand over.** Never leave

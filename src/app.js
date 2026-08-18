@@ -411,6 +411,49 @@ function renderError(err, { keepData = false } = {}) {
   );
 }
 
+/**
+ * What a broken screen looks like.
+ *
+ * Deliberately shows the real error text and the top stack frame rather than a
+ * friendly non-message: this app has no dev tools in its loop, so the screen
+ * IS the error report. Everything here is copyable so it can be pasted back
+ * verbatim. Navigation stays intact so a broken route never traps the app.
+ */
+function renderViewError(err, hash) {
+  const frame = String(err?.stack || '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith('at '))[0];
+
+  return el('div.screen', null, [
+    el('div.banner', null, [
+      el('strong', { text: 'This screen failed to load' }),
+      el('div', { text: `${err?.name || 'Error'}: ${err?.message || String(err)}` }),
+      el('code', { text: hash }),
+      frame ? el('code', { text: frame }) : null,
+      el('code', { text: BUILD_LABEL }),
+    ]),
+    el('p.note', {
+      style: { marginBottom: '12px' },
+      text:
+        'The rest of the app still works — use the tabs below. If this keeps happening, ' +
+        'the lines above are what to report.',
+    }),
+    el('div', { style: { display: 'grid', gap: '8px' } }, [
+      el(
+        'button.btn.btn-accent.btn-block',
+        { type: 'button', onclick: () => navigate('#/home') },
+        'Go to Home',
+      ),
+      el(
+        'button.btn.btn-block',
+        { type: 'button', onclick: () => location.reload() },
+        'Reload the app',
+      ),
+    ]),
+  ]);
+}
+
 // ------------------------------------------------------------------- router --
 
 // Five tabs, deliberately. Songs absorbed the old Rotation screen -- Rotation
@@ -485,16 +528,26 @@ function route() {
 
   // Order matters: '#/show/' and '#/shows' share a prefix, and '#/songs' /
   // '#/song/' likewise, so the more specific pattern is tested first.
+  //
+  // ERROR BOUNDARY. Without this a view that throws leaves the screen exactly
+  // as it was -- the hash changes, nothing else does, and the tap looks like a
+  // dead button. That is invisible without dev tools, which is how a broken
+  // gap chart survived three releases. A view that throws must SAY so.
   let view;
-  if (hash.startsWith('#/song/')) view = renderSong(ctx, hash.slice('#/song/'.length));
-  else if (hash.startsWith('#/songs')) view = renderSongs(ctx);
-  else if (hash.startsWith('#/gapchart/')) view = renderGapChart(ctx, hash.slice('#/gapchart/'.length));
-  else if (hash.startsWith('#/show/')) view = renderShow(ctx, hash.slice('#/show/'.length));
-  else if (hash.startsWith('#/shows')) view = renderShows(ctx);
-  else if (hash.startsWith('#/venue/')) view = renderVenue(ctx, hash.slice('#/venue/'.length));
-  else if (hash.startsWith('#/jams')) view = renderJams(ctx);
-  else if (hash.startsWith('#/picks')) view = renderPicks(ctx);
-  else view = renderHome(ctx);
+  try {
+    if (hash.startsWith('#/song/')) view = renderSong(ctx, hash.slice('#/song/'.length));
+    else if (hash.startsWith('#/songs')) view = renderSongs(ctx);
+    else if (hash.startsWith('#/gapchart/')) view = renderGapChart(ctx, hash.slice('#/gapchart/'.length));
+    else if (hash.startsWith('#/show/')) view = renderShow(ctx, hash.slice('#/show/'.length));
+    else if (hash.startsWith('#/shows')) view = renderShows(ctx);
+    else if (hash.startsWith('#/venue/')) view = renderVenue(ctx, hash.slice('#/venue/'.length));
+    else if (hash.startsWith('#/jams')) view = renderJams(ctx);
+    else if (hash.startsWith('#/picks')) view = renderPicks(ctx);
+    else view = renderHome(ctx);
+  } catch (err) {
+    console.error(`[dozen] view failed to render for ${hash}`, err);
+    view = renderViewError(err, hash);
+  }
 
   clear(main);
   append(main, view);

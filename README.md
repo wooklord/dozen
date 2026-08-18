@@ -11,12 +11,15 @@ back to the corresponding page there.
 
 | Screen | What it shows |
 |---|---|
-| **Show** | The next show (or any of the 18 upcoming ones), what was played last time at that venue, "On This Date", and the venue's play count |
-| **Rotation** | Every song with shows-since-last-played, last played, and times played. One toggle flips coldest ⇄ hottest. Filter by original/cover/jam chart |
-| **Recent** | The last 15 shows, with Carton's setlist notation preserved exactly and footnotes as tappable markers |
-| **Jams** | Jam chart membership, ranked by entry count |
+| **Home** | The next show (or any upcoming one), what was played last time at that venue, "On This Date", and the venue's play count |
+| **Songs** | Every song, searchable, with shows-since-last-played, last played and times played. Sort A–Z, coldest, hottest or most played; filter by original/cover/jam chart |
+| **Shows** | The recent shows with Carton's setlist notation preserved exactly and footnotes as tappable markers, plus search by venue, city, state or date, and "load older" back through the archive |
+| **Jams** | Jam chart membership, A–Z or by entry count |
 | **Picks** | A local shortlist you can reorder and copy as plain text |
-| **Song detail** | Gap, times played, first/last, where it has landed, jam entries, and every performance |
+| **Song detail** | Gap, times played, first/last, longest observed gap, where it has landed, album membership, jam entries, and every performance |
+| **Show detail** | One show's full setlist, show notes, and a link to its gap chart |
+| **Gap chart** | Every song in one night's setlist with its gap *as of that date* |
+| **Venue** | Every show at a venue, newest first, with play count and first/most recent |
 
 ## Scope
 
@@ -43,6 +46,18 @@ Run the tests:
 node --test
 ```
 
+Run the route smoke test (needs Chrome; set `CHROME=/path/to/chrome` if it
+isn't found automatically):
+
+```sh
+node scripts/smoke.mjs
+```
+
+It boots the real app in a headless browser, visits every route, and requires
+each one to render content unique to itself. Unit tests cover pure functions
+and cannot catch a view that throws — that failure mode once shipped three
+releases in a row. Run it before pushing.
+
 ## Architecture
 
 ```
@@ -58,6 +73,7 @@ src/
     normalize.js      song-name normalizer + entity decoding
   ui/                 dom helpers, shared components
   views/              one file per screen
+scripts/smoke.mjs     route smoke test (headless Chrome)
 tests/                node --test
 docs/                 plan, schema, design, parked ideas
 ```
