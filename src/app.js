@@ -8,6 +8,15 @@ import { buildIndex } from './data/index.js';
 import { formatAge, localYear } from './util/dates.js';
 import { count as pickCount } from './scratchpad.js';
 import { openGapExplainer } from './ui/components.js';
+import {
+  THEMES,
+  THEME_LABELS,
+  getTheme,
+  setTheme,
+  applyTheme,
+  resolvedTheme,
+  onSystemThemeChange,
+} from './theme.js';
 
 import { renderHome } from './views/home.js';
 import { renderSongs } from './views/songs.js';
@@ -182,6 +191,56 @@ function renderHeaderStatus() {
 }
 
 /**
+ * Three-state Auto / Light / Dark.
+ *
+ * Auto is the default, so nothing changes for anyone who never touches it.
+ * The other two exist because a phone that switches at sunset otherwise
+ * changes the app underneath you with no way to decline.
+ *
+ * Built for one hand in a dark room: three full-height targets across the
+ * sheet width, no precise aiming, no submenu.
+ */
+function themeControl() {
+  const wrap = el('div');
+
+  function paint() {
+    const current = getTheme();
+    const resolved = resolvedTheme(current);
+    wrap.replaceChildren(
+      el('div.section-title', { style: { marginBottom: '6px' }, text: 'Appearance' }),
+      el(
+        'div.segmented',
+        { role: 'group', 'aria-label': 'Appearance' },
+        THEMES.map((t) =>
+          el(
+            'button.segmented-item',
+            {
+              type: 'button',
+              'aria-pressed': String(current === t),
+              onclick: () => {
+                setTheme(t);
+                paint();
+              },
+            },
+            THEME_LABELS[t],
+          ),
+        ),
+      ),
+      el('p.note', {
+        style: { marginTop: '6px' },
+        text:
+          current === 'auto'
+            ? `Following your device, which is ${resolved} right now.`
+            : `Always ${resolved}, whatever your device does.`,
+      }),
+    );
+  }
+
+  paint();
+  return wrap;
+}
+
+/**
  * Cache age, row count and newest showdate, all visible without dev tools --
  * a stale or truncated index has to be diagnosable from the UI alone.
  */
@@ -190,6 +249,11 @@ function openCacheSheet() {
     const a = app.archive;
     const i = app.index;
     return el('div', { style: { display: 'grid', gap: '10px' } }, [
+      // Appearance sits FIRST in the sheet. This is a bottom sheet, so the
+      // top of it is the part nearest the thumb -- and putting it above the
+      // stats means it is never something to scroll for while a set starts.
+      themeControl(),
+
       el('div.stat-grid', null, [
         el('div.stat', null, [
           el('div.stat-value.num', { text: String(i?.counts.setlistRows ?? 0) }),
@@ -417,6 +481,12 @@ function route() {
 
 window.addEventListener('hashchange', route);
 window.addEventListener('dozen:picks-changed', renderTabs);
+
+// Re-apply on load (the inline head script already stamped it pre-paint; this
+// keeps the meta tag and any later state in step) and follow the OS while in
+// auto mode.
+applyTheme();
+onSystemThemeChange(() => renderHeaderStatus());
 
 renderTabs();
 boot();

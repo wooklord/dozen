@@ -8,13 +8,34 @@
       name="description"
       content="A fast, mobile-first reader for The Carton's Eggy setlist archive. Gap charts, rotation, recent setlists and jam charts."
     />
-    <meta name="theme-color" content="#14110e" />
+    <!-- Two media-scoped theme-colors so the browser chrome follows the OS in
+         Auto mode. app.js overrides these when an explicit theme is chosen. -->
+    <meta name="theme-color" content="#14110e" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#faf6ef" media="(prefers-color-scheme: light)" />
     <meta name="color-scheme" content="dark light" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icons/icon-180.png" />
     <link rel="stylesheet" href="./src/styles/tokens.css" />
     <link rel="stylesheet" href="./src/styles/app.css" />
+    <script>
+      // Stamp the saved theme BEFORE first paint. src/app.js is a module and
+      // therefore deferred, so doing this there would flash the default
+      // palette first -- which is exactly the jarring thing an explicit theme
+      // choice is meant to prevent. Mirrors src/theme.js; kept tiny and
+      // dependency-free on purpose.
+      try {
+        var t = localStorage.getItem('dozen.theme.v1');
+        if (t === 'light' || t === 'dark') {
+          document.documentElement.setAttribute('data-theme', t);
+          var m = document.createElement('meta');
+          m.id = 'theme-color-explicit';
+          m.name = 'theme-color';
+          m.content = t === 'light' ? '#faf6ef' : '#14110e';
+          document.head.appendChild(m);
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <header class="app-header">
@@ -39,9 +60,11 @@
     <nav class="tabbar" id="tabbar" aria-label="Main"></nav>
 
     <noscript>
-      <p style="padding: 24px; color: #a99f92">
+      <!-- Tokens, not literals: hardcoded hex here would stay dark-mode
+           coloured on a light background. -->
+      <p style="padding: 24px; color: var(--ink-dim)">
         The Dozen needs JavaScript. All setlist data comes from
-        <a href="https://thecarton.net" style="color: #f5a623">The Carton</a>.
+        <a href="https://thecarton.net" style="color: var(--yolk)">The Carton</a>.
       </p>
     </noscript>
 

@@ -606,7 +606,7 @@ button.gap-figure:active {
 .sheet-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--scrim);
   z-index: 50;
 }
 
@@ -637,6 +637,41 @@ button.gap-figure:active {
 .sheet h2 {
   font-size: var(--t-md);
   margin: 0 0 var(--s-3);
+}
+
+/* Three-state control. Full-width thirds at full tap height: usable one-handed
+   in a dark room without aiming. */
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-up);
+  border: 1px solid var(--line);
+  border-radius: var(--r-cell);
+}
+
+.segmented-item {
+  min-height: var(--tap);
+  border-radius: calc(var(--r-cell) - 3px);
+  font-size: var(--t-md);
+  font-weight: 600;
+  color: var(--ink-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.segmented-item[aria-pressed="true"] {
+  background: var(--yolk);
+  color: var(--yolk-ink);
+}
+
+.segmented-item:active {
+  background: var(--line);
+}
+.segmented-item[aria-pressed="true"]:active {
+  background: var(--yolk-deep);
 }
 
 .sheet-item {
@@ -817,7 +852,7 @@ button.gap-figure:active {
   aspect-ratio: 1 / 1.15;
   border-radius: 50% 50% 46% 46% / 56% 56% 44% 44%;
   background: var(--surface-up);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+  box-shadow: inset 0 1px 2px var(--cell-inset);
   transition: background 0.35s ease, transform 0.35s ease;
 }
 

@@ -1,40 +1,96 @@
-/* Design tokens. See docs/design.md for the reasoning behind every value. */
+/* Design tokens. See docs/design.md for the reasoning behind every value.
+ *
+ * STRUCTURE
+ *   1. Both palettes are declared once, as --dk-* and --lt-* raw values.
+ *   2. The active tokens are then MAPPED to one palette or the other.
+ *
+ * The mapping is repeated for three selectors (default, OS-light, forced-light)
+ * but contains no colour literals, so a colour is only ever edited in one
+ * place. Duplicating hex values across theme blocks is how palettes drift.
+ *
+ * CONTRAST
+ *   Every foreground/background pair in use was measured against WCAG AA:
+ *   4.5:1 for normal text, 3:1 for large/bold. The light palette originally
+ *   failed four checks -- the yolk accent was 3.85:1 on white as small text --
+ *   and the values below are the corrected ones. The two themes deliberately
+ *   do NOT share the same yolk hex: they have to be equally readable, which is
+ *   not the same as being identical.
+ */
 
 :root {
-  /* --- Color: dark is the default and the design target --------------------
-     Warm near-black, closer to cardboard in shadow than to a terminal. The
-     warmth is the carton reference; it does the work an illustration would. */
-  --shell: #14110e;
-  --shell-alpha: rgba(20, 17, 14, 0.86);
-  --surface: #1c1815;
-  --surface-up: #262019;
-  --line: #332c25;
-  --line-soft: #262019;
+  /* --- Dark palette (raw) ------------------------------------------------ */
+  --dk-shell: #14110e;
+  --dk-shell-alpha: rgba(20, 17, 14, 0.86);
+  --dk-surface: #1c1815;
+  --dk-surface-up: #262019;
+  --dk-line: #332c25;
+  --dk-line-soft: #262019;
+  --dk-ink: #f5efe6;
+  --dk-ink-dim: #bcb2a3;
+  --dk-ink-faint: #8d8375;
+  --dk-ink-venue: #f5efe6;
+  --dk-ink-place: #cabfae;
+  --dk-yolk: #f5a623;
+  --dk-yolk-deep: #c77f14;
+  --dk-yolk-wash: rgba(245, 166, 35, 0.12);
+  --dk-yolk-line: rgba(245, 166, 35, 0.35);
+  --dk-yolk-ink: #1a1206;
+  --dk-danger: #e5734a;
+  --dk-scrim: rgba(0, 0, 0, 0.5);
+  --dk-cell-inset: rgba(0, 0, 0, 0.4);
+  --dk-shadow-up: 0 -1px 0 #332c25, 0 -8px 24px rgba(0, 0, 0, 0.45);
+  --dk-shadow-sheet: 0 -8px 40px rgba(0, 0, 0, 0.6);
 
-  --ink: #f5efe6;
-  /* Raised for arm's-length legibility on a phone in a dark room. The old
-     values (#a99f92 / #6e655b) tested fine zoomed in on a desktop and were
-     genuinely hard to read held at arm's length. */
-  --ink-dim: #bcb2a3;
-  --ink-faint: #8d8375;
+  /* --- Light palette (raw) ----------------------------------------------- */
+  /* Yolk is #945906 here, not the dark #f5a623: measured 5.69:1 on white,
+     5.28:1 on the shell and 4.84:1 on the pressed surface. The previous
+     #b8720a cleared none of those as small text. */
+  --lt-shell: #faf6ef;
+  --lt-shell-alpha: rgba(250, 246, 239, 0.9);
+  --lt-surface: #ffffff;
+  --lt-surface-up: #f2ece1;
+  --lt-line: #ddd3c2;
+  --lt-line-soft: #eee7db;
+  --lt-ink: #1e1913;
+  --lt-ink-dim: #5c5246;
+  --lt-ink-faint: #6f6657;
+  --lt-ink-venue: #1e1913;
+  --lt-ink-place: #4f463b;
+  --lt-yolk: #945906;
+  --lt-yolk-deep: #7d4d05;
+  --lt-yolk-wash: rgba(148, 89, 6, 0.1);
+  --lt-yolk-line: rgba(148, 89, 6, 0.32);
+  --lt-yolk-ink: #fffaf1;
+  --lt-danger: #b03a06;
+  --lt-scrim: rgba(0, 0, 0, 0.38);
+  --lt-cell-inset: rgba(0, 0, 0, 0.12);
+  --lt-shadow-up: 0 -1px 0 #ddd3c2, 0 -8px 24px rgba(0, 0, 0, 0.08);
+  --lt-shadow-sheet: 0 -8px 40px rgba(0, 0, 0, 0.18);
 
-  /* Venue and location are PRIMARY information, not metadata -- knowing which
-     Brooklyn Bowl you are looking at matters. They get their own tokens so
-     they can never accidentally inherit a de-emphasized one. */
-  --ink-venue: #f5efe6;
-  --ink-place: #cabfae;
+  /* --- Active mapping: dark is the default ------------------------------- */
+  --shell: var(--dk-shell);
+  --shell-alpha: var(--dk-shell-alpha);
+  --surface: var(--dk-surface);
+  --surface-up: var(--dk-surface-up);
+  --line: var(--dk-line);
+  --line-soft: var(--dk-line-soft);
+  --ink: var(--dk-ink);
+  --ink-dim: var(--dk-ink-dim);
+  --ink-faint: var(--dk-ink-faint);
+  --ink-venue: var(--dk-ink-venue);
+  --ink-place: var(--dk-ink-place);
+  --yolk: var(--dk-yolk);
+  --yolk-deep: var(--dk-yolk-deep);
+  --yolk-wash: var(--dk-yolk-wash);
+  --yolk-line: var(--dk-yolk-line);
+  --yolk-ink: var(--dk-yolk-ink);
+  --danger: var(--dk-danger);
+  --scrim: var(--dk-scrim);
+  --cell-inset: var(--dk-cell-inset);
+  --shadow-up: var(--dk-shadow-up);
+  --shadow-sheet: var(--dk-shadow-sheet);
 
-  /* ONE accent, load-bearing. Marks gap magnitude, active sort, and
-     scratchpad membership. Nothing else. */
-  --yolk: #f5a623;
-  --yolk-deep: #c77f14;
-  --yolk-wash: rgba(245, 166, 35, 0.12);
-  --yolk-line: rgba(245, 166, 35, 0.35);
-  --yolk-ink: #1a1206;
-
-  --danger: #e5734a;
-
-  /* --- Type --------------------------------------------------------------- */
+  /* --- Type -------------------------------------------------------------- */
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -45,7 +101,7 @@
   --t-lg: 19px;
   --t-xl: 26px;
 
-  /* --- Space and shape ---------------------------------------------------- */
+  /* --- Space and shape --------------------------------------------------- */
   --s-1: 4px;
   --s-2: 8px;
   --s-3: 12px;
@@ -60,35 +116,61 @@
 
   --header-h: 52px;
   --tabs-h: 58px;
-
-  --shadow-up: 0 -1px 0 var(--line), 0 -8px 24px rgba(0, 0, 0, 0.45);
-  --shadow-sheet: 0 -8px 40px rgba(0, 0, 0, 0.6);
 }
 
-/* Light is a courtesy, not the target: token overrides only, no layout
-   changes. Dark remains the default when no preference is expressed. */
+/* Auto (no explicit choice): follow the OS.
+   `:not([data-theme="dark"])` so an explicit dark choice still wins on a
+   light-mode phone. */
 @media (prefers-color-scheme: light) {
-  :root {
-    --shell: #faf6ef;
-    --shell-alpha: rgba(250, 246, 239, 0.9);
-    --surface: #ffffff;
-    --surface-up: #f2ece1;
-    --line: #e2d9ca;
-    --line-soft: #eee7db;
-
-    --ink: #1e1913;
-    --ink-dim: #5c5246;
-    --ink-faint: #7d7263;
-    --ink-venue: #1e1913;
-    --ink-place: #4f463b;
-
-    --yolk: #b8720a;
-    --yolk-deep: #8f5806;
-    --yolk-wash: rgba(184, 114, 10, 0.1);
-    --yolk-line: rgba(184, 114, 10, 0.3);
-    --yolk-ink: #fffaf1;
-
-    --shadow-up: 0 -1px 0 var(--line), 0 -8px 24px rgba(0, 0, 0, 0.08);
-    --shadow-sheet: 0 -8px 40px rgba(0, 0, 0, 0.18);
+  :root:not([data-theme="dark"]) {
+    --shell: var(--lt-shell);
+    --shell-alpha: var(--lt-shell-alpha);
+    --surface: var(--lt-surface);
+    --surface-up: var(--lt-surface-up);
+    --line: var(--lt-line);
+    --line-soft: var(--lt-line-soft);
+    --ink: var(--lt-ink);
+    --ink-dim: var(--lt-ink-dim);
+    --ink-faint: var(--lt-ink-faint);
+    --ink-venue: var(--lt-ink-venue);
+    --ink-place: var(--lt-ink-place);
+    --yolk: var(--lt-yolk);
+    --yolk-deep: var(--lt-yolk-deep);
+    --yolk-wash: var(--lt-yolk-wash);
+    --yolk-line: var(--lt-yolk-line);
+    --yolk-ink: var(--lt-yolk-ink);
+    --danger: var(--lt-danger);
+    --scrim: var(--lt-scrim);
+    --cell-inset: var(--lt-cell-inset);
+    --shadow-up: var(--lt-shadow-up);
+    --shadow-sheet: var(--lt-shadow-sheet);
   }
 }
+
+/* Explicit Light: wins regardless of what the OS says. */
+:root[data-theme="light"] {
+  --shell: var(--lt-shell);
+  --shell-alpha: var(--lt-shell-alpha);
+  --surface: var(--lt-surface);
+  --surface-up: var(--lt-surface-up);
+  --line: var(--lt-line);
+  --line-soft: var(--lt-line-soft);
+  --ink: var(--lt-ink);
+  --ink-dim: var(--lt-ink-dim);
+  --ink-faint: var(--lt-ink-faint);
+  --ink-venue: var(--lt-ink-venue);
+  --ink-place: var(--lt-ink-place);
+  --yolk: var(--lt-yolk);
+  --yolk-deep: var(--lt-yolk-deep);
+  --yolk-wash: var(--lt-yolk-wash);
+  --yolk-line: var(--lt-yolk-line);
+  --yolk-ink: var(--lt-yolk-ink);
+  --danger: var(--lt-danger);
+  --scrim: var(--lt-scrim);
+  --cell-inset: var(--lt-cell-inset);
+  --shadow-up: var(--lt-shadow-up);
+  --shadow-sheet: var(--lt-shadow-sheet);
+}
+
+/* Explicit Dark needs no block: the :root defaults already map to dark, and
+   the OS-light block above excludes [data-theme="dark"]. */

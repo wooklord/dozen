@@ -44,8 +44,38 @@ eye has exactly one thing to find.
 Gap magnitude uses **opacity of a single hue**, not a rainbow scale. A multi-hue heatmap would
 imply thresholds the data doesn't have, and thresholds edge toward prediction.
 
-A light palette exists under `prefers-color-scheme: light` as token overrides only. Dark is the
-default and the design target; light is a courtesy.
+### Themes: Auto / Light / Dark
+
+Dark is the default and the design target. Light is a **supported theme**, not a courtesy — it was
+audited and corrected, and there is an explicit three-state control in the Data panel.
+
+Auto (following the OS) is the default because it handles the common case unprompted. It is not
+sufficient on its own: a phone that switches at sunset changes the app underneath the user with no
+way to decline, which is precisely what the Light and Dark options are for.
+
+Both palettes are declared once in `tokens.css` as `--dk-*` / `--lt-*` raw values, then *mapped*
+onto the active tokens by three selectors (default, OS-light, forced-light). The mapping blocks
+contain no colour literals, so a colour is only ever edited in one place — duplicating hex values
+across theme blocks is how palettes drift apart.
+
+### Contrast is measured, not eyeballed
+
+Every foreground/background pair in use is checked against WCAG AA: **4.5:1 for normal text, 3:1
+for large/bold**. This is not decoration — the yolk accent carries meaning on gap figures, so
+failing contrast is a legibility bug, not a taste one.
+
+The light palette originally **failed four checks**, the worst being the yolk accent at 3.85:1 on
+white as small text (tab labels, badges, set labels). Corrected values:
+
+| Token | Was | Now | Why |
+|---|---|---|---|
+| `--lt-yolk` | `#b8720a` | `#945906` | 3.85:1 → 5.69:1 on white; also clears the pressed surface |
+| `--lt-ink-faint` | `#7d7263` | `#6f6657` | 4.37:1 → 5.25:1 on the shell |
+| `--lt-danger` | `#c2410c` | `#b03a06` | headroom |
+
+**The two themes deliberately do not share the same yolk hex.** They have to be equally *readable*,
+which is not the same as being identical — a colour that works on near-black does not automatically
+work on white. Re-run `scratchpad/contrast.mjs` after any palette change.
 
 ## Type
 
