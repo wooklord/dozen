@@ -1,10 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <!-- The Dozen. Warm carton ground, one yolk. No illustration beyond this. -->
-  <rect width="512" height="512" rx="112" fill="#14110E"/>
-  <!-- carton cell shadow -->
-  <ellipse cx="256" cy="268" rx="150" ry="166" fill="#241E18"/>
-  <!-- the egg -->
-  <path d="M256 96c62 0 116 78 116 152 0 70-50 118-116 118s-116-48-116-118c0-74 54-152 116-152z" fill="#F5EFE6"/>
-  <!-- the yolk -->
-  <circle cx="256" cy="256" r="52" fill="#F5A623"/>
+  <!-- The Dozen. A 4x3 carton: twelve egg ovals in a tray.
+       Geometric and flat on purpose -- a mark, not an illustration.
+       Colours are the dark-theme tokens: shell #14110e, tray #2f2720, yolk #f5a623. -->
+  <rect width="512" height="512" rx="112" fill="#14110e"/>
+  <rect x="72" y="126" width="368" height="260" rx="34" fill="#2f2720"/>
+
+  <ellipse cx="118" cy="169.33333333333334" rx="31" ry="37" fill="#f5a623"/>
+  <ellipse cx="210" cy="169.33333333333334" rx="31" ry="37" fill="#f5a623"/>
+  <ellipse cx="302" cy="169.33333333333334" rx="31" ry="37" fill="#f5a623"/>
+  <ellipse cx="394" cy="169.33333333333334" rx="31" ry="37" fill="#f5a623"/>
+  <ellipse cx="118" cy="256" rx="31" ry="37" fill="#f5a623"/>
+  <ellipse cx="210" cy="256" rx="31" ry="37" fill="#f5a623"/>
+  <ellipse cx="302" cy="256" rx="31" ry="37" fill="#f5a623"/>
+  <ellipse cx="394" cy="256" rx="31" ry="37" fill="#f5a623"/>
+  <ellipse cx="118" cy="342.6666666666667" rx="31" ry="37" fill="#f5a623"/>
+  <ellipse cx="210" cy="342.6666666666667" rx="31" ry="37" fill="#f5a623"/>
+  <ellipse cx="302" cy="342.6666666666667" rx="31" ry="37" fill="#f5a623"/>
+  <ellipse cx="394" cy="342.6666666666667" rx="31" ry="37" fill="#f5a623"/>
 </svg>

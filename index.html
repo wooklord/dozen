@@ -15,7 +15,10 @@
     <meta name="color-scheme" content="dark light" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="./icons/icon-180.png" />
+    <!-- iOS ignores the manifest's maskable purpose and applies its own
+         squircle mask, so this points at a square full-bleed asset rather than
+         the padded maskable one -- otherwise the mark floats small inside it. -->
+    <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon-180.png" />
     <link rel="stylesheet" href="./src/styles/tokens.css" />
     <link rel="stylesheet" href="./src/styles/app.css" />
     <script>
@@ -39,7 +42,21 @@
   </head>
   <body>
     <header class="app-header">
-      <h1 class="app-title"><span class="the">The</span> Dozen</h1>
+      <div class="app-brand">
+        <!-- 3x2, not the full dozen: at 24px a 4x3 grid collapses into
+             texture, the same way the carton failed in the tab bar. The whole
+             dozen lives on the app icon, where there is room for it.
+             `currentColor` so it follows --yolk into the light theme. -->
+        <svg class="app-mark" viewBox="0 0 512 512" aria-hidden="true" focusable="false">
+          <ellipse cx="85.3" cy="160" rx="62" ry="74" />
+          <ellipse cx="256" cy="160" rx="62" ry="74" />
+          <ellipse cx="426.7" cy="160" rx="62" ry="74" />
+          <ellipse cx="85.3" cy="352" rx="62" ry="74" />
+          <ellipse cx="256" cy="352" rx="62" ry="74" />
+          <ellipse cx="426.7" cy="352" rx="62" ry="74" />
+        </svg>
+        <h1 class="app-title"><span class="the">The</span> Dozen</h1>
+      </div>
       <div class="header-status" id="header-status"></div>
     </header>
 

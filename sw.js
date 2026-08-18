@@ -9,7 +9,7 @@
 // Bump CACHE_VERSION whenever shell files change. It is tied to the BUILD
 // marker so a deploy is confirmable from the header.
 
-const CACHE_VERSION = 'dozen-shell-v29';
+const CACHE_VERSION = 'dozen-shell-v30';
 
 const SHELL = [
   './',
@@ -41,6 +41,8 @@ const SHELL = [
   './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './icons/icon-maskable-512.png',
+  './icons/apple-touch-icon-180.png',
 ];
 
 self.addEventListener('install', (event) => {
