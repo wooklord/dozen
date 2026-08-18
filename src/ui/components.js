@@ -166,7 +166,21 @@ function heatFor(gap, maxGap) {
  * A song row. `figure` chooses which number sits on the right.
  * Every label describes what HAS happened -- never what will.
  */
-export function songRow(song, { figure = 'gap', maxGap = 1, onOpen, index } = {}) {
+/**
+ * @param {object} opts
+ * @param {boolean} [opts.jamBadge=false]  Show a "Jam" badge on the meta line.
+ *   OFF by default. On the Songs list it crowded the second line -- which is
+ *   where gap and cover credit are scanned -- and it duplicated the "Jam
+ *   charts" filter chip sitting directly above the list. The fact stays
+ *   reachable through that filter, through the Jams tab, and through the jam
+ *   chart entries on song detail, where it does real work rather than acting
+ *   as a label. Parameterized rather than deleted so a future caller can ask
+ *   for it explicitly instead of the option vanishing from the shared row.
+ */
+export function songRow(
+  song,
+  { figure = 'gap', maxGap = 1, onOpen, index, jamBadge = false } = {},
+) {
   const picked = isPicked(song.song_id);
 
   let value;
@@ -210,7 +224,7 @@ export function songRow(song, { figure = 'gap', maxGap = 1, onOpen, index } = {}
       }),
     );
   }
-  if (song.isJamChart) append(meta, el('span.badge.badge-jam', { text: 'Jam' }));
+  if (jamBadge && song.isJamChart) append(meta, el('span.badge.badge-jam', { text: 'Jam' }));
 
   const pickBtn = el(
     'button.pick-btn',
