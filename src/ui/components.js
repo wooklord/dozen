@@ -369,6 +369,32 @@ export function setlistBlock(rows, { onSong, index } = {}) {
   return wrap;
 }
 
+/**
+ * Venue name + place, rendered at primary weight everywhere it appears.
+ *
+ * One helper so no screen can quietly drop this back into `.note` or another
+ * de-emphasized style. Venue and city/state are primary information: three
+ * different venues share the name "Brooklyn Bowl", so the place is part of
+ * knowing what you are looking at.
+ *
+ * @param {object} showOrVenue  anything with venuename plus location or city/state
+ * @param {{small?: boolean}} [opts]
+ */
+export function venueLine(showOrVenue, { small = false } = {}) {
+  const name = showOrVenue.venuename || '';
+  const place =
+    showOrVenue.location ||
+    [showOrVenue.city, showOrVenue.state, showOrVenue.country]
+      .filter(Boolean)
+      .filter((p, i, arr) => !(p === 'USA' && arr.length > 2))
+      .join(', ');
+
+  return el(`div.venue-line${small ? '.venue-line-sm' : ''}`, null, [
+    el('span', { text: name }),
+    place ? el('span.place', { text: ` · ${place}` }) : null,
+  ]);
+}
+
 export function statTile(value, label, accent = false) {
   return el('div.stat', null, [
     el(`div.stat-value${accent ? '.accent' : ''}.num`, { text: String(value) }),

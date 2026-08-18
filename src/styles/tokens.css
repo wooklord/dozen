@@ -12,8 +12,17 @@
   --line-soft: #262019;
 
   --ink: #f5efe6;
-  --ink-dim: #a99f92;
-  --ink-faint: #6e655b;
+  /* Raised for arm's-length legibility on a phone in a dark room. The old
+     values (#a99f92 / #6e655b) tested fine zoomed in on a desktop and were
+     genuinely hard to read held at arm's length. */
+  --ink-dim: #bcb2a3;
+  --ink-faint: #8d8375;
+
+  /* Venue and location are PRIMARY information, not metadata -- knowing which
+     Brooklyn Bowl you are looking at matters. They get their own tokens so
+     they can never accidentally inherit a de-emphasized one. */
+  --ink-venue: #f5efe6;
+  --ink-place: #cabfae;
 
   /* ONE accent, load-bearing. Marks gap magnitude, active sort, and
      scratchpad membership. Nothing else. */
@@ -68,8 +77,10 @@
     --line-soft: #eee7db;
 
     --ink: #1e1913;
-    --ink-dim: #6b6053;
-    --ink-faint: #968a7a;
+    --ink-dim: #5c5246;
+    --ink-faint: #7d7263;
+    --ink-venue: #1e1913;
+    --ink-place: #4f463b;
 
     --yolk: #b8720a;
     --yolk-deep: #8f5806;

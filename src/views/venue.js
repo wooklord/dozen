@@ -16,6 +16,7 @@ import {
   sectionHead,
   emptyState,
   statTile,
+  venueLine,
 } from '../ui/components.js';
 import { showStructure } from '../data/index.js';
 import { formatShowDate, formatShowDateShort } from '../util/dates.js';
@@ -42,9 +43,11 @@ export function renderVenue(ctx, venueId) {
   append(screen, el('h1.screen-title', { text: venue.venuename }));
   append(
     screen,
-    el('p.screen-sub', {
-      text: [venue.city, venue.state, venue.country].filter(Boolean).join(', '),
-    }),
+    el('div.venue-line', null, [
+      el('span.place', {
+        text: [venue.city, venue.state, venue.country].filter(Boolean).join(', '),
+      }),
+    ]),
   );
   append(screen, cartonLink(venuePermalink(venue), 'View on The Carton'));
 

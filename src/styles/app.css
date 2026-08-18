@@ -168,6 +168,35 @@ a {
   margin: 0;
 }
 
+/* Venue name + location.
+   Primary information, never metadata: which Brooklyn Bowl (of three) you are
+   looking at is part of identifying the show. Deliberately does NOT use .note
+   or any de-emphasized token. */
+.venue-line {
+  font-size: var(--t-md);
+  line-height: 1.35;
+  font-weight: 550;
+  color: var(--ink-venue);
+}
+
+.venue-line .place {
+  font-weight: 450;
+  color: var(--ink-place);
+}
+
+/* Inside a dense row, one step down in size but the same contrast. */
+.venue-line-sm {
+  font-size: var(--t-sm);
+  font-weight: 500;
+}
+
+/* Inside a row the venue line must truncate rather than widen the row. */
+.row-main > .venue-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Every number states its universe -- a bare figure invites the reader to
    invent a meaning for it. */
 .note {

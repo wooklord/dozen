@@ -39,10 +39,8 @@ export function renderGapChart(ctx, showId) {
   }
 
   append(screen, el('h1.screen-title', { text: 'Gap chart' }));
-  append(
-    screen,
-    el('p.screen-sub', { text: `${formatShowDate(show.showdate)} · ${show.venuename}` }),
-  );
+  append(screen, el('p.screen-sub', { text: formatShowDate(show.showdate) }));
+  append(screen, venueLine(show));
 
   const entries = gapChartForShow(index, show.show_id);
 
@@ -59,8 +57,9 @@ export function renderGapChart(ctx, showId) {
       el('p', {
         style: { margin: '0 0 8px', fontSize: 'var(--t-sm)' },
         text:
-          'Each song’s gap as of this show — how many shows had passed since it was last ' +
-          'played, counted at that date. These are not current gaps.',
+          'How many shows had passed since each song was last played, counted as of this ' +
+          'date. A song’s gap today is a different number — it keeps growing until the song ' +
+          'is played again.',
       }),
       el('div', null, [openGapExplainerLink(index)]),
     ]),

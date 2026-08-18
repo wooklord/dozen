@@ -14,6 +14,7 @@ import {
   attribution,
   sectionHead,
   emptyState,
+  venueLine,
 } from '../ui/components.js';
 import { showStructure, compareVenuesByName } from '../data/index.js';
 import { formatShowDate, formatShowDateShort } from '../util/dates.js';
@@ -72,11 +73,6 @@ export function renderShows(ctx) {
     const structure = hasSetlist ? showStructure(index, show.show_id) : null;
     const upcoming = show.showdate > index.today;
 
-    const meta = el('div.row-meta');
-    if (showVenue) {
-      append(meta, el('span', { text: `${show.venuename} · ${show.location}` }));
-    }
-
     return el('li', null, [
       el('div.row-shell', null, [
         el(
@@ -85,7 +81,7 @@ export function renderShows(ctx) {
           [
             el('div.row-main', null, [
               el('div.row-title', { text: formatShowDate(show.showdate) }),
-              meta,
+              showVenue ? venueLine(show, { small: true }) : null,
             ]),
             // Format is shown only where setlist data establishes it. Upcoming
             // shows assert nothing; played shows with no setlist say so.
@@ -178,9 +174,9 @@ export function renderShows(ctx) {
                 [
                   el('div.row-main', null, [
                     el('div.row-title', { text: venue.venuename }),
-                    el('div.row-meta', null, [
-                      el('span', { text: `${venue.city}, ${venue.state}` }),
-                      reason ? el('span.badge', { text: reason }) : null,
+                    el('div.venue-line.venue-line-sm', null, [
+                      el('span.place', { text: [venue.city, venue.state].filter(Boolean).join(', ') }),
+                      reason ? el('span.badge', { style: { marginLeft: '6px' }, text: reason }) : null,
                     ]),
                   ]),
                   el('div.gap-figure', null, [
@@ -225,7 +221,7 @@ export function renderShows(ctx) {
             [
               el('div', { style: { minWidth: '0' } }, [
                 el('div', { style: { fontWeight: '650' }, text: formatShowDate(show.showdate) }),
-                el('div.note', { text: `${show.venuename} · ${show.location}` }),
+                venueLine(show, { small: true }),
               ]),
               rows.length
                 ? el('span.badge.badge-set', { text: showStructure(index, show.show_id) || '' })

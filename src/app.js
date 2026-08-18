@@ -9,7 +9,7 @@ import { formatAge, localYear } from './util/dates.js';
 import { count as pickCount } from './scratchpad.js';
 import { openGapExplainer } from './ui/components.js';
 
-import { renderUpcoming } from './views/upcoming.js';
+import { renderHome } from './views/home.js';
 import { renderSongs } from './views/songs.js';
 import { renderShows } from './views/shows.js';
 import { renderSong } from './views/song.js';
@@ -326,8 +326,11 @@ function renderError(err, { keepData = false } = {}) {
 // Five tabs, deliberately. Songs absorbed the old Rotation screen -- Rotation
 // was already "all songs sorted by gap", so it is a sort mode here rather than
 // a sixth tab.
+// "Home" rather than "Show": it sat next to "Shows" and read as a near
+// duplicate, and the screen is more than the next show -- venue history and
+// On This Date live here too.
 const TABS = [
-  ['#/', 'Show', ICONS.calendar],
+  ['#/home', 'Home', ICONS.calendar],
   ['#/songs', 'Songs', ICONS.gap],
   ['#/shows', 'Shows', ICONS.list],
   ['#/jams', 'Jams', ICONS.jam],
@@ -341,10 +344,10 @@ function renderTabs() {
   const picks = pickCount();
 
   for (const [href, label, path] of TABS) {
-    const active =
-      href === '#/'
-        ? hash === '#/' || hash === '' || hash === '#'
-        : hash.startsWith(href);
+    // Every tab now has a named route, so no special case for the root. The
+    // '#/song/' vs '#/songs' and '#/show/' vs '#/shows' pairs do not collide
+    // because the trailing slash makes the prefixes disjoint.
+    const active = hash.startsWith(href);
     const tab = el('a.tab', { href, 'aria-current': active ? 'page' : null }, [
       icon(path, 21),
       el('span', { text: label }),
@@ -383,6 +386,12 @@ function route() {
     history.replaceState(null, '', '#/shows');
     return route();
   }
+  // The landing screen moved from '#/' to a named route, so the bare root and
+  // the old bookmark both resolve to it.
+  if (hash === '' || hash === '#' || hash === '#/' || hash.startsWith('#/upcoming')) {
+    history.replaceState(null, '', '#/home');
+    return route();
+  }
 
   // Order matters: '#/show/' and '#/shows' share a prefix, and '#/songs' /
   // '#/song/' likewise, so the more specific pattern is tested first.
@@ -395,7 +404,7 @@ function route() {
   else if (hash.startsWith('#/venue/')) view = renderVenue(ctx, hash.slice('#/venue/'.length));
   else if (hash.startsWith('#/jams')) view = renderJams(ctx);
   else if (hash.startsWith('#/picks')) view = renderPicks(ctx);
-  else view = renderUpcoming(ctx);
+  else view = renderHome(ctx);
 
   clear(main);
   append(main, view);

@@ -16,6 +16,7 @@ import {
   statTile,
   openGapExplainer,
   gapExplainerLink,
+  venueLine,
 } from '../ui/components.js';
 import { SLOT_LABELS, SLOTS, setLabel, longestObservedGap } from '../data/index.js';
 import { formatShowDate, formatShowDateShort } from '../util/dates.js';
@@ -202,7 +203,7 @@ export function renderSong(ctx, songId) {
             el('div', { style: { fontWeight: '600' }, text: formatShowDate(j.showdate) }),
             el('span.badge.badge-set', { text: setLabel('Set', j.setnumber) }),
           ]),
-          el('div.note', { text: `${j.venuename} · ${j.city}, ${j.state}` }),
+          venueLine(j, { small: true }),
           j.jamchartnote
             ? el('p', { style: { margin: '8px 0 0', fontSize: 'var(--t-sm)' }, text: j.jamchartnote })
             : null,
@@ -235,9 +236,7 @@ export function renderSong(ctx, songId) {
               [
                 el('div.row-main', null, [
                   el('div.row-title', { text: formatShowDate(p.showdate) }),
-                  el('div.row-meta', null, [
-                    el('span', { text: `${p.venuename}${p.city ? ` · ${p.city}, ${p.state}` : ''}` }),
-                  ]),
+                  venueLine(p, { small: true }),
                 ]),
                 el('span.badge.badge-set', { text: setLabel(p.settype, p.setnumber) }),
               ],

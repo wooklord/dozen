@@ -8,6 +8,7 @@ import {
   showPermalink,
   sectionHead,
   emptyState,
+  venueLine,
 } from '../ui/components.js';
 import { showStructure } from '../data/index.js';
 import { formatShowDate } from '../util/dates.js';
@@ -31,7 +32,7 @@ export function renderShow(ctx, showId) {
   }
 
   append(screen, el('h1.screen-title', { text: formatShowDate(show.showdate) }));
-  append(screen, el('p.screen-sub', { text: `${show.venuename} · ${show.location}` }));
+  append(screen, venueLine(show));
   append(
     screen,
     el('div.card-actions', null, [
