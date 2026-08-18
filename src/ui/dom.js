@@ -61,6 +61,18 @@ export function icon(paths, size = 21) {
 }
 
 export const ICONS = {
+  // Home.
+  //
+  // A 2x3 carton grid was tried first (twice -- a second pass with a taller box
+  // and smaller, wider-spaced dots). Screenshotted in the real tab bar at phone
+  // scale, both fused into a dark cluster: six filled dots inside a closed box
+  // is too much information at 21px, and it sat noticeably heavier than the
+  // four open, linear icons beside it. Legibility beats theme in a tab bar.
+  //
+  // The carton motif still lives where it has room to work: the 12-cell
+  // loading grid. It was never going to survive at this size, and a drawn egg
+  // was never an option -- the design direction is no egg illustrations.
+  house: '<path d="M3.5 10.5 12 3.5l8.5 7"/><path d="M5.5 9.5v10h13v-10"/>',
   calendar:
     '<rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>',
   gap: '<path d="M4 19V9M9.5 19V5M15 19v-7M20.5 19v-3"/>',

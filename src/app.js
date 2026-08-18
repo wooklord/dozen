@@ -330,7 +330,7 @@ function renderError(err, { keepData = false } = {}) {
 // duplicate, and the screen is more than the next show -- venue history and
 // On This Date live here too.
 const TABS = [
-  ['#/home', 'Home', ICONS.calendar],
+  ['#/home', 'Home', ICONS.house],
   ['#/songs', 'Songs', ICONS.gap],
   ['#/shows', 'Shows', ICONS.list],
   ['#/jams', 'Jams', ICONS.jam],
