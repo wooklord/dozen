@@ -735,9 +735,26 @@ button.gap-figure:active {
   border-bottom-color: var(--yolk);
 }
 
-/* "->" must never break across lines into "-" and ">". They are one mark. */
+/* Segue marks.
+ *
+ * These sit INLINE between song titles, where they read as punctuation. The
+ * yolk accent made them look like emphasis, which they are not -- that accent
+ * is reserved for things carrying meaning (gap magnitude, active state,
+ * scratchpad membership). Accenting punctuation spends it on nothing.
+ *
+ * `inherit` rather than a token on purpose: "match the surrounding text" is
+ * literally what it means, so it stays correct in both themes and in any
+ * future context where a setlist renders on a different ground. There is
+ * nothing to keep in sync.
+ *
+ * ">" and "->" stay distinct from each other by glyph, and the mono face and
+ * weight keep them reading as marks rather than stray characters.
+ *
+ * `white-space: nowrap` is load-bearing: without it "->" breaks across lines
+ * into "-" and ">", which is a different notation.
+ */
 .segue {
-  color: var(--yolk);
+  color: inherit;
   font-weight: 700;
   font-family: var(--mono);
   font-size: var(--t-sm);
