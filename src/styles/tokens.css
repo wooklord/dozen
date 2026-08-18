@@ -40,6 +40,10 @@
   --dk-cell-inset: rgba(0, 0, 0, 0.4);
   --dk-shadow-up: 0 -1px 0 #332c25, 0 -8px 24px rgba(0, 0, 0, 0.45);
   --dk-shadow-sheet: 0 -8px 40px rgba(0, 0, 0, 0.6);
+  /* Heat-bar floor. The dark accent is far lighter than its ground, so a low
+     opacity still registers; on white the same value vanishes. Raised for
+     light so the decoration is equally present in both themes. */
+  --dk-heat-floor: 0.1;
 
   /* --- Light palette (raw) ----------------------------------------------- */
   /* Yolk is #945906 here, not the dark #f5a623: measured 5.69:1 on white,
@@ -66,6 +70,7 @@
   --lt-cell-inset: rgba(0, 0, 0, 0.12);
   --lt-shadow-up: 0 -1px 0 #ddd3c2, 0 -8px 24px rgba(0, 0, 0, 0.08);
   --lt-shadow-sheet: 0 -8px 40px rgba(0, 0, 0, 0.18);
+  --lt-heat-floor: 0.32;
 
   /* --- Active mapping: dark is the default ------------------------------- */
   --shell: var(--dk-shell);
@@ -89,6 +94,7 @@
   --cell-inset: var(--dk-cell-inset);
   --shadow-up: var(--dk-shadow-up);
   --shadow-sheet: var(--dk-shadow-sheet);
+  --heat-floor: var(--dk-heat-floor);
 
   /* --- Type -------------------------------------------------------------- */
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
@@ -144,6 +150,7 @@
     --cell-inset: var(--lt-cell-inset);
     --shadow-up: var(--lt-shadow-up);
     --shadow-sheet: var(--lt-shadow-sheet);
+    --heat-floor: var(--lt-heat-floor);
   }
 }
 
@@ -170,6 +177,7 @@
   --cell-inset: var(--lt-cell-inset);
   --shadow-up: var(--lt-shadow-up);
   --shadow-sheet: var(--lt-shadow-sheet);
+  --heat-floor: var(--lt-heat-floor);
 }
 
 /* Explicit Dark needs no block: the :root defaults already map to dark, and

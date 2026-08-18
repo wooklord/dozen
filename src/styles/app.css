@@ -101,19 +101,26 @@ a {
   padding: 2px 7px;
 }
 
-.refresh-btn {
-  min-width: 32px;
-  min-height: 32px;
+.icon-btn {
+  min-width: 34px;
+  min-height: 34px;
   display: grid;
   place-items: center;
   border-radius: var(--r-pill);
   color: var(--ink-dim);
 }
-.refresh-btn:active {
+.icon-btn:active {
   background: var(--surface-up);
 }
-.refresh-btn[data-busy="true"] svg {
+.icon-btn[data-busy="true"] svg {
   animation: spin 0.9s linear infinite;
+}
+
+/* The settings entry point carries a border so it reads as a control rather
+   than as another status glyph sitting in a row of readouts. */
+.icon-btn-bordered {
+  border: 1px solid var(--line);
+  color: var(--ink);
 }
 @keyframes spin {
   to {
@@ -435,6 +442,10 @@ button.gap-figure:active {
   color: var(--ink-faint);
 }
 
+/* The floor is per-theme: on near-black the accent is far lighter than its
+   ground so a low opacity still registers, while the same value on white
+   disappears. Without it the bar is present in one theme and absent in the
+   other -- an inconsistency you feel without being able to name it. */
 .gap-bar {
   position: absolute;
   left: 0;
@@ -442,7 +453,13 @@ button.gap-figure:active {
   bottom: 0;
   width: 3px;
   background: var(--yolk);
-  opacity: var(--heat, 0);
+  opacity: calc(var(--heat-floor) + var(--heat, 0) * (1 - var(--heat-floor)));
+}
+
+/* Genuinely no value (a song never played) means no bar at all -- the floor
+   must not invent one. */
+.gap-bar[data-heat="none"] {
+  opacity: 0;
 }
 
 /* ---------------------------------------------------------------- badges --- */
@@ -777,6 +794,13 @@ button.gap-figure:active {
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.1;
+  white-space: nowrap;
+}
+
+/* Long values (dates) step down rather than wrapping, which would make one
+   tile taller than the rest and break the grid. */
+.stat-value-sm {
+  font-size: var(--t-lg);
 }
 
 .stat-value.accent {

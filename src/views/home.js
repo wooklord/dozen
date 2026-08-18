@@ -18,6 +18,7 @@ import {
   cartonLink,
   showPermalink,
   venueLine,
+  statValue,
   attribution,
 } from '../ui/components.js';
 import { showStructure, onThisDate, consecutiveRun } from '../data/index.js';
@@ -125,17 +126,17 @@ function renderNextShow(screen, { index, navigate }, show, today) {
       sectionHead(show.venuename),
       el('div.stat-grid', null, [
         el('div.stat', null, [
-          el('div.stat-value.accent.num', { text: String(allVenueShows.length) }),
+          statValue(allVenueShows.length, { accent: true }),
           el('div.stat-label', {
             text: allVenueShows.length === 1 ? 'show played here' : 'shows played here',
           }),
         ]),
         el('div.stat', null, [
-          el('div.stat-value.num', {
-            text: allVenueShows.length
+          statValue(
+            allVenueShows.length
               ? formatShowDateShort(allVenueShows[allVenueShows.length - 1].showdate)
               : '—',
-          }),
+          ),
           el('div.stat-label', { text: 'most recent' }),
         ]),
       ]),

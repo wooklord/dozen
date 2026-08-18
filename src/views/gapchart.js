@@ -87,6 +87,7 @@ export function renderGapChart(ctx, showId) {
           el('div.row-shell', null, [
             el('span.gap-bar', {
               style: { '--heat': String(e.gap === null ? 0 : Math.max(0.08, e.gap / maxGap)) },
+              'data-heat': e.gap === null ? 'none' : null,
             }),
             el(
               'button.row',

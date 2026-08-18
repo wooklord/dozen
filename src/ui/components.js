@@ -250,8 +250,12 @@ export function songRow(song, { figure = 'gap', maxGap = 1, onOpen, index } = {}
         el('div.gap-unit', { text: unit }),
       ]);
 
+  const heat = heatFor(value, maxGap);
   const shell = el('div.row-shell', { 'data-picked': String(picked) }, [
-    el('span.gap-bar', { style: { '--heat': String(heatFor(value, maxGap)) } }),
+    el('span.gap-bar', {
+      style: { '--heat': String(heat) },
+      'data-heat': heat === 0 ? 'none' : null,
+    }),
     row,
     figureNode,
     pickBtn,
@@ -395,11 +399,25 @@ export function venueLine(showOrVenue, { small = false } = {}) {
   ]);
 }
 
+/**
+ * A stat value at the right size for its content.
+ *
+ * Long values ("May 14, 2021", "2026-08-14") wrapped at the display size and
+ * made their tile taller than its neighbours, breaking the grid. They step
+ * down a size and never wrap instead, so every tile in a row stays level.
+ * Used by every stat everywhere -- inline copies are how the bug returns.
+ */
+export function statValue(value, { accent = false } = {}) {
+  const text = String(value);
+  const long = text.length > 9;
+  return el(
+    `div.stat-value${accent ? '.accent' : ''}${long ? '.stat-value-sm' : ''}.num`,
+    { text },
+  );
+}
+
 export function statTile(value, label, accent = false) {
-  return el('div.stat', null, [
-    el(`div.stat-value${accent ? '.accent' : ''}.num`, { text: String(value) }),
-    el('div.stat-label', { text: label }),
-  ]);
+  return el('div.stat', null, [statValue(value, { accent }), el('div.stat-label', { text: label })]);
 }
 
 export function sectionHead(title, right = null) {

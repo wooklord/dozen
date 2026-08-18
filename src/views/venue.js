@@ -16,6 +16,7 @@ import {
   sectionHead,
   emptyState,
   statTile,
+  statValue,
   venueLine,
 } from '../ui/components.js';
 import { showStructure } from '../data/index.js';
@@ -62,7 +63,7 @@ export function renderVenue(ctx, venueId) {
     el('div.section', null, [
       el('div.stat-grid', null, [
         el('div.stat', null, [
-          el('div.stat-value.accent.num', { text: String(played.length) }),
+          statValue(played.length, { accent: true }),
           el('div.stat-label', { text: played.length === 1 ? 'show played' : 'shows played' }),
         ]),
         statTile(played.length ? formatShowDateShort(played[0].showdate) : '—', 'first show'),

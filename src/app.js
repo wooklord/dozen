@@ -7,7 +7,7 @@ import { readArchive, writeArchive, isStale, cacheAge, mergeYear } from './data/
 import { buildIndex } from './data/index.js';
 import { formatAge, localYear } from './util/dates.js';
 import { count as pickCount } from './scratchpad.js';
-import { openGapExplainer } from './ui/components.js';
+import { openGapExplainer, statValue } from './ui/components.js';
 import {
   THEMES,
   THEME_LABELS,
@@ -160,6 +160,9 @@ async function refresh({ mode = 'fast', silent = false } = {}) {
 function renderHeaderStatus() {
   clear(statusSlot);
 
+  // Kept tappable as a second way in -- a path already learned should not be
+  // taken away -- but it is no longer the only one. "just now" reads as a
+  // status readout, and nothing about a readout suggests a door.
   if (app.index) {
     const age = cacheAge(app.archive);
     append(
@@ -167,8 +170,8 @@ function renderHeaderStatus() {
       el('button.build-marker', {
         type: 'button',
         text: formatAge(age),
-        'aria-label': 'Cache details and refresh options',
-        onclick: openCacheSheet,
+        'aria-label': 'Settings and data',
+        onclick: openSettingsSheet,
       }),
     );
   }
@@ -178,7 +181,7 @@ function renderHeaderStatus() {
   append(
     statusSlot,
     el(
-      'button.refresh-btn',
+      'button.icon-btn',
       {
         type: 'button',
         'data-busy': String(app.busy),
@@ -186,6 +189,21 @@ function renderHeaderStatus() {
         onclick: () => refresh({ mode: 'fast' }),
       },
       icon(ICONS.refresh, 18),
+    ),
+  );
+
+  // The visible way in. An icon button reads as a control; the cache badge
+  // reads as a number.
+  append(
+    statusSlot,
+    el(
+      'button.icon-btn.icon-btn-bordered',
+      {
+        type: 'button',
+        'aria-label': 'Settings and data',
+        onclick: openSettingsSheet,
+      },
+      icon(ICONS.settings, 18),
     ),
   );
 }
@@ -244,31 +262,37 @@ function themeControl() {
  * Cache age, row count and newest showdate, all visible without dev tools --
  * a stale or truncated index has to be diagnosable from the UI alone.
  */
-function openCacheSheet() {
-  openSheet('Data', (close) => {
+function openSettingsSheet() {
+  // "Settings & data", because it is honestly both: a preference you change,
+  // and provenance you read. Calling it "Settings" alone would misdescribe the
+  // gap denominator; calling it "Data" hid the theme control, which is how it
+  // went unfound. Splitting it into two sheets would be worse on a phone than
+  // one panel with an accurate name.
+  openSheet('Settings & data', (close) => {
     const a = app.archive;
     const i = app.index;
     return el('div', { style: { display: 'grid', gap: '10px' } }, [
-      // Appearance sits FIRST in the sheet. This is a bottom sheet, so the
-      // top of it is the part nearest the thumb -- and putting it above the
-      // stats means it is never something to scroll for while a set starts.
+      // Appearance is FIRST, deliberately: it is the only thing in here that
+      // gets changed repeatedly. Everything below is read once and understood.
+      // Ordering by interaction frequency, not by importance.
       themeControl(),
 
+      el('div.section-title', { style: { marginTop: '6px' }, text: 'Data' }),
       el('div.stat-grid', null, [
         el('div.stat', null, [
-          el('div.stat-value.num', { text: String(i?.counts.setlistRows ?? 0) }),
+          statValue(i?.counts.setlistRows ?? 0),
           el('div.stat-label', { text: 'setlist rows' }),
         ]),
         el('div.stat', null, [
-          el('div.stat-value.num', { text: String(i?.counts.countedShows ?? 0) }),
+          statValue(i?.counts.countedShows ?? 0),
           el('div.stat-label', { text: 'shows counted' }),
         ]),
         el('div.stat', null, [
-          el('div.stat-value.num', { text: i?.newestShowdate ?? '—' }),
+          statValue(i?.newestShowdate ?? '—'),
           el('div.stat-label', { text: 'newest show' }),
         ]),
         el('div.stat', null, [
-          el('div.stat-value.num', { text: formatAge(cacheAge(a)) }),
+          statValue(formatAge(cacheAge(a))),
           el('div.stat-label', { text: 'last updated' }),
         ]),
       ]),
@@ -278,30 +302,8 @@ function openCacheSheet() {
           'setlists after the fact — a full rebuild is the only way to pick those up.',
       }),
 
-      // How gap is counted, stated plainly in a persistent panel. Excluding
-      // shows with no setlist is a convention that makes every gap figure
-      // smaller than one counting all shows, so it is stated, not buried.
-      el('div.card', null, [
-        el('div.section-title', { style: { marginBottom: '6px' }, text: 'How gap is counted' }),
-        el('p', {
-          style: { margin: '0 0 8px', fontSize: 'var(--t-sm)' },
-          text:
-            `Gap is counted across the ${i?.counts.countedShows ?? 0} shows that have setlist data. ` +
-            `${i?.counts.excludedNoSetlist ?? 0} shows in the archive were played but have no setlist ` +
-            `recorded and are not counted; ${i?.counts.excludedFuture ?? 0} upcoming shows are not counted either.`,
-        }),
-        i?.counts.excludedBadDate
-          ? el('p.note', {
-              style: { margin: '0 0 8px' },
-              text: `${i.counts.excludedBadDate} of the uncounted shows also has a corrupt date in The Carton's data.`,
-            })
-          : null,
-        el(
-          'button.btn.btn-block',
-          { type: 'button', onclick: () => { close(); openGapExplainer(app.index); } },
-          'More on gap',
-        ),
-      ]),
+      // Actions sit directly under the status they act on, above the
+      // reference material -- otherwise they end up below a wall of prose.
       el(
         'button.btn.btn-block',
         {
@@ -324,6 +326,30 @@ function openCacheSheet() {
         },
         'Full rebuild…',
       ),
+
+      // How gap is counted: provenance, read once. Last, because it is
+      // reference rather than something to act on.
+      el('div.card', { style: { marginTop: '6px' } }, [
+        el('div.section-title', { style: { marginBottom: '6px' }, text: 'How gap is counted' }),
+        el('p', {
+          style: { margin: '0 0 8px', fontSize: 'var(--t-sm)' },
+          text:
+            `Gap is counted across the ${i?.counts.countedShows ?? 0} shows that have setlist data. ` +
+            `${i?.counts.excludedNoSetlist ?? 0} shows in the archive were played but have no setlist ` +
+            `recorded and are not counted; ${i?.counts.excludedFuture ?? 0} upcoming shows are not counted either.`,
+        }),
+        i?.counts.excludedBadDate
+          ? el('p.note', {
+              style: { margin: '0 0 8px' },
+              text: `${i.counts.excludedBadDate} of the uncounted shows also has a corrupt date in The Carton's data.`,
+            })
+          : null,
+        el(
+          'button.btn.btn-block',
+          { type: 'button', onclick: () => { close(); openGapExplainer(app.index); } },
+          'More on gap',
+        ),
+      ]),
     ]);
   });
 }

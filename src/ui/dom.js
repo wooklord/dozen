@@ -80,6 +80,12 @@ export const ICONS = {
   jam: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
   picks: '<path d="M5 3.5h14v17l-7-4.5-7 4.5z"/>',
   refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.6"/><path d="M20 4.5V11h-6.5"/>',
+  // Sliders rather than a cogwheel: a cog's teeth mush at 18px exactly the way
+  // the carton grid did in the tab bar, while three tracks with handles stay
+  // legible and read unambiguously as "controls".
+  settings:
+    '<path d="M4 21v-6M4 11V3M12 21v-9M12 8V3M20 21v-4M20 13V3"/>' +
+    '<path d="M1.5 15h5M9.5 8h5M17.5 17h5"/>',
   back: '<path d="M15 19l-7-7 7-7"/>',
   check: '<path d="M4 12.5l5 5L20 6.5"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',

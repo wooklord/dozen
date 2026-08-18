@@ -14,6 +14,7 @@ import {
   songPermalink,
   showPermalink,
   statTile,
+  statValue,
   openGapExplainer,
   gapExplainerLink,
   venueLine,
@@ -89,7 +90,7 @@ export function renderSong(ctx, songId) {
             onclick: () => openGapExplainer(index),
           },
           [
-            el('div.stat-value.accent.num', { text: String(song.showsSinceLastPlayed ?? '—') }),
+            statValue(song.showsSinceLastPlayed ?? '—', { accent: true }),
             el('div.stat-label', { text: 'shows since last' }),
           ],
         ),
@@ -115,7 +116,7 @@ export function renderSong(ctx, songId) {
                 onclick: () => openGapExplainer(index),
               },
               [
-                el('div.stat-value.num', { text: String(longest.gap) }),
+                statValue(longest.gap),
                 el('div.stat-label', {
                   text: `longest observed gap — ended ${formatShowDateShort(longest.at.showdate)}`,
                 }),

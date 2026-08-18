@@ -44,6 +44,12 @@ eye has exactly one thing to find.
 Gap magnitude uses **opacity of a single hue**, not a rainbow scale. A multi-hue heatmap would
 imply thresholds the data doesn't have, and thresholds edge toward prediction.
 
+The heat bar's minimum opacity is a **per-theme token** (`--heat-floor`), not a constant. The dark
+accent is far lighter than its ground, so a low opacity still registers; the same value on white
+disappears. A decoration present in one theme and absent in the other is an inconsistency the user
+feels without being able to name it. A genuinely absent value still renders no bar at all — the
+floor must not invent one.
+
 ### Themes: Auto / Light / Dark
 
 Dark is the default and the design target. Light is a **supported theme**, not a courtesy — it was
