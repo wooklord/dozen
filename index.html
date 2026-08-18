@@ -42,21 +42,14 @@
   </head>
   <body>
     <header class="app-header">
-      <div class="app-brand">
-        <!-- 3x2, not the full dozen: at 24px a 4x3 grid collapses into
-             texture, the same way the carton failed in the tab bar. The whole
-             dozen lives on the app icon, where there is room for it.
-             `currentColor` so it follows --yolk into the light theme. -->
-        <svg class="app-mark" viewBox="0 0 512 512" aria-hidden="true" focusable="false">
-          <ellipse cx="85.3" cy="160" rx="62" ry="74" />
-          <ellipse cx="256" cy="160" rx="62" ry="74" />
-          <ellipse cx="426.7" cy="160" rx="62" ry="74" />
-          <ellipse cx="85.3" cy="352" rx="62" ry="74" />
-          <ellipse cx="256" cy="352" rx="62" ry="74" />
-          <ellipse cx="426.7" cy="352" rx="62" ry="74" />
-        </svg>
-        <h1 class="app-title"><span class="the">The</span> Dozen</h1>
-      </div>
+      <!-- No header mark, deliberately.
+           A 3x2 mark showed six cells for an app called The Dozen, which
+           contradicts the name. The honest 4x3 and 6x2 alternatives both
+           collapse into texture at the ~21px the header can spare, the same
+           failure the carton grid hit in the tab bar. The wordmark already
+           states the name and the full dozen lives on the app icon, where
+           there is room for it, so nothing is lost and nothing miscounts. -->
+      <h1 class="app-title"><span class="the">The</span> Dozen</h1>
       <div class="header-status" id="header-status"></div>
     </header>
 

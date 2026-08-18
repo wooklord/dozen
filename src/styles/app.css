@@ -67,23 +67,6 @@ a {
   z-index: 40;
 }
 
-.app-brand {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  min-width: 0;
-}
-
-/* The header mark. Takes its colour from --yolk via currentColor, so it
-   follows the theme without a second asset. */
-.app-mark {
-  flex: none;
-  width: 24px;
-  height: 24px;
-  color: var(--yolk);
-  fill: currentColor;
-}
-
 .app-title {
   font-size: var(--t-md);
   font-weight: 700;
@@ -779,8 +762,19 @@ button.gap-figure:active {
   white-space: nowrap;
 }
 
+/* Separators between song titles. Same reasoning as .segue: this is
+ * punctuation inside flowing text, so it takes the surrounding colour.
+ *
+ * It was --ink-faint, not yolk -- deliberately dimmer than the text, which is
+ * why it read as getting lost. `inherit` rather than --ink for the same reason
+ * as .segue: "match the surrounding text" is literally what it means, so it
+ * cannot drift from the context it sits in.
+ *
+ * The rule is kept rather than deleted so the intent is on record and a colour
+ * does not get reintroduced here later.
+ */
 .comma {
-  color: var(--ink-faint);
+  color: inherit;
 }
 
 /* Footnotes are tappable, not tooltips -- hover does not exist on a phone. */
