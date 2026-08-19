@@ -18,7 +18,7 @@
 // crawler, but we behave accordingly: no polling loops, no per-keystroke
 // requests, aggressive caching, one batched cold pull.
 
-const BASE = 'https://thecarton.net/api/v2';
+import { CARTON_API_BASE as BASE } from '../config.js';
 
 // Full-table pulls MUST pass an explicit oversized limit. Without it,
 // /setlists.json silently returns exactly 4000 well-formed rows and stops at

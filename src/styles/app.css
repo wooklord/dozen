@@ -896,6 +896,35 @@ button.gap-figure:active {
   font-size: var(--t-xs);
 }
 
+/* A secondary outbound link, sitting beside the Carton one.
+   Deliberately quieter: --ink-faint against the Carton link's --ink-dim, and
+   normal weight against its 600. This app rides on The Carton's work, so that
+   link stays visibly primary wherever both appear. Same 44px target. */
+.link-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+}
+
+.info-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: var(--tap);
+  font-size: var(--t-sm);
+  color: var(--ink-faint);
+  text-decoration: none;
+  font-weight: 400;
+}
+.info-link::after {
+  content: "↗";
+  font-size: var(--t-xs);
+}
+.info-link:active {
+  color: var(--ink-dim);
+}
+
 /* ------------------------------------------------- loading: the 12 cells --- */
 
 /* The only literal carton reference in the app. It appears exactly when the

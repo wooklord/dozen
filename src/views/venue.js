@@ -12,6 +12,7 @@ import {
   attribution,
   cartonLink,
   venuePermalink,
+  venueInfoLink,
   showPermalink,
   sectionHead,
   emptyState,
@@ -50,7 +51,16 @@ export function renderVenue(ctx, venueId) {
       }),
     ]),
   );
-  append(screen, cartonLink(venuePermalink(venue), 'View on The Carton'));
+  // The Carton link stays primary and leads; "Venue info" is an outbound deep
+  // link built from Carton's own fields, rendered only when there is a usable
+  // query.
+  append(
+    screen,
+    el('div.link-row', null, [
+      cartonLink(venuePermalink(venue), 'View on The Carton'),
+      venueInfoLink(venue),
+    ]),
+  );
 
   const all = (index.showsByVenue.get(Number(venue.venue_id)) || []).slice();
   const played = all.filter((s) => s.showdate <= index.today);

@@ -9,6 +9,7 @@ import {
   sectionHead,
   emptyState,
   venueLine,
+  venueInfoLink,
 } from '../ui/components.js';
 import { showStructure } from '../data/index.js';
 import { formatShowDate } from '../util/dates.js';
@@ -33,6 +34,10 @@ export function renderShow(ctx, showId) {
 
   append(screen, el('h1.screen-title', { text: formatShowDate(show.showdate) }));
   append(screen, venueLine(show));
+  // Beside the venue line, not inside venueLine() -- that helper is shared with
+  // the Shows search rows, which stay dense and get no link.
+  const mapsLink = venueInfoLink(show);
+  if (mapsLink) append(screen, el('div.link-row', null, [mapsLink]));
   append(
     screen,
     el('div.card-actions', null, [

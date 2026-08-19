@@ -5,7 +5,7 @@ import { parseFootnotes, setLabel } from '../data/index.js';
 import { formatShowDateShort } from '../util/dates.js';
 import { isPicked, togglePick } from '../scratchpad.js';
 
-const CARTON = 'https://thecarton.net';
+import { CARTON_BASE as CARTON, SONGFISH_URL, MAPS_SEARCH_BASE } from '../config.js';
 
 /** Deep link back to the corresponding Carton page. Required, not optional. */
 export function cartonLink(href, label = 'View on The Carton') {
@@ -45,6 +45,57 @@ export function venuePermalink(venue) {
  */
 export function gapChartPermalink(show) {
   return show?.permalink ? `${CARTON}/gap-chart/${show.permalink}` : CARTON;
+}
+
+/** Names that carry no information and must never become a Maps search. */
+const PLACEHOLDER_VENUE = /^(unknown|unknown venue|tbd|tba|n\/?a|none|null|test|-+|\?+)$/i;
+
+/**
+ * An outbound Google Maps deep link for a venue, or null.
+ *
+ * OUTBOUND ONLY. Nothing is fetched, embedded or rendered from Google — see
+ * the scope note in CLAUDE.md. This builds a URL out of Carton's own fields
+ * and hands it to the user's browser.
+ *
+ * Name-based search on purpose: `venues` carries NO coordinates (8 fields, no
+ * lat/lng anywhere), and the name resolves to the venue's actual Maps place
+ * page, which is the point. `zip` and `capacity` exist but are dead in this
+ * dataset -- blank on 440 of 441 and 0 on all 441 -- so neither is used.
+ *
+ * Returns null rather than a junk query when the name is missing or is an
+ * obvious placeholder. A link that searches for nothing is worse than no link.
+ *
+ * @param {{venuename?: string, city?: string, state?: string}} venue
+ * @returns {string|null}
+ */
+export function venueMapsUrl(venue) {
+  const name = String(venue?.venuename ?? '').trim();
+  if (!name || PLACEHOLDER_VENUE.test(name)) return null;
+
+  // City/state are frequently thin (3 venues have no state, 1 has no city),
+  // so anything blank simply drops out rather than leaving a dangling comma.
+  const query = [name, String(venue?.city ?? '').trim(), String(venue?.state ?? '').trim()]
+    .filter(Boolean)
+    .join(', ');
+
+  return MAPS_SEARCH_BASE + encodeURIComponent(query);
+}
+
+/**
+ * "Venue info" link, or null when there is no usable query.
+ *
+ * Deliberately secondary to cartonLink: this app rides on The Carton's work
+ * and that link stays the primary one on any surface where both appear.
+ */
+export function venueInfoLink(venue, label = 'Venue info') {
+  const href = venueMapsUrl(venue);
+  if (!href) return null;
+  return el('a.info-link', {
+    href,
+    target: '_blank',
+    rel: 'noopener noreferrer',
+    text: label,
+  });
 }
 
 /**
@@ -450,7 +501,7 @@ export function attribution() {
       el('a', { href: CARTON, target: '_blank', rel: 'noopener noreferrer', text: 'The Carton' }),
       ', powered by ',
       el('a', {
-        href: 'https://www.songfish.net',
+        href: SONGFISH_URL,
         target: '_blank',
         rel: 'noopener noreferrer',
         text: 'Songfish',

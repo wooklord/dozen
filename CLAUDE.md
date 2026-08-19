@@ -32,6 +32,22 @@ move on.
 ships. If it implies what *will happen*, it does not. "Longest gap" ships. "Due" does not.
 "Played 3 of the last 5 shows" ships. "Hot pick" does not.
 
+### Outbound deep links are in scope. Third-party data is not.
+
+Decided 2026-08-18, adding the "Venue info" Maps link.
+
+**In scope:** building an **outbound deep link** out of Carton's own fields — taking `venuename`,
+`city` and `state` and constructing a URL the user can tap. The app sends them somewhere; it learns
+nothing.
+
+**Not in scope:** fetching, embedding, or rendering third-party place data. No Maps API, no
+embedded map, no iframe, no scraped place details, no geocoding, nothing displayed inside the app
+that did not come from The Carton. `thecarton.net` remains the only host this app requests data
+from.
+
+The line is the same one the scope rule draws elsewhere: **a link is navigation, a fetch is a data
+source.** If a change would put third-party content on screen, it is out.
+
 ---
 
 ## Repo isolation rule
@@ -189,6 +205,13 @@ and types. Notable corrections to the published docs already captured there:
 - **A bad method or column name returns `text/html`, not empty JSON** — so `await res.json()`
   throws. Check `content-type` before parsing. Column names are case-insensitive. Everything
   returns HTTP 200, including error pages, so status is useless as a health check.
+- **`venues` has exactly 8 fields and NO coordinates.** `venue_id`, `venuename`, `city`, `state`,
+  `country`, `zip`, `capacity`, `slug` — identical across all 441 rows. Nothing matching
+  `lat|lon|lng|geo|coord` exists, so anything location-shaped must be built from the name and
+  place strings.
+- **`zip` and `capacity` are dead fields. Do not build against either.** `zip` is blank on
+  **440 of 441** rows; `capacity` is `0` on **all 441**. They are present in the schema and carry
+  no information in this dataset.
 - **Venue names are NOT unique — always key on `venue_id`.** 9 names exist in more than one city;
   `Brooklyn Bowl` is in Brooklyn NY, Las Vegas NV *and* Philadelphia PA. Grouping venues by name
   silently merges distinct venues. (`9:30 Club` also appears twice with the city spelled
