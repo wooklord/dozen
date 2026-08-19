@@ -272,6 +272,51 @@ statistics. No writes to any database. No contact with the other two repos.
   loosened where a batch has been pre-approved.
 - Docs land in the repo the moment they're decided, not at the end of a session.
 
+### The recurring failure: "what else could satisfy this?"
+
+**Every verification failure in this project has been the same failure.** Not
+three incidents — one pattern, three times. A check asserts something the
+intended condition *would* produce, but which **other things also produce**. It
+then passes for the wrong reason, and reports health it never established.
+
+| The check | What it was meant to prove | What else satisfied it |
+|---|---|---|
+| Screenshot the gap chart route | that route renders | the **previous screen**, still displayed because the render threw. A PNG was written, the run was green, and the route had been broken for three releases |
+| `grep venueLine` in the file | that the symbol is **imported** | the **call site**, added moments earlier. The bug and its false confirmation came from one mistake |
+| Read `.build-marker` in the header | that BUILD is displayed | the **cache-age chip**, which used the same class. It would have read "just now" and reported a successful deploy |
+
+The shape is always a **proxy**: the check tests a side effect rather than the
+thing itself, and the side effect has more than one cause.
+
+**The rule.** When adding or changing any verification, ask *what else could
+satisfy this?* The answer has to be **nothing**. If something else can, the
+check is not specific enough — narrow it until only the real condition passes.
+
+Concretely, that means:
+
+- Assert **content unique to the target**, not that an artefact was produced.
+  Every route in `scripts/smoke.mjs` must render a marker unique to *itself*.
+- Match the **actual construct**, not a string that appears near it. An import
+  check must match the import statement, not any mention of the name.
+- Name things for **what they are**. A class called `build-marker` on a chip
+  showing cache age is a trap set for a future check. It is `status-chip` now.
+- Search **the whole document**, not a fixed position. `verify-deploy.mjs`
+  finds `<meta name="dozen-build">` anywhere, in any attribute order, and
+  cross-checks it against `src/version.js` and against what the UI shows — a
+  value has to agree in three independent places.
+
+**Standing practice: prove a check goes RED before trusting it GREEN.** A test
+that has never failed on the bug it exists for has demonstrated nothing. Both
+current checks were verified this way:
+
+- `scripts/smoke.mjs` — with the `venueLine` import removed: 7 failures, exit 1.
+  Restored: 0 failures, exit 0.
+- `tests/build.test.mjs` — with `version.js` bumped alone: 2 failures. In step:
+  85 passing.
+
+Do this for every new check. It costs one minute and it is the only thing that
+separates a real check from a comforting one.
+
 ### Run the route smoke test before pushing
 
 ```sh
@@ -315,16 +360,15 @@ screen is the only error report there is, so a silent failure is invisible until
 someone happens to tap the right button. Never "handle" a render error by
 swallowing it.
 
-### Grepping for a symbol does not prove it is imported
+### Checking imports specifically
 
-The regression was introduced *and* mis-verified by the same mistake: a check
-that searched a file for `venueLine` matched the **call site**, not the import,
-and reported success. An automated edit that skipped files "already containing"
-the name skipped this one for the same reason.
+An instance of the pattern above, called out because it bites often: **an
+automated edit that skips files "already containing" a name will skip the file
+that only *calls* it** — which is exactly the file that needs the import.
 
-When checking imports, match the import statement, or run
-`scratchpad/undefaudit.mjs`-style analysis that compares imported names against
-called names. Better: run the smoke test, which executes the code.
+Match the import statement itself, or compare imported names against called
+names across the module. Best: run the smoke test, which executes the code and
+cannot be fooled by a string.
 
 ### Commit, push, and verify the deploy — all three, every time
 

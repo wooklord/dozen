@@ -167,7 +167,10 @@ function renderHeaderStatus() {
     const age = cacheAge(app.archive);
     append(
       statusSlot,
-      el('button.build-marker', {
+      // Class is `status-chip`, not `build-marker`: it shows cache age, and a
+      // misleading name here is how a deploy check ends up reading the wrong
+      // element and passing for the wrong reason.
+      el('button.status-chip', {
         type: 'button',
         text: formatAge(age),
         'aria-label': 'Settings and data',
@@ -175,8 +178,6 @@ function renderHeaderStatus() {
       }),
     );
   }
-
-  append(statusSlot, el('span.build-marker', { text: BUILD_LABEL }));
 
   append(
     statusSlot,
@@ -295,6 +296,13 @@ function openSettingsSheet() {
           statValue(formatAge(cacheAge(a))),
           el('div.stat-label', { text: 'last updated' }),
         ]),
+      ]),
+
+      // The BUILD marker. Moved out of the header, but still two taps away and
+      // still the thing that confirms a deploy landed.
+      el('div.stat.stat-wide', null, [
+        statValue(BUILD_LABEL.replace('BUILD ', '')),
+        el('div.stat-label', { text: 'build' }),
       ]),
       el('p.note', {
         text:

@@ -67,6 +67,26 @@ a {
   z-index: 40;
 }
 
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+/* The carton mark: 6x2, a full dozen, at the flat proportion a header suits.
+   22px tall sits with the wordmark rather than towering over it; 66px wide
+   gives twelve cells an 11px pitch, which keeps them individually countable
+   instead of collapsing into texture. Colour comes from --yolk via
+   currentColor, so one asset serves both themes. */
+.app-mark {
+  flex: none;
+  width: 66px;
+  height: 22px;
+  color: var(--yolk);
+  fill: currentColor;
+}
+
 .app-title {
   font-size: var(--t-md);
   font-weight: 700;
@@ -90,9 +110,10 @@ a {
   white-space: nowrap;
 }
 
-/* The BUILD marker. This is how a deploy gets confirmed without dev tools,
-   so it is always visible -- never hidden behind a menu. */
-.build-marker {
+/* Cache age. NOT the BUILD marker -- that lives in the Settings & data sheet
+   and in a <meta> tag in the served HTML. Named for what it shows, so nothing
+   can read this element and believe it found a build number. */
+.status-chip {
   font-family: var(--mono);
   font-size: var(--t-xs);
   color: var(--ink-faint);

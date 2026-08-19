@@ -10,6 +10,10 @@
     />
     <!-- Two media-scoped theme-colors so the browser chrome follows the OS in
          Auto mode. app.js overrides these when an explicit theme is chosen. -->
+    <!-- BUILD in the SERVED HTML, so a deploy can be verified with a plain
+         fetch and no browser. src/version.js remains the single source of
+         truth; tests/build.test.mjs fails if these two ever drift apart. -->
+    <meta name="dozen-build" content="0.1.33" />
     <meta name="theme-color" content="#14110e" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#faf6ef" media="(prefers-color-scheme: light)" />
     <meta name="color-scheme" content="dark light" />
@@ -42,14 +46,29 @@
   </head>
   <body>
     <header class="app-header">
-      <!-- No header mark, deliberately.
-           A 3x2 mark showed six cells for an app called The Dozen, which
-           contradicts the name. The honest 4x3 and 6x2 alternatives both
-           collapse into texture at the ~21px the header can spare, the same
-           failure the carton grid hit in the tab bar. The wordmark already
-           states the name and the full dozen lives on the app icon, where
-           there is room for it, so nothing is lost and nothing miscounts. -->
-      <h1 class="app-title"><span class="the">The</span> Dozen</h1>
+      <div class="app-brand">
+        <!-- A full dozen: 6x2, the flat carton strip.
+             Six cells would contradict the name, and earlier attempts failed
+             only because the BUILD chip left ~9px of headroom. With BUILD moved
+             into the Settings sheet the header has 198px for a 146px brand, so
+             twelve cells get 11px of pitch and stay individually countable.
+             `currentColor` so it follows --yolk into the light theme. -->
+        <svg class="app-mark" viewBox="0 0 384 128" aria-hidden="true" focusable="false">
+          <ellipse cx="32" cy="32" rx="24" ry="26" />
+          <ellipse cx="96" cy="32" rx="24" ry="26" />
+          <ellipse cx="160" cy="32" rx="24" ry="26" />
+          <ellipse cx="224" cy="32" rx="24" ry="26" />
+          <ellipse cx="288" cy="32" rx="24" ry="26" />
+          <ellipse cx="352" cy="32" rx="24" ry="26" />
+          <ellipse cx="32" cy="96" rx="24" ry="26" />
+          <ellipse cx="96" cy="96" rx="24" ry="26" />
+          <ellipse cx="160" cy="96" rx="24" ry="26" />
+          <ellipse cx="224" cy="96" rx="24" ry="26" />
+          <ellipse cx="288" cy="96" rx="24" ry="26" />
+          <ellipse cx="352" cy="96" rx="24" ry="26" />
+        </svg>
+        <h1 class="app-title"><span class="the">The</span> Dozen</h1>
+      </div>
       <div class="header-status" id="header-status"></div>
     </header>
 
