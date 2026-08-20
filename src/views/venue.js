@@ -51,14 +51,16 @@ export function renderVenue(ctx, venueId) {
       }),
     ]),
   );
-  // The Carton link stays primary and leads; "Venue info" is an outbound deep
-  // link built from Carton's own fields, rendered only when there is a usable
-  // query.
+  // "Venue info" leads: it is the outbound Maps deep link, built from Carton's
+  // own fields and rendered only when there is a usable query, and on a venue
+  // screen it answers the more immediate question. The Carton link follows,
+  // quieter and smaller. Credit is not carried by this row -- attribution()
+  // names The Carton and Songfish at the foot of every screen.
   append(
     screen,
     el('div.link-row', null, [
-      cartonLink(venuePermalink(venue), 'View on The Carton'),
       venueInfoLink(venue),
+      cartonLink(venuePermalink(venue), 'View on The Carton'),
     ]),
   );
 

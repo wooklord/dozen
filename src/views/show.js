@@ -38,6 +38,9 @@ export function renderShow(ctx, showId) {
   // the Shows search rows, which stay dense and get no link.
   const mapsLink = venueInfoLink(show);
   if (mapsLink) append(screen, el('div.link-row', null, [mapsLink]));
+  // Two buttons only. The Carton link used to be a third child here and wrapped
+  // onto its own line on a narrow phone, which read as a stranded third action
+  // rather than a footnote. It now sits under the setlist -- see below.
   append(
     screen,
     el('div.card-actions', null, [
@@ -53,11 +56,16 @@ export function renderShow(ctx, showId) {
         { type: 'button', onclick: () => navigate(`#/venue/${show.venue_id}`) },
         'Venue history',
       ),
-      cartonLink(showPermalink(show)),
     ]),
   );
 
   const rows = index.setlistByShow.get(Number(show.show_id)) || [];
+
+  // Directly under the setlist, inside the same section, in both branches: the
+  // link is a pointer to the source of THIS setlist, so it belongs against the
+  // setlist rather than up in the action row. When no setlist was recorded it
+  // matters more, not less -- it is where the reader goes to check.
+  const sourceLink = () => el('div.link-row.setlist-source', null, [cartonLink(showPermalink(show))]);
 
   if (rows.length) {
     append(
@@ -65,6 +73,7 @@ export function renderShow(ctx, showId) {
       el('div.section', null, [
         sectionHead('Setlist', el('span.badge.badge-set', { text: showStructure(index, show.show_id) || '' })),
         el('div.card', null, setlistBlock(rows, { index, onSong: (id) => navigate(`#/song/${id}`) })),
+        sourceLink(),
       ]),
     );
   } else {
@@ -73,6 +82,7 @@ export function renderShow(ctx, showId) {
       el('div.section', null, [
         sectionHead('Setlist'),
         emptyState('The Carton has no setlist recorded for this show.'),
+        sourceLink(),
       ]),
     );
   }

@@ -84,8 +84,8 @@ export function venueMapsUrl(venue) {
 /**
  * "Venue info" link, or null when there is no usable query.
  *
- * Deliberately secondary to cartonLink: this app rides on The Carton's work
- * and that link stays the primary one on any surface where both appear.
+ * The louder of the two wherever it appears beside cartonLink (see .info-link
+ * in app.css). Attribution still rides on attribution(), not on this row.
  */
 export function venueInfoLink(venue, label = 'Venue info') {
   const href = venueMapsUrl(venue);

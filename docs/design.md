@@ -149,3 +149,27 @@ These are design rules with a scope consequence, so they are not negotiable:
 Not a footer afterthought. Every show, song and venue view carries a visible link home to the
 corresponding `thecarton.net` page, and the shell credits The Carton and Songfish persistently.
 This app rides on someone else's work and should send traffic back.
+
+### Link weight: the credit is the footer, not the inline links (0.1.35)
+
+Two things were doing the same job at the same volume, and one of them is on almost every screen.
+
+`.carton-link` — "View on The Carton", plus the short `Carton` variants inside rows — appears on
+home, shows, show, song, venue, jams and the gap chart. At 13px/600 it read as a call to action
+every time, competing with the content it points at. It is now **11px, weight 500, `--ink-faint`**:
+still obviously a link, still a 44px tap target, no longer shouting.
+
+`.info-link` — "Venue info", the outbound Maps deep link — is now the **louder of the two**,
+at 13px/600 in `--ink-dim`, and it leads the row on the venue screen. This inverts what these two
+rules used to say. On a venue screen the live question is *where is this place*; *read about this
+elsewhere* is not.
+
+**Attribution is unaffected, and that is the point.** `.attrib a` is a separate rule and keeps its
+`--ink-dim` and its underline. The footer naming The Carton and Songfish renders on every screen
+and was not touched. The requirement is that credit is visible and traffic goes home — that is
+carried by the persistent footer plus a real link on every view, not by making the inline links
+the loudest thing on the page.
+
+Contrast after the change, both themes, measured not eyeballed: `.carton-link` 5.09:1 on the dark
+shell and 5.25:1 on the light shell; `.info-link` 9.07:1 and 7.09:1. 11px is normal text under
+WCAG, so the 4.5:1 threshold applies to the smaller link and it clears.

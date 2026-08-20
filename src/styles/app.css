@@ -881,25 +881,45 @@ button.gap-figure:active {
   text-underline-offset: 2px;
 }
 
+/* Outbound link back to The Carton, on every show, song and venue surface.
+   These sit beside the content they point at, on almost every screen, and at
+   13px/600 they were pulling the eye off it. Held small and quiet: --t-xs at
+   weight 500 in --ink-faint. The 44px tap target is unchanged -- this is a
+   type change, not a target change, and the link is still reachable one-handed.
+   Measured: 4.86:1 dark, 5.65:1 on white, 4.81:1 on the light pressed surface.
+   AA for normal text, so it clears the bar at any size.
+
+   The attribution footer is deliberately NOT included -- .attrib a is its own
+   rule and that credit stays at full strength. Toning these down is a density
+   decision about repeated inline links; the disclaimer is the actual credit
+   and it is not being quieted. */
 .carton-link {
   display: inline-flex;
   align-items: center;
   gap: var(--s-1);
   min-height: var(--tap);
-  font-size: var(--t-sm);
-  color: var(--ink-dim);
+  font-size: var(--t-xs);
+  color: var(--ink-faint);
   text-decoration: none;
-  font-weight: 600;
+  font-weight: 500;
 }
+.carton-link:active {
+  color: var(--ink-dim);
+}
+/* Sized in em, not --t-xs: the arrow now has to track an 11px parent rather
+   than sit a step below a 13px one. */
 .carton-link::after {
   content: "↗";
-  font-size: var(--t-xs);
+  font-size: 0.85em;
 }
 
-/* A secondary outbound link, sitting beside the Carton one.
-   Deliberately quieter: --ink-faint against the Carton link's --ink-dim, and
-   normal weight against its 600. This app rides on The Carton's work, so that
-   link stays visibly primary wherever both appear. Same 44px target. */
+/* Outbound Maps deep link for a venue, sitting beside the Carton one.
+   The louder of the two as of 0.1.35: --ink-dim at weight 600 against the
+   Carton link's --ink-faint at 500 and a size step down. This inverts what
+   these two rules used to say, on purpose -- on a venue screen "where is it"
+   is the live question and "read this elsewhere" is not. Attribution is not
+   weakened by the swap: the credit that matters is .attrib, which is
+   unchanged and still names The Carton and Songfish on every screen. */
 .link-row {
   display: flex;
   align-items: center;
@@ -913,16 +933,25 @@ button.gap-figure:active {
   gap: var(--s-1);
   min-height: var(--tap);
   font-size: var(--t-sm);
-  color: var(--ink-faint);
+  color: var(--ink-dim);
   text-decoration: none;
-  font-weight: 400;
+  font-weight: 600;
 }
 .info-link::after {
   content: "↗";
   font-size: var(--t-xs);
 }
 .info-link:active {
-  color: var(--ink-dim);
+  color: var(--ink);
+}
+
+/* The Carton link sitting under a setlist card. It is a source note for the
+   card directly above it, not a free-standing action, so it hangs off that
+   card: 2px of clearance, with the link's own 44px tap target supplying the
+   rest of the breathing room. Anything more and it starts to look like the
+   heading of the section below. */
+.setlist-source {
+  margin-top: 2px;
 }
 
 /* ------------------------------------------------- loading: the 12 cells --- */
