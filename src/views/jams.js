@@ -86,31 +86,41 @@ export function renderJams(ctx) {
     const latest = s.jamcharts
       .slice()
       .sort((a, b) => b.showdate.localeCompare(a.showdate))[0];
+    // Same shape as every other list: `.row-shell` is the flex container, the
+    // button is a flex item and the figure is its SIBLING. Nesting the figure
+    // inside the button left the button shrink-to-fit -- a form control's
+    // `width: auto` does not stretch, and `flex: 1 1 0` does nothing outside a
+    // flex parent -- so the figure's right edge tracked each row's content and
+    // "entry" rows stopped short of "entries" rows.
     append(
       list,
       el('li', null, [
-        el(
-          'button.row',
-          { type: 'button', onclick: () => navigate(`#/song/${s.song_id}`) },
-          [
-            el('span.gap-bar', { style: { '--heat': String(Math.max(0.12, s.jamcharts.length / max)) } }),
-            el('div.row-main', null, [
-              el('div.row-title', { text: s.name }),
-              el('div.row-meta', null, [
-                el('span', { text: `Latest ${formatShowDateShort(latest.showdate)}` }),
-                el('span.sep', { text: '·' }),
-                el('span', { text: `${s.timesPlayed}× played` }),
-                s.showsSinceLastPlayed !== null
-                  ? el('span.badge', { text: `gap ${s.showsSinceLastPlayed}` })
-                  : null,
+        el('div.row-shell', null, [
+          el('span.gap-bar', {
+            style: { '--heat': String(Math.max(0.12, s.jamcharts.length / max)) },
+          }),
+          el(
+            'button.row',
+            { type: 'button', onclick: () => navigate(`#/song/${s.song_id}`) },
+            [
+              el('div.row-main', null, [
+                el('div.row-title', { text: s.name }),
+                el('div.row-meta', null, [
+                  el('span', { text: `Latest ${formatShowDateShort(latest.showdate)}` }),
+                  el('span.sep', { text: '·' }),
+                  el('span', { text: `${s.timesPlayed}× played` }),
+                  s.showsSinceLastPlayed !== null
+                    ? el('span.badge', { text: `gap ${s.showsSinceLastPlayed}` })
+                    : null,
+                ]),
               ]),
-            ]),
-            el('div.gap-figure', null, [
-              el('div.gap-num.num', { text: String(s.jamcharts.length) }),
-              el('div.gap-unit', { text: s.jamcharts.length === 1 ? 'entry' : 'entries' }),
-            ]),
-          ],
-        ),
+            ],
+          ),
+          el('div.gap-figure', null, [
+            el('div.gap-num.num', { text: String(s.jamcharts.length) }),
+            el('div.gap-unit', { text: s.jamcharts.length === 1 ? 'entry' : 'entries' }),
+          ]),
+        ]),
       ]),
     );
     }
