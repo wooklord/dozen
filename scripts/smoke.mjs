@@ -124,6 +124,12 @@ server.listen(PORT, async () => {
     new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
   const evaluate = async (expression) =>
     (await send('Runtime.evaluate', { expression, returnByValue: true }))?.result?.value;
+  // Same thing, but resolves a promise instead of handing back "[object
+  // Object]". Anything touching navigator.serviceWorker or caches is async and
+  // MUST use this -- the plain one silently returns the unresolved promise,
+  // which stringifies to something truthy and quietly passes a check.
+  const evaluateAsync = async (expression) =>
+    (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }))?.result?.value;
 
   await send('Runtime.enable');
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
@@ -311,6 +317,75 @@ server.listen(PORT, async () => {
     fail(`jam (light): highlight and body text are both ${lightJam.jamColor}`);
   } else pass(`light highlight ${lightJam.jamColor} differs from dark and from body text`);
   await evaluate(`document.documentElement.removeAttribute('data-theme');`);
+
+  // --- The ?nosw guard ------------------------------------------------------
+  //
+  // Checked by REGISTERING A WORKER FIRST and then confirming ?nosw tears it
+  // down. Loading ?nosw on a clean profile would pass trivially -- there was
+  // never a worker to disable -- and would say nothing about the case the flag
+  // exists for, which is a machine that already has one serving a stale shell.
+  //
+  // This is also why the assertion is on getRegistrations(), not on whether
+  // register() was called: skipping registration is not the behaviour under
+  // test, removing an existing worker is.
+  console.log('\n?nosw guard:');
+  await send('Page.navigate', { url: `http://localhost:${PORT}/#/home` });
+
+  // Wait on navigator.serviceWorker.ready -- the primitive that means "a worker
+  // is active for this page" -- rather than polling getRegistrations().
+  //
+  // Polling was flaky roughly one run in three: registration is hung off
+  // window.load and can settle later than any sleep worth writing, so the
+  // baseline failed for timing reasons that had nothing to do with the guard.
+  // A check that goes red without a real defect is exactly as useless as one
+  // that goes green without health, so this waits on the real signal with a
+  // generous ceiling instead of guessing a duration.
+  //
+  // Measured before changing it: register() itself resolves fine (scope
+  // returned, no rejection) -- the fault was the wait, not the app. The
+  // registration code was therefore left alone.
+  const registered = await evaluateAsync(`(async () => {
+    try {
+      await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 25000)),
+      ]);
+      return (await navigator.serviceWorker.getRegistrations()).length;
+    } catch { return 0; }
+  })()`);
+  if (!registered) {
+    fail('?nosw: baseline failed — no worker registered without the flag, so the teardown proves nothing');
+  } else {
+    pass(`baseline: ${registered} worker registered without the flag`);
+
+    await send('Page.navigate', { url: `http://localhost:${PORT}/?nosw#/home` });
+    await sleep(3000);
+    const after = await evaluateAsync(`(async () => ({
+      regs: (await navigator.serviceWorker.getRegistrations()).length,
+      caches: (await caches.keys()).length,
+      controller: !!navigator.serviceWorker.controller,
+      chip: !!document.querySelector('.sw-off-chip'),
+      booted: !document.querySelector('.loader'),
+    }))()`);
+
+    if (after.regs !== 0) fail(`?nosw: ${after.regs} worker(s) still registered`);
+    else if (after.controller) fail('?nosw: a worker is still controlling the page');
+    else if (after.caches !== 0) fail(`?nosw: ${after.caches} cache(s) left behind`);
+    else pass('worker unregistered, caches dropped, page uncontrolled');
+
+    // The flag has to be VISIBLE -- there are no dev tools in this loop, and an
+    // invisible dev state is one you can be wrong about in both directions.
+    if (!after.chip) fail('?nosw: no .sw-off-chip rendered — the flag is invisible');
+    else pass('NO SW chip is on screen');
+
+    // And it must not have broken the app on the way through.
+    if (!after.booted) fail('?nosw: the app did not finish booting with the flag set');
+    else pass('app still boots with the flag set');
+  }
+
+  // Back to a clean URL so nothing downstream inherits the flag.
+  await send('Page.navigate', { url: `http://localhost:${PORT}/#/home` });
+  await sleep(1500);
 
   console.log('\nruntime errors:');
   if (runtimeErrors.length) {

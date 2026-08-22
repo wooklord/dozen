@@ -40,6 +40,18 @@ python -m http.server 8080     # or: npx serve .
 # open http://localhost:8080
 ```
 
+If you are changing CSS or tokens, add `?nosw` while you work:
+
+```
+http://localhost:8080/?nosw
+```
+
+The service worker caches the app shell, so without this a reload can serve you
+the PREVIOUS build's stylesheet -- you read back a real, plausible value and
+spend the next ten minutes debugging a change that already landed. `?nosw`
+unregisters the worker and drops its caches, and shows a **NO SW** chip in the
+header so you can see it is off.
+
 Run the tests:
 
 ```sh

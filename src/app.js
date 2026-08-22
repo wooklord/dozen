@@ -35,6 +35,12 @@ const app = {
   busy: false,
 };
 
+// Read once, at module scope: renderHeaderStatus() consults this during boot,
+// which runs before the service-worker block at the bottom of this file. A
+// const declared down there would still be in its temporal dead zone and the
+// header would throw on first paint.
+const SW_DISABLED = new URLSearchParams(location.search).has('nosw');
+
 const main = document.getElementById('main');
 const statusSlot = document.getElementById('header-status');
 
@@ -159,6 +165,15 @@ async function refresh({ mode = 'fast', silent = false } = {}) {
 
 function renderHeaderStatus() {
   clear(statusSlot);
+
+  // `?nosw` is on-screen or it is not trustworthy. There are no dev tools in
+  // this project's loop, so an invisible flag fools you BOTH ways: you can
+  // believe the worker is off when the param got dropped in a copied URL, or
+  // that it is on when it is not. Its own class and its own words -- never
+  // `.status-chip`, which means cache age and is what a deploy check reads.
+  if (SW_DISABLED) {
+    append(statusSlot, el('span.sw-off-chip', { text: 'NO SW', title: 'Service worker disabled by ?nosw' }));
+  }
 
   // Kept tappable as a second way in -- a path already learned should not be
   // taken away -- but it is no longer the only one. "just now" reads as a
@@ -578,11 +593,51 @@ onSystemThemeChange(() => renderHeaderStatus());
 renderTabs();
 boot();
 
-// Service worker: app shell offline. Registered late so it never blocks boot.
+// ----------------------------------------------------------- service worker --
+//
+// App shell offline. Registered late so it never blocks boot.
+//
+// `?nosw` turns it off for local work. This exists because the worker served a
+// stale shell twice while tuning a colour: the page returned a real, plausible
+// value read from the PREVIOUS build's stylesheet, which looks like a broken
+// change rather than a cache. See CLAUDE.md, "The service worker will serve you
+// a stale shell".
+//
+// SKIPPING register() IS NOT ENOUGH ON ITS OWN. A worker installed by an
+// earlier visit keeps controlling this origin whether or not the page asks for
+// one, so the flag has to actively tear the existing one down. A guard that
+// only skipped registration would appear to work, do nothing on the one machine
+// that actually had the problem, and be worse than no flag at all.
+//
+// Deliberately NOT gated on hostname: the offline path is a shipped feature
+// that gets used in venues on bad signal, and a worker that only ever runs
+// where nobody can watch it is a worker whose next bug ships. Local testing
+// exercises it by default; you opt out per-URL when you need to.
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch((err) => {
-      console.warn('[dozen] service worker registration failed', err);
+  if (SW_DISABLED) disableServiceWorker();
+  else {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch((err) => {
+        console.warn('[dozen] service worker registration failed', err);
+      });
     });
-  });
+  }
+}
+
+async function disableServiceWorker() {
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    for (const r of regs) await r.unregister();
+    for (const k of await caches.keys()) await caches.delete(k);
+
+    // Reload ONLY when a worker was actually serving this page. Unregistering
+    // does not detach the controller from an already-loaded document, so
+    // without a reload you would still be looking at the stale shell you came
+    // here to escape. The `regs.length` half is what stops it looping: after
+    // the reload there is nothing left to unregister, so the condition is
+    // false and the page settles.
+    if (regs.length && navigator.serviceWorker.controller) location.reload();
+  } catch (err) {
+    console.warn('[dozen] could not disable the service worker', err);
+  }
 }

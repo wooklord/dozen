@@ -135,6 +135,23 @@ a {
   padding: 2px 7px;
 }
 
+/* `?nosw` is active. A DEV state, so it is marked as one -- --danger, not
+   --yolk: yolk means the data is telling you something, and this is the app
+   telling you it is not running normally. Its own class on purpose; reusing
+   .status-chip here would put two different meanings behind one selector,
+   which is exactly how a check ends up reading the wrong element. */
+.sw-off-chip {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--danger);
+  border: 1px dashed var(--danger);
+  border-radius: var(--r-pill);
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
 .icon-btn {
   min-width: 34px;
   min-height: 34px;

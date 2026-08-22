@@ -386,31 +386,54 @@ So the automated check is clean and the manual loop is not, which is precisely
 why this went unnoticed for two rounds. **Do not "simplify" the smoke test onto
 a fixed port or a persistent profile** — those two lines are load-bearing.
 
-#### Making the dev server bypass the SW entirely (not built — what it would take)
+#### `?nosw` turns the worker off (BUILD 0.1.41)
 
-Three options, cheapest first. None are implemented; this is the note so the
-next person does not re-derive it.
+Append `?nosw` to any local URL and the app tears the worker down instead of
+registering one:
 
-1. **Rotate the dev port.** Serve on a random port the way the smoke test does
-   (`npx serve -l 0`, or a wrapper that picks one). Zero code change, and it
-   works because SW scope is per-origin. Costs: `localStorage` (theme, picks)
-   and the IndexedDB cache are also per-origin, so every run starts cold — which
-   means a full archive pull each time. That is the real reason not to default
-   to it.
-2. **A `?nosw` guard on registration.** In `src/app.js` the registration is one
-   `if` block; gate it on
-   `!new URLSearchParams(location.search).has('nosw')`. About three lines, keeps
-   the same origin so caches and picks survive, and is opt-in so normal local
-   testing still exercises the worker. **This is the one to build if it comes up
-   again.**
-3. **Skip registration on localhost entirely.** Tempting and wrong: the PWA
-   offline path is a shipped feature that gets used in venues with bad signal,
-   and this would mean it is never exercised outside production. If the worker
-   only ever runs where it cannot be observed, its next bug ships.
+```
+http://localhost:8080/?nosw#/show/1728657865
+```
 
-Option 2 is the recommendation. It was not built during this batch because the
-batch was about the jam highlight and the header, and adding a dev-only switch
-to `app.js` is a change to shipped code that deserves its own decision.
+A **NO SW** chip renders in the header while it is active, because there are no
+dev tools in this loop and an invisible dev flag fools you in *both* directions
+— you can believe the worker is off when the param got dropped from a copied
+URL, or that it is on when it is not.
+
+**Skipping `register()` is not enough, and a guard that only did that would be
+worse than none.** A worker installed by an earlier visit keeps controlling the
+origin whether or not the page asks for one, so `?nosw` actively unregisters,
+drops the caches, and reloads once. That reload is guarded on `regs.length` so
+it cannot loop: after it there is nothing left to unregister.
+
+Deliberately **not** gated on hostname. The offline path is a shipped feature
+used in venues on bad signal, and a worker that only ever runs where nobody can
+watch it is a worker whose next bug ships. Local testing exercises it by
+default; you opt out per-URL when you need to.
+
+`scripts/smoke.mjs` tests this by **registering a worker first** and then
+confirming `?nosw` removes it. Loading `?nosw` on a clean profile would pass
+trivially — there was never a worker to disable — and would say nothing about
+the case the flag exists for. Proved red both ways: the naive skip-only guard
+leaves the worker registered, and renaming the chip class fails the visibility
+check.
+
+> **Waiting for a worker: use `navigator.serviceWorker.ready`, not a poll.**
+> The first version polled `getRegistrations()` and failed about one run in
+> three. `register()` was measured and is fine — it resolves with a scope and
+> never rejects — so the fault was the wait, not the app, and the app was left
+> alone. A check that goes red without a real defect is exactly as useless as
+> one that goes green without health.
+
+Two other bypasses were considered and rejected:
+
+- **Rotate the dev port.** Zero code, and it works because worker scope is
+  per-origin including port. But `localStorage` (theme, picks) and the
+  IndexedDB archive are per-origin too, so every run starts cold and re-pulls
+  the whole archive.
+- **Skip registration on localhost entirely.** Same objection as gating on
+  hostname above: it would mean the offline path is never exercised outside
+  production.
 
 ### Run the route smoke test before pushing
 
