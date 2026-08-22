@@ -302,6 +302,33 @@ Note `isoriginal` disagrees between methods for some songs: `songs` reports `"Eg
 > Two naming traps: the note field is **`jamchartnote`** (one word) here, but `jamchart_notes` in
 > `setlists`. The show key is **`showid`**, not `show_id`.
 
+### Joining `jamcharts` to `setlists` (measured 2026-08-21)
+
+`setlists.isjamchart` and the `jamcharts` table are **two views of the same fact and they agree
+exactly.** Verified in both directions, so neither is treated as authoritative over the other:
+
+| Check | Result |
+|---|---|
+| Unique `(show, song)` pairs with `setlists.isjamchart = 1` | **779** |
+| Unique `(show, song)` pairs in `jamcharts` | **779** |
+| Flagged in `setlists` but **no** `jamcharts` row | **0** |
+| In `jamcharts` but **not** flagged in `setlists` | **0** |
+
+**The join key is `showid` + `song_id` + `setnumber` + `position`.** All 792 jamcharts rows match a
+setlist row on it, with zero misses.
+
+- **`position` is required, not optional.** 792 rows cover only 779 unique `(show, song)` pairs
+  because **13 songs are jam-charted twice in the same night**. Keying on song alone silently
+  collapses those pairs into one entry.
+- **`settype` is correctly absent from the key.** `jamcharts` has no such field and does not need
+  one: the four-part tuple is unique across all 6361 setlist rows (zero collisions), and **no show
+  mixes `"One Set"` with `"Set"`**, so settype carries no disambiguating information here.
+- `setnumber` is a string on both sides and is case-folded before comparison, so `"E"` and `"e"`
+  cannot split an encore in two.
+
+Because the flag lives on the setlist row itself, **highlighting a jam entry inside a setlist needs
+no join at all** — only the per-show entry list does.
+
 ## `albums` — 16 fields
 
 One row per **track**, not per album. `album_title`, `album_displayname`, `artist`, `artist_id`,

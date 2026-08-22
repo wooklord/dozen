@@ -384,9 +384,17 @@ export function setlistBlock(rows, { onSong, index } = {}) {
   for (const group of sets) {
     const flow = el('div.setlist-flow');
     group.rows.forEach((r, i) => {
-      const song = el('span.setlist-song', {
+      // Carton's own flag, not a lookup: `setlists.isjamchart` and the
+      // `jamcharts` table agree exactly in live data -- 779 unique
+      // (show, song) pairs from each, zero rows flagged without an entry and
+      // zero entries without a flag. The row already carries it, so the
+      // highlight costs no join. `data-jam` is what the smoke test asserts,
+      // because a class is also what a stylesheet could set by accident.
+      const isJam = Number(r.isjamchart) === 1;
+      const song = el(`span.setlist-song${isJam ? '.jam' : ''}`, {
         role: 'button',
         tabindex: '0',
+        'data-jam': isJam ? 'true' : null,
         text: r.songname,
         onclick: () => onSong?.(Number(r.song_id)),
         onkeydown: (e) => {

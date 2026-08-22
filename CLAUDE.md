@@ -307,6 +307,7 @@ then passes for the wrong reason, and reports health it never established.
 | Screenshot the gap chart route | that route renders | the **previous screen**, still displayed because the render threw. A PNG was written, the run was green, and the route had been broken for three releases |
 | `grep venueLine` in the file | that the symbol is **imported** | the **call site**, added moments earlier. The bug and its false confirmation came from one mistake |
 | Read `.build-marker` in the header | that BUILD is displayed | the **cache-age chip**, which used the same class. It would have read "just now" and reported a successful deploy |
+| Read the rendered jam colour from a local page | that the new token shipped | the **service worker's cached shell**, still serving the previous build's stylesheet. `getComputedStyle` returned a real colour, from the wrong stylesheet |
 
 The shape is always a **proxy**: the check tests a side effect rather than the
 thing itself, and the side effect has more than one cause.
@@ -339,6 +340,77 @@ current checks were verified this way:
 
 Do this for every new check. It costs one minute and it is the only thing that
 separates a real check from a comforting one.
+
+### The service worker will serve you a stale shell (dev-loop hazard)
+
+**Symptom: you change a token, reload the local page, and read back the OLD
+value — as a real, plausible number.** This cost time twice in one session while
+tuning the jam colour. `getComputedStyle` returned `rgb(127, 206, 127)` when the
+committed token said `#7ecfa6`. Nothing looked broken; the wrong colour was
+simply the *previous build's* stylesheet, served out of the service worker cache.
+
+This is the **same shape as every other verification failure here** — see the
+table above. The check read a genuine value from the **wrong artifact**. A stale
+shell is indistinguishable from a fresh one by inspection, which is exactly what
+makes it expensive: you start debugging the change instead of the cache.
+
+**The fix, both halves — one is not enough:**
+
+```js
+// In the page console, before trusting anything you read back:
+for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+for (const k of await caches.keys()) await caches.delete(k);
+location.reload();
+```
+
+plus a cache-busting query on the URL (`?cb=<build>`). Unregistering alone can
+still leave the HTTP cache holding the old CSS; the query alone leaves the
+service worker answering from `caches`. Bumping `CACHE_VERSION` does **not** help
+in the moment — the already-installed worker keeps serving until it is replaced.
+
+**Confirm the value, do not assume the reload worked.** Read the colour (or
+whatever changed) back and compare it against the committed token before drawing
+any conclusion from what is on screen.
+
+#### Why `scripts/smoke.mjs` never hits this
+
+Two accidents of its design make it immune, and both are worth preserving:
+
+- it serves on a **random port** each run (`8123 + rand(400)`), and service
+  worker scope is per-origin *including port*, so there is never a worker
+  registered for that origin;
+- it launches Chrome with a **throwaway `--user-data-dir`**, so there is no
+  profile carrying one over.
+
+So the automated check is clean and the manual loop is not, which is precisely
+why this went unnoticed for two rounds. **Do not "simplify" the smoke test onto
+a fixed port or a persistent profile** — those two lines are load-bearing.
+
+#### Making the dev server bypass the SW entirely (not built — what it would take)
+
+Three options, cheapest first. None are implemented; this is the note so the
+next person does not re-derive it.
+
+1. **Rotate the dev port.** Serve on a random port the way the smoke test does
+   (`npx serve -l 0`, or a wrapper that picks one). Zero code change, and it
+   works because SW scope is per-origin. Costs: `localStorage` (theme, picks)
+   and the IndexedDB cache are also per-origin, so every run starts cold — which
+   means a full archive pull each time. That is the real reason not to default
+   to it.
+2. **A `?nosw` guard on registration.** In `src/app.js` the registration is one
+   `if` block; gate it on
+   `!new URLSearchParams(location.search).has('nosw')`. About three lines, keeps
+   the same origin so caches and picks survive, and is opt-in so normal local
+   testing still exercises the worker. **This is the one to build if it comes up
+   again.**
+3. **Skip registration on localhost entirely.** Tempting and wrong: the PWA
+   offline path is a shipped feature that gets used in venues with bad signal,
+   and this would mean it is never exercised outside production. If the worker
+   only ever runs where it cannot be observed, its next bug ships.
+
+Option 2 is the recommendation. It was not built during this batch because the
+batch was about the jam highlight and the header, and adding a dev-only switch
+to `app.js` is a change to shipped code that deserves its own decision.
 
 ### Run the route smoke test before pushing
 

@@ -53,11 +53,24 @@ a {
 
 /* ---------------------------------------------------------------- header --- */
 
+/* The BAR stays full-bleed; its CONTENTS are constrained to the same 720px
+ * column as .app-main, so the brand lines up with the body instead of being
+ * shoved into the window corner. Padding rather than an inner wrapper: it
+ * needs no extra DOM, and the blurred background still reaches the window
+ * edges, which is what keeps content from appearing to scroll past a floating
+ * bar on a wide screen.
+ *
+ * `max(0px, ...)` collapses to nothing below 720px, so the mobile value is
+ * exactly the --s-4 it has always been -- verified at 390px. The + var(--s-4)
+ * matches .screen's own padding, so the brand aligns with body text rather
+ * than with the column's outer edge.
+ */
 .app-header {
   position: fixed;
   inset: 0 0 auto 0;
   height: calc(var(--header-h) + env(safe-area-inset-top));
-  padding: env(safe-area-inset-top) var(--s-4) 0;
+  padding: env(safe-area-inset-top)
+    calc(max(0px, (100% - 720px) / 2) + var(--s-4)) 0;
   display: flex;
   align-items: center;
   gap: var(--s-3);
@@ -532,11 +545,20 @@ button.gap-figure:active {
 
 /* ------------------------------------------------------------------ tabs --- */
 
+/* Same treatment as .app-header: full-bleed bar, contents held to the 720px
+ * column so five tabs do not stretch across a desktop window. No --s-4 term
+ * here -- the tabs are a 5-up grid that should span the column edge to edge,
+ * the way .app-main's own box does, not inset within it.
+ *
+ * Below 720px the max() collapses to 0 and the grid is byte-for-byte what it
+ * was -- verified at 390px. */
 .tabbar {
   position: fixed;
   inset: auto 0 0 0;
   height: calc(var(--tabs-h) + env(safe-area-inset-bottom));
   padding-bottom: env(safe-area-inset-bottom);
+  padding-left: max(0px, (100% - 720px) / 2);
+  padding-right: max(0px, (100% - 720px) / 2);
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   background: var(--shell-alpha);
@@ -756,6 +778,35 @@ button.gap-figure:active {
   border-bottom-color: var(--yolk);
 }
 
+/* Jam chart entries.
+ *
+ * The Carton marks these itself -- `.setlist-songbox .jamchart` is green in
+ * its own stylesheet -- so this carries their signal across rather than
+ * inventing a new one. See --dk-jam/--lt-jam for the hues and the measured
+ * contrast on every ground this lands on.
+ *
+ * COLOUR ONLY, on the song title alone. It is the same text at the same size
+ * and weight in the same place; nothing about the entry moves. That matters
+ * because this sits inside flowing text where any box, weight or size change
+ * would reflow the line and break the setlist's rhythm.
+ *
+ * Why not yolk-with-something: the setlist already spends yolk on set labels
+ * and footnote markers, where it means "there is more to read here". A second
+ * warm accent inline would compete with that for the same attention. Green is
+ * a different family, so the two can coexist in one block without either
+ * having to be louder.
+ */
+.setlist-song.jam {
+  color: var(--jam);
+}
+
+/* The press underline follows the text it belongs to. Left at --yolk it would
+   flash orange under a green word, which reads as a different control. Scoped
+   to .jam so non-jam entries keep exactly the affordance they have now. */
+.setlist-song.jam:active {
+  border-bottom-color: currentColor;
+}
+
 /* Segue marks.
  *
  * These sit INLINE between song titles, where they read as punctuation. The
@@ -796,6 +847,41 @@ button.gap-figure:active {
  */
 .comma {
   color: inherit;
+}
+
+/* Jam chart entry cards on show detail.
+ *
+ * The song title takes the same --jam green as its highlighted counterpart in
+ * the setlist above, which is the whole point: the green word up there and the
+ * note down here are one entry, and matching colour is what says so.
+ *
+ * The Carton carries these notes in a `title` tooltip on the setlist link.
+ * Hover does not exist on a phone, so the note is rendered as real text
+ * instead -- same data, reachable with a thumb.
+ */
+.jam-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.jam-card-song {
+  color: var(--jam);
+  font-weight: 600;
+  text-align: left;
+  padding: 0;
+  min-height: 0;
+  border-bottom: 1px solid transparent;
+}
+.jam-card-song:active {
+  border-bottom-color: currentColor;
+}
+
+.jam-card-note {
+  margin: var(--s-2) 0 0;
+  font-size: var(--t-sm);
+  color: var(--ink-dim);
 }
 
 /* Footnotes are tappable, not tooltips -- hover does not exist on a phone. */

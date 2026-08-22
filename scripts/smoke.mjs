@@ -194,6 +194,124 @@ server.listen(PORT, async () => {
     else pass(`${ep.name} -> ${hash}`);
   }
 
+  // --- Jam chart highlight + per-show jam entries ---------------------------
+  //
+  // 2024-12-31: 6 jam entries spread across Set 1, Set 2 and the encore. The
+  // multi-set spread is the point -- for this show setlist order and
+  // alphabetical order are DIFFERENT, so an accidental alphabetical sort
+  // cannot pass. A single-set show would not discriminate.
+  console.log('\njam chart highlight and entries:');
+  await evaluate(`location.hash = '#/show/1728657865';`);
+  await sleep(1200);
+
+  const jam = await evaluate(`(() => {
+    const songs = [...document.querySelectorAll('.setlist-song')];
+    const marked = songs.filter((s) => s.dataset.jam === 'true');
+    const plain = songs.filter((s) => s.dataset.jam !== 'true');
+    const cs = (n) => getComputedStyle(n).color;
+    const token = getComputedStyle(document.documentElement).getPropertyValue('--jam').trim();
+    // Resolve the token through a throwaway node so the comparison is between
+    // two rgb() strings rather than a hex against a computed colour.
+    const probe = document.createElement('span');
+    probe.style.color = token;
+    document.body.appendChild(probe);
+    const tokenRgb = getComputedStyle(probe).color;
+    probe.remove();
+    return {
+      total: songs.length,
+      marked: marked.length,
+      markedNames: marked.map((s) => s.textContent),
+      jamColor: marked.length ? cs(marked[0]) : null,
+      plainColor: plain.length ? cs(plain[0]) : null,
+      tokenRgb,
+      sectionNames: [...document.querySelectorAll('.jam-card-song')].map((n) => n.textContent),
+    };
+  })()`);
+
+  if (!jam || !jam.total) {
+    fail('jam: the 2024-12-31 setlist did not render at all');
+  } else {
+    // The highlight is applied at all, and to the right number of songs.
+    if (jam.marked !== 6) fail(`jam: expected 6 highlighted songs, found ${jam.marked}`);
+    else pass(`6 setlist entries carry data-jam`);
+
+    // A class with no CSS rule behind it would still set data-jam, so assert
+    // the COLOUR, not the attribute -- and against the token specifically, so
+    // "some colour got applied" cannot pass for "the jam colour got applied".
+    if (jam.jamColor !== jam.tokenRgb) {
+      fail(`jam: highlighted song is ${jam.jamColor}, --jam is ${jam.tokenRgb}`);
+    } else if (jam.jamColor === jam.plainColor) {
+      fail(`jam: highlighted and plain songs are both ${jam.jamColor}`);
+    } else pass(`highlight ${jam.jamColor} differs from body ${jam.plainColor}`);
+
+    // The section exists and has one card per highlighted song.
+    if (jam.sectionNames.length !== jam.marked) {
+      fail(`jam: ${jam.marked} highlighted songs but ${jam.sectionNames.length} entry cards`);
+    } else pass(`${jam.sectionNames.length} entry cards under the setlist`);
+
+    // THE ORDER CHECK. Compared against the rendered setlist itself rather
+    // than a hardcoded list, so it tests the actual requirement: the entries
+    // read in the order they were played. Also asserted NOT to be
+    // alphabetical -- for this show those two orders differ, which is why
+    // this show was chosen.
+    const inSetlistOrder = JSON.stringify(jam.sectionNames) === JSON.stringify(jam.markedNames);
+    const alpha = JSON.stringify([...jam.markedNames].sort());
+    if (!inSetlistOrder) {
+      fail(`jam: entries out of setlist order\n      setlist: ${jam.markedNames.join(', ')}\n      section: ${jam.sectionNames.join(', ')}`);
+    } else if (JSON.stringify(jam.sectionNames) === alpha) {
+      fail('jam: entries are alphabetical, not setlist order');
+    } else pass(`entries in setlist order: ${jam.sectionNames.join(', ')}`);
+  }
+
+  // A show with NO jam entries must render no section at all, not an empty
+  // one. 2019-12-14: 28 setlist rows, zero jam entries -- a long setlist on
+  // purpose, so "rendered nothing" cannot be satisfied by the view having
+  // failed to render. The setlist length is asserted for exactly that reason.
+  await evaluate(`location.hash = '#/show/1627919708';`);
+  await sleep(1100);
+  const noJam = await evaluate(`(() => ({
+    songs: document.querySelectorAll('.setlist-song').length,
+    marked: document.querySelectorAll('.setlist-song[data-jam="true"]').length,
+    cards: document.querySelectorAll('.jam-card-song').length,
+    heading: (document.getElementById('main').innerText || '').toLowerCase().includes('jam chart entries'),
+  }))()`);
+  if (noJam.songs !== 28) fail(`jam: the no-jam show did not render (expected 28 songs, got ${noJam.songs})`);
+  else if (noJam.marked !== 0) fail(`jam: expected 0 highlighted songs on this show, found ${noJam.marked}`);
+  else if (noJam.cards || noJam.heading) fail('jam: a show with no entries rendered the section anyway');
+  else pass('a show with 28 songs and no entries renders no section');
+
+  // --- The same, in the light theme ----------------------------------------
+  // The two themes do not share a hex, so a light-theme regression (a value
+  // missing from one of the three mapping blocks) would be invisible here
+  // otherwise. Both the colour AND its difference from body text are checked.
+  console.log('\nlight theme:');
+  await evaluate(`document.documentElement.setAttribute('data-theme', 'light');`);
+  await evaluate(`location.hash = '#/show/1728657865';`);
+  await sleep(1200);
+  const lightJam = await evaluate(`(() => {
+    const marked = document.querySelector('.setlist-song[data-jam="true"]');
+    const plain = [...document.querySelectorAll('.setlist-song')].find((s) => s.dataset.jam !== 'true');
+    const probe = document.createElement('span');
+    probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--jam').trim();
+    document.body.appendChild(probe);
+    const tokenRgb = getComputedStyle(probe).color;
+    probe.remove();
+    return {
+      jamColor: marked && getComputedStyle(marked).color,
+      plainColor: plain && getComputedStyle(plain).color,
+      tokenRgb,
+    };
+  })()`);
+  if (!lightJam?.jamColor) fail('jam (light): no highlighted song found');
+  else if (lightJam.jamColor !== lightJam.tokenRgb) {
+    fail(`jam (light): song is ${lightJam.jamColor}, --jam is ${lightJam.tokenRgb}`);
+  } else if (lightJam.jamColor === jam.jamColor) {
+    fail(`jam (light): same hex as dark (${lightJam.jamColor}) — the light mapping is missing`);
+  } else if (lightJam.jamColor === lightJam.plainColor) {
+    fail(`jam (light): highlight and body text are both ${lightJam.jamColor}`);
+  } else pass(`light highlight ${lightJam.jamColor} differs from dark and from body text`);
+  await evaluate(`document.documentElement.removeAttribute('data-theme');`);
+
   console.log('\nruntime errors:');
   if (runtimeErrors.length) {
     for (const e of [...new Set(runtimeErrors)]) fail(e);

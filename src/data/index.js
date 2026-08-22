@@ -72,6 +72,25 @@ export function setRank(setnumber) {
   return SET_RANK[String(setnumber).toLowerCase()] ?? 50;
 }
 
+/**
+ * Join key between a `setlists` row and a `jamcharts` row.
+ *
+ * `settype` is deliberately NOT part of the key: `jamcharts` has no settype
+ * field, and it is not needed. Measured against live data, the tuple below is
+ * unique across all 6361 setlist rows (zero collisions) and no show mixes
+ * "One Set" with "Set", so settype carries no disambiguating information here.
+ *
+ * `position` IS part of the key. Thirteen songs are jam-charted twice in one
+ * night; keying on song alone would collapse those pairs into one entry.
+ *
+ * Note the field-name trap: jamcharts uses `showid` (no underscore) while
+ * setlists uses `show_id`. Callers pass the value, not the row, so the
+ * mismatch cannot leak in here.
+ */
+export function jamKey(showId, songId, setnumber, position) {
+  return `${Number(showId)}|${Number(songId)}|${String(setnumber).toLowerCase()}|${Number(position)}`;
+}
+
 /** Human label for a set. */
 export function setLabel(settype, setnumber) {
   const n = String(setnumber).toLowerCase();
@@ -440,6 +459,45 @@ export function buildIndex(raw) {
     });
   }
 
+  // --- Jam chart entries, per show, IN SETLIST ORDER --------------------------
+  //
+  // Built by walking the show's ALREADY-SORTED setlist rows rather than by
+  // sorting the jamcharts rows. Order is therefore correct by construction --
+  // there is no second sort to drift out of step with the setlist rendered
+  // directly above these entries on show detail.
+  //
+  // The join is show + song + settype-agnostic setnumber + position, which is
+  // EXACT against live data: all 792 jamcharts rows match a setlist row, and
+  // no setlist row flagged isjamchart lacks one. Verified both directions --
+  // 779 unique (show, song) pairs from each source, zero disagreement. The 13
+  // songs charted twice in one night are separated by position, which is why
+  // the key includes it rather than stopping at song_id.
+  const jamByKey = new Map();
+  for (const j of jamcharts) {
+    jamByKey.set(jamKey(j.showid, j.song_id, j.setnumber, j.position), j);
+  }
+
+  const jamByShow = new Map();
+  for (const [showId, rows] of setlistByShow) {
+    const entries = [];
+    for (const r of rows) {
+      if (Number(r.isjamchart) !== 1) continue;
+      const j = jamByKey.get(jamKey(r.show_id, r.song_id, r.setnumber, r.position));
+      // A flagged row with no jamcharts row does not occur in live data, but
+      // if the two tables ever diverge the setlist row still carries the note,
+      // so the entry is rendered from what IS present rather than dropped.
+      entries.push({
+        song_id: Number(r.song_id),
+        songname: r.songname,
+        settype: r.settype,
+        setnumber: r.setnumber,
+        position: Number(r.position),
+        note: j ? j.jamchartnote : cleanDisplayText(r.jamchart_notes || ''),
+      });
+    }
+    if (entries.length) jamByShow.set(showId, entries);
+  }
+
   // --- Venues ----------------------------------------------------------------
   const venuesById = new Map(venues.map((v) => [Number(v.venue_id), v]));
   const showsByVenue = new Map();
@@ -472,6 +530,7 @@ export function buildIndex(raw) {
     countedShows,
     futureShows,
     setlistByShow,
+    jamByShow,
     showOrdinal,
     venues,
     venuesById,

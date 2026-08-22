@@ -35,6 +35,46 @@
   --dk-yolk-wash: rgba(245, 166, 35, 0.12);
   --dk-yolk-line: rgba(245, 166, 35, 0.35);
   --dk-yolk-ink: #1a1206;
+  /* Jam chart highlight. Green because The Carton itself marks jam chart
+     entries green -- `.setlist-songbox .jamchart{color:#75eb00}` in its
+     songfish-eggy.css -- so this is their signal retuned, not one invented
+     here. Their neon #75eb00 measures 11.45:1 on our card but only 1.54:1
+     on white, so exactly like yolk the two themes do NOT share a hex.
+
+     WARM SAGE, hue 132. Four greens were rendered in a real setlist, in
+     both themes, and compared on screen -- not swatched:
+       hue  90 chartreuse  rejected: goes olive in light and reads as a
+                           second WARM accent beside the yolk set labels
+       hue 120 leaf        rejected: legible, cleared everything, not liked
+       hue 150 sage        rejected: measurably the coolest thing on screen
+                           (b* 12.7) against a palette where every token
+                           leans yellow; picked up a mint cast in dark
+       hue 132 warm sage   CHOSEN -- sage pulled back toward yolk far
+                           enough to lose the mint cast, nowhere near the
+                           chartreuse's olive failure (that was hue 80 at
+                           saturation 71; this is hue 132 at 41)
+
+     Measured on every ground it can land on:
+       dark  #8ace98  9.54:1 surface / 10.18:1 shell / 8.72:1 pressed
+       light #376841  6.52:1 surface /  6.06:1 shell / 5.55:1 pressed
+     Setlist text is 15px regular, so the 4.5:1 normal-text threshold
+     applies and both clear it on all three. Both also sit just above yolk
+     (8.70 / 5.69) rather than below it -- this recolours body text being
+     READ, not a small accent glyph, so it needs at least yolk's legibility
+     without overshooting into a louder accent.
+
+     WARMTH IS A MEASURED AXIS HERE, not a vibe. On Lab b* (yellow +,
+     blue -) every token in this palette is warm: shell 1.9, ink 5.0, yolk
+     71.9. This sits at b* 20.2 dark / 17.0 light -- clearly warmer than the
+     sage it replaced (12.7 / 12.2) and still well short of the leaf green
+     (31.8 / 27.0), which is the band that keeps it a green rather than a
+     second yellow. Hold b* inside roughly 15-24 if this is ever retuned.
+
+     The dark value was fitted to sage's EXACT contrast triple so the two
+     could be compared on hue alone. Any future candidate should be matched
+     the same way -- changing warmth and loudness together makes a
+     side-by-side unjudgeable. */
+  --dk-jam: #8ace98;
   --dk-danger: #e5734a;
   --dk-scrim: rgba(0, 0, 0, 0.5);
   --dk-cell-inset: rgba(0, 0, 0, 0.4);
@@ -65,6 +105,7 @@
   --lt-yolk-wash: rgba(148, 89, 6, 0.1);
   --lt-yolk-line: rgba(148, 89, 6, 0.32);
   --lt-yolk-ink: #fffaf1;
+  --lt-jam: #376841;
   --lt-danger: #b03a06;
   --lt-scrim: rgba(0, 0, 0, 0.38);
   --lt-cell-inset: rgba(0, 0, 0, 0.12);
@@ -89,6 +130,7 @@
   --yolk-wash: var(--dk-yolk-wash);
   --yolk-line: var(--dk-yolk-line);
   --yolk-ink: var(--dk-yolk-ink);
+  --jam: var(--dk-jam);
   --danger: var(--dk-danger);
   --scrim: var(--dk-scrim);
   --cell-inset: var(--dk-cell-inset);
@@ -145,6 +187,7 @@
     --yolk-wash: var(--lt-yolk-wash);
     --yolk-line: var(--lt-yolk-line);
     --yolk-ink: var(--lt-yolk-ink);
+    --jam: var(--lt-jam);
     --danger: var(--lt-danger);
     --scrim: var(--lt-scrim);
     --cell-inset: var(--lt-cell-inset);
@@ -172,6 +215,7 @@
   --yolk-wash: var(--lt-yolk-wash);
   --yolk-line: var(--lt-yolk-line);
   --yolk-ink: var(--lt-yolk-ink);
+  --jam: var(--lt-jam);
   --danger: var(--lt-danger);
   --scrim: var(--lt-scrim);
   --cell-inset: var(--lt-cell-inset);

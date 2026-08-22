@@ -50,6 +50,79 @@ disappears. A decoration present in one theme and absent in the other is an inco
 feels without being able to name it. A genuinely absent value still renders no bar at all — the
 floor must not invent one.
 
+### The jam highlight is a second colour, and not a second accent (0.1.40)
+
+Jam chart entries render green inside the setlist. This is the one place a colour other than yolk
+carries meaning, so the reasoning is on the record.
+
+**It is Carton's signal, not a new one.** Their own stylesheet marks these entries green:
+
+```css
+.setlist-songbox .jamchart { color: #75eb00; padding: 2px }
+```
+
+Carrying that across keeps the two sites saying the same thing about the same fact. Their neon
+`#75eb00` was not reused directly: it measures 11.45:1 on our card but **1.54:1 on white**, so like
+yolk the two themes take different hexes.
+
+```
+--dk-jam   #8ACE98     9.54:1 surface / 10.18:1 shell / 8.72:1 pressed
+--lt-jam   #376841     6.52:1 surface /  6.06:1 shell / 5.55:1 pressed
+```
+
+Setlist text is 15px regular, so the **4.5:1 normal-text threshold** applies and both clear it on
+every ground they can land on. Both sit just above yolk (8.70 / 5.69) rather than below it: this
+recolours body text that gets *read*, not a small accent glyph, so it needs at least yolk's
+legibility — and no more, or it would out-shout the accent.
+
+#### Four hues were rendered in place before choosing
+
+Not swatched — put into a real setlist, in both themes, and compared on screen.
+
+| | Hue | b\* dark / light | Verdict |
+|---|---|---|---|
+| Chartreuse (Carton's own) | 90 | 47.9 / 42.0 | **Rejected.** In light it resolves to an olive that reads as a second *warm* accent beside the yolk set labels — the one thing this must not do. |
+| Leaf green | 120 | 31.8 / 27.0 | **Rejected.** Legible, cleared every check, simply not liked. |
+| Sage | 150 | 12.7 / 12.2 | **Rejected.** Measurably the coolest thing on screen, and picked up a mint cast in dark. |
+| **Warm sage** | **132** | **20.2 / 17.0** | **Chosen.** Sage pulled back toward yolk far enough to lose the mint cast, without approaching the chartreuse's olive failure. |
+
+**Why this does not break the one-accent rule.** Yolk answers "there is more to read here" — set
+labels, footnote markers, gap magnitude. Green answers "The Carton charted this jam". Different
+questions, different hue family, so the two share a block without either getting louder. What
+*would* break the rule is a warm second colour, which is exactly what the chartreuse turned out
+to be.
+
+#### Warmth is a measured axis here, not a vibe
+
+On the Lab **b\*** axis (yellow positive, blue negative) every token in this palette is warm:
+
+```
+shell  1.9    ink  5.0    yolk  71.9        (dark)
+shell  3.8    ink  4.9    yolk  50.3        (light)
+```
+
+That is the number the last two rounds of this decision turned on. Sage at b\* 12.7 was the least
+warm thing on screen against a palette where everything leans yellow; the chartreuse at 47.9 was
+warm enough to compete with yolk outright. **Hold b\* inside roughly 15–24 if this is ever
+retuned** — that band is what keeps the colour reading as a green rather than as a second yellow.
+
+Hue alone is not sufficient to state the constraint: the chartreuse failed at hue 90 *with
+saturation 71*, while the chosen value is hue 132 at saturation 41. Both hue and chroma move b\*.
+
+**Candidates must be contrast-matched before comparing.** The chosen dark value was fitted to
+sage's exact contrast triple (9.54 / 10.18 / 8.72) so the two could be judged on hue alone.
+Changing warmth and loudness together makes a side-by-side unjudgeable, and that is how a colour
+gets picked for the wrong reason.
+
+**Colour only, and only on the song title.** Same text, same size, same weight, same place. Inside
+flowing setlist text any box, weight or size change reflows the line and breaks the setlist's
+rhythm. The one accompanying change is the press underline, which follows `currentColor` on jam
+entries so a green word does not flash an orange underline.
+
+**The redundancy for colour-blind readers is structural, not typographic.** Every jam-highlighted
+song on a show page has a matching card in the "Jam chart entries" section directly below, in the
+same order, so the fact is never carried by hue alone.
+
 ### Themes: Auto / Light / Dark
 
 Dark is the default and the design target. Light is a **supported theme**, not a courtesy — it was
@@ -120,6 +193,13 @@ down. Weight carries hierarchy more than size does, because size costs rows-per-
 - **Density target: ~8 song rows per screen** on a mid-size Android phone, with song name, gap,
   last-played and times-played all legible without zooming.
 - Safe-area insets respected top and bottom so the tab bar clears the gesture bar.
+- **The fixed bars are full-bleed; their contents sit in the 720px column.** `.app-header` and
+  `.tabbar` span the window so their blurred background reaches the edges, but both pad their
+  contents in by `max(0px, (100% - 720px) / 2)` so the brand lines up with body text and the five
+  tabs span exactly the column `.app-main` occupies. Below 720px the `max()` collapses to zero and
+  the mobile layout is byte-for-byte unchanged — verified at 390px by diffing every box against the
+  previous stylesheet, not by inspection. This is alignment only: **desktop remains a courtesy**,
+  and nothing here is a large-screen design pass.
 
 ## The carton motif, used once
 

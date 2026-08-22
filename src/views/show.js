@@ -11,7 +11,7 @@ import {
   venueLine,
   venueInfoLink,
 } from '../ui/components.js';
-import { showStructure } from '../data/index.js';
+import { showStructure, setLabel } from '../data/index.js';
 import { formatShowDate } from '../util/dates.js';
 
 export function renderShow(ctx, showId) {
@@ -85,6 +85,49 @@ export function renderShow(ctx, showId) {
         sourceLink(),
       ]),
     );
+  }
+
+  // --- Jam chart entries for THIS show, in setlist order ---------------------
+  //
+  // Directly under the setlist and in the same order it was played, so the two
+  // read together: a green title above has its note right here, in the
+  // sequence you heard it. Not alphabetical and not grouped by chart -- either
+  // would break the correspondence that makes this worth showing at all.
+  //
+  // Order comes from index.jamByShow, which is built by walking the show's
+  // sorted setlist rows, so it cannot drift from the block above.
+  //
+  // Absent rather than empty when a show has none, same rule as album
+  // membership on song detail: jamByShow only holds shows that have entries.
+  const jams = index.jamByShow.get(Number(show.show_id));
+  if (jams?.length) {
+    const jamSection = el('div.section');
+    append(
+      jamSection,
+      sectionHead(
+        'Jam chart entries',
+        el('span.badge.badge-jam', { text: String(jams.length) }),
+      ),
+    );
+    for (const j of jams) {
+      append(
+        jamSection,
+        el('div.card.jam-card', { style: { marginBottom: '8px' } }, [
+          el('div.jam-card-head', null, [
+            // Tappable to the same place the setlist title above goes, and in
+            // the same green, so the two are visibly the same entry.
+            el('button.jam-card-song', {
+              type: 'button',
+              text: j.songname,
+              onclick: () => navigate(`#/song/${j.song_id}`),
+            }),
+            el('span.badge.badge-set', { text: setLabel(j.settype, j.setnumber) }),
+          ]),
+          j.note ? el('p.jam-card-note', { text: j.note }) : null,
+        ]),
+      );
+    }
+    append(screen, jamSection);
   }
 
   if (rows[0]?.shownotes) {
