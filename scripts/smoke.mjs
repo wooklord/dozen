@@ -332,30 +332,70 @@ server.listen(PORT, async () => {
   const key = await evaluate(`(() => {
     const card = document.querySelector('.section .card');
     const k = card ? card.querySelector('.jam-key') : null;
-    const sample = k ? k.querySelector('.jam-key-sample') : null;
     const song = document.querySelector('.setlist-song[data-jam="true"]');
-    const sets = card ? card.querySelector('.setlist-set') : null;
+    const fn = card ? card.querySelector('.fn-list') : null;
+    const notes = card ? card.querySelector('.setlist-shownotes') : null;
+    const after = (a, b) => !!(a && b && (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING));
     return {
       inCard: !!k,
-      swatch: sample ? getComputedStyle(sample).color : null,
+      keyColor: k ? getComputedStyle(k).color : null,
       songColor: song ? getComputedStyle(song).color : null,
       text: k ? k.textContent.replace(/\\s+/g, ' ').trim() : null,
-      // A key explaining a colour has to come before the colour.
-      beforeSetlist: k && sets
-        ? !!(k.compareDocumentPosition(sets) & Node.DOCUMENT_POSITION_FOLLOWING)
-        : false,
+      hadFootnotes: !!fn,
+      afterFootnotes: after(fn, k),
+      beforeShowNotes: after(k, notes),
     };
   })()`);
 
   if (!key.inCard) fail('jam key: not rendered inside the setlist card');
   else pass('key renders inside the setlist card');
-  if (key.swatch !== key.songColor) {
-    fail(`jam key: swatch ${key.swatch} does not match the highlighted titles ${key.songColor}`);
-  } else pass(`swatch matches the highlighted titles (${key.swatch})`);
-  if (!key.beforeSetlist) fail('jam key: sits after the setlist it explains');
-  else pass('key sits above the first set');
-  if (!/jam chart entry/i.test(key.text || '')) fail(`jam key: reads ${JSON.stringify(key.text)}`);
-  else pass(`reads ${JSON.stringify(key.text)}`);
+
+  // Against the RENDERED setlist, never an expected hex -- a literal would keep
+  // passing after the token drifted and the key had started naming the wrong
+  // colour, which is the exact failure var(--jam) exists to prevent.
+  if (key.keyColor !== key.songColor) {
+    fail(`jam key: key is ${key.keyColor}, highlighted titles are ${key.songColor}`);
+  } else pass(`key colour matches the highlighted titles (${key.keyColor})`);
+
+  if (key.text !== 'jam chart entry') fail(`jam key: reads ${JSON.stringify(key.text)}, expected "jam chart entry"`);
+  else pass('reads "jam chart entry" and nothing else');
+
+  if (!key.hadFootnotes) fail('jam key: this show was chosen because it HAS footnotes — it rendered none');
+  else if (!key.afterFootnotes) fail('jam key: does not sit under the footnotes');
+  else pass('sits under the last footnote');
+
+  if (!key.beforeShowNotes) fail('jam key: does not sit above the show notes');
+  else pass('card order is setlist -> footnotes -> key -> show notes');
+
+  // THE NO-FOOTNOTES CASE. 2025-11-09 has 2 jam entries and zero footnotes --
+  // one of exactly three such shows in the archive. The key must still render,
+  // in the slot the footnote list would have occupied. This is the branch the
+  // implementation deliberately does not have, so it is the one worth checking.
+  await evaluate(`location.hash = '#/show/1753713777';`);
+  await sleep(1100);
+  const noFn = await evaluate(`(() => {
+    const card = document.querySelector('.section .card');
+    const k = card ? card.querySelector('.jam-key') : null;
+    const song = document.querySelector('.setlist-song[data-jam="true"]');
+    const sets = card ? [...card.querySelectorAll('.setlist-set')] : [];
+    const last = sets[sets.length - 1];
+    return {
+      footnotes: card ? card.querySelectorAll('.fn-list').length : -1,
+      songs: document.querySelectorAll('.setlist-song').length,
+      key: !!k,
+      text: k ? k.textContent.trim() : null,
+      color: k ? getComputedStyle(k).color : null,
+      songColor: song ? getComputedStyle(song).color : null,
+      afterLastSet: !!(k && last && (last.compareDocumentPosition(k) & Node.DOCUMENT_POSITION_FOLLOWING)),
+    };
+  })()`);
+
+  if (noFn.songs !== 9) fail(`jam key (no footnotes): show did not render (${noFn.songs} songs, expected 9)`);
+  else if (noFn.footnotes !== 0) fail(`jam key (no footnotes): this show should have no footnote list, found ${noFn.footnotes}`);
+  else if (!noFn.key) fail('jam key (no footnotes): key vanished when there were no footnotes to sit under');
+  else if (!noFn.afterLastSet) fail('jam key (no footnotes): key is not in the slot the footnotes would occupy');
+  else if (noFn.color !== noFn.songColor) fail(`jam key (no footnotes): ${noFn.color} vs ${noFn.songColor}`);
+  else pass('a show with jam entries and NO footnotes still renders the key, after the last set');
 
   // ONE condition, shared with the entries section. Checked on a show with no
   // entries: neither may appear. If these ever split, this is what catches it.

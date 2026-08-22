@@ -75,22 +75,17 @@ export function renderShow(ctx, showId) {
   // matters more, not less -- it is where the reader goes to check.
   const sourceLink = () => el('div.link-row.setlist-source', null, [cartonLink(showPermalink(show))]);
 
-  // A key, not a paragraph. One line: a sample in the actual highlight colour,
-  // then what it means.
+  // Three words in the highlight colour, sitting with the footnotes.
   //
-  // The swatch takes its colour from --jam in CSS, never a literal here. A
-  // hardcoded hex would be a second copy of a value that has already been
-  // retuned four times, and the failure mode is silent -- a key confidently
-  // explaining a colour the setlist above it no longer uses.
+  // The footnote list is already where this setlist's marks get explained, so
+  // a colour key belongs there rather than at the top of the card competing
+  // with the setlist for attention. The words ARE the sample -- no swatch, no
+  // label, no sentence.
   //
-  // The sample is the WORD "Song", set exactly like a setlist title, rather
-  // than a dot or a square: it demonstrates the thing instead of describing it,
-  // and it is what the eye is actually going to match against.
-  const jamKey = () =>
-    el('div.jam-key', null, [
-      el('span.jam-key-sample', { text: 'Song', 'aria-hidden': 'true' }),
-      el('span.jam-key-label', { text: 'jam chart entry' }),
-    ]);
+  // Colour comes from --jam in CSS, never a literal here. A hardcoded hex
+  // would be a second copy of a value already retuned four times, and it fails
+  // silently: a key confidently naming a colour the setlist no longer uses.
+  const jamKey = () => el('div.jam-key', { text: 'jam chart entry' });
 
   // Show notes belong INSIDE the setlist card, last: setlist -> footnotes ->
   // notes. They annotate this setlist, so a card of their own below put a
@@ -114,11 +109,17 @@ export function renderShow(ctx, showId) {
       el('div.section', null, [
         sectionHead('Setlist', el('span.badge.badge-set', { text: showStructure(index, show.show_id) || '' })),
         el('div.card', null, [
-          // The key sits INSIDE the card, above the first set: it explains a
-          // colour, so it has to be read before the colour rather than after
-          // it. Same condition as the entries section -- see `hasJams`.
-          hasJams ? jamKey() : null,
           setlistBlock(rows, { index, onSong: (id) => navigate(`#/song/${id}`) }),
+          // Sibling of the setlist block rather than a child of it, which is
+          // what makes the no-footnotes case need no branch: `.fn-list` is the
+          // LAST thing setlistBlock renders, so a node placed straight after
+          // the block lands under the last footnote when there are footnotes,
+          // and in the slot the footnote list would have occupied when there
+          // are none. Three shows in the archive have jam entries and zero
+          // footnotes; both paths are covered in the smoke test.
+          //
+          // Same condition as the entries section below the card -- `hasJams`.
+          hasJams ? jamKey() : null,
           showNotes(),
         ]),
         sourceLink(),

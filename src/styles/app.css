@@ -770,36 +770,26 @@ button.gap-figure:active {
   margin-bottom: var(--s-4);
 }
 
-/* The jam key: one line at the top of the setlist card saying what the green
- * titles below it are.
+/* The jam key. Three words in the highlight colour, sitting with the
+ * footnotes -- the footnote list is already where this setlist's marks get
+ * explained, so the colour key belongs there and not at the top of the card
+ * competing with the setlist.
+ *
+ * The words are the sample: no swatch, no separate label, no sentence.
  *
  * `var(--jam)` and nothing else. The literal hex belongs in exactly one place
- * (tokens.css) -- a copy here would be a key that keeps confidently explaining
- * a colour the setlist has stopped using, and nothing on screen would look
- * wrong. That value has already been retuned four times.
+ * (tokens.css) -- a copy here would keep confidently naming a colour the
+ * setlist has stopped using, and nothing on screen would look wrong. That
+ * value has already been retuned four times.
  *
- * Rendered only when the show HAS jam entries, on the same condition as the
- * entries section below the card.
+ * Matches .fn-list's size and top margin so it reads as a peer of the
+ * footnotes rather than as a new block. Rendered only when the show HAS jam
+ * entries, on the same condition as the entries section below the card.
  */
 .jam-key {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-2);
-  margin-bottom: var(--s-3);
-  padding-bottom: var(--s-2);
-  border-bottom: 1px solid var(--line-soft);
-}
-
-/* Set exactly like a setlist title, because that is what it is a sample of. */
-.jam-key-sample {
+  margin-top: var(--s-3);
+  font-size: var(--t-sm);
   color: var(--jam);
-  font-size: var(--t-md);
-  line-height: 1.2;
-}
-
-.jam-key-label {
-  font-size: var(--t-xs);
-  color: var(--ink-faint);
 }
 
 /* Headers INSIDE the setlist card: the set labels, and the show-notes header.
