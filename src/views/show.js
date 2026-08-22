@@ -67,12 +67,31 @@ export function renderShow(ctx, showId) {
   // matters more, not less -- it is where the reader goes to check.
   const sourceLink = () => el('div.link-row.setlist-source', null, [cartonLink(showPermalink(show))]);
 
+  // Show notes belong INSIDE the setlist card, last: setlist -> footnotes ->
+  // notes. They annotate this setlist, so a card of their own below put a
+  // border between a note and the thing it is a note about.
+  //
+  // No separate guard needed for the no-setlist branch: `shownotes` is a field
+  // on setlist ROWS (repeated on every row of a show), so with no rows there is
+  // nothing to read it from. Notes cannot exist without a card to sit in.
+  const showNotes = () => {
+    const text = rows[0]?.shownotes;
+    if (!text) return null;
+    return el('div.setlist-shownotes', null, [
+      el('div.setlist-note-label', { text: 'Show notes' }),
+      el('p.setlist-note-text', { text }),
+    ]);
+  };
+
   if (rows.length) {
     append(
       screen,
       el('div.section', null, [
         sectionHead('Setlist', el('span.badge.badge-set', { text: showStructure(index, show.show_id) || '' })),
-        el('div.card', null, setlistBlock(rows, { index, onSong: (id) => navigate(`#/song/${id}`) })),
+        el('div.card', null, [
+          setlistBlock(rows, { index, onSong: (id) => navigate(`#/song/${id}`) }),
+          showNotes(),
+        ]),
         sourceLink(),
       ]),
     );
@@ -128,16 +147,6 @@ export function renderShow(ctx, showId) {
       );
     }
     append(screen, jamSection);
-  }
-
-  if (rows[0]?.shownotes) {
-    append(
-      screen,
-      el('div.section', null, [
-        sectionHead('Show notes'),
-        el('div.card', null, el('p', { style: { margin: 0, fontSize: 'var(--t-sm)' }, text: rows[0].shownotes })),
-      ]),
-    );
   }
 
   append(screen, attribution());

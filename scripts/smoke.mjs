@@ -318,6 +318,80 @@ server.listen(PORT, async () => {
   } else pass(`light highlight ${lightJam.jamColor} differs from dark and from body text`);
   await evaluate(`document.documentElement.removeAttribute('data-theme');`);
 
+  // --- Show notes live INSIDE the setlist card ------------------------------
+  //
+  // 2026-08-06 has show notes AND 7 jam entries, so one visit covers both the
+  // placement and the fact that the jam section is unaffected by it.
+  //
+  // The assertion is on ANCESTRY -- `.card .setlist-shownotes` -- not on the
+  // notes merely existing. "Show notes are on the page" was true of the old
+  // layout too, so it would pass without the change having happened, which is
+  // the whole failure mode this project keeps re-learning. Ordering within the
+  // card is checked the same way: against the rendered DOM, not assumed.
+  console.log('\nshow notes placement:');
+  await evaluate(`location.hash = '#/show/1779890028';`);
+  await sleep(1200);
+  const notes = await evaluate(`(() => {
+    const card = document.querySelector('.section .card');
+    const inCard = card ? card.querySelector('.setlist-shownotes') : null;
+    const anywhere = document.querySelector('.setlist-shownotes');
+    const fn = card ? card.querySelector('.fn-list') : null;
+    // Ordering inside the card, read off the DOM.
+    let order = null;
+    if (inCard && fn) {
+      order = fn.compareDocumentPosition(inCard) & Node.DOCUMENT_POSITION_FOLLOWING
+        ? 'notes after footnotes' : 'notes BEFORE footnotes';
+    }
+    const label = inCard ? inCard.querySelector('.setlist-note-label') : null;
+    const setLabelEl = card ? card.querySelector('.setlist-label') : null;
+    const same = label && setLabelEl
+      ? ['fontSize','fontWeight','letterSpacing','textTransform','color']
+          .every(k => getComputedStyle(label)[k] === getComputedStyle(setLabelEl)[k])
+      : false;
+    return {
+      anywhere: !!anywhere,
+      inCard: !!inCard,
+      order,
+      labelText: label ? label.textContent : null,
+      matchesSetLabel: same,
+      jamCards: document.querySelectorAll('.jam-card-song').length,
+      // The old layout put notes in a section of their own. Nothing may sit
+      // between the setlist card's section and the jam section any more.
+      strayNoteSection: [...document.querySelectorAll('.section-title')]
+        .some(t => t.textContent.trim().toLowerCase() === 'show notes'),
+    };
+  })()`);
+
+  if (!notes.anywhere) fail('show notes: not rendered at all on a show that has them');
+  else if (!notes.inCard) fail('show notes: rendered OUTSIDE the setlist card');
+  else pass('show notes render inside the setlist card');
+
+  if (notes.order !== 'notes after footnotes') fail(`show notes: ${notes.order}`);
+  else pass('order inside the card is setlist -> footnotes -> show notes');
+
+  if (notes.labelText !== 'Show notes') fail(`show notes: header reads ${JSON.stringify(notes.labelText)}`);
+  else if (!notes.matchesSetLabel) fail('show notes: header does not match the set labels in that card');
+  else pass('header matches the set labels (size, weight, tracking, case, colour)');
+
+  if (notes.strayNoteSection) fail('show notes: a separate "Show notes" section is still rendering');
+  else pass('no separate show-notes section below the card');
+
+  if (notes.jamCards !== 7) fail(`show notes: expected 7 jam cards on this show, found ${notes.jamCards}`);
+  else pass('jam section unaffected — 7 entries still below the card');
+
+  // A show WITHOUT notes renders no header and no empty block. Long setlist on
+  // purpose, so "nothing rendered" cannot be satisfied by a failed render.
+  await evaluate(`location.hash = '#/show/1627919708';`);
+  await sleep(1100);
+  const noNotes = await evaluate(`(() => ({
+    songs: document.querySelectorAll('.setlist-song').length,
+    block: document.querySelectorAll('.setlist-shownotes').length,
+    label: document.querySelectorAll('.setlist-note-label').length,
+  }))()`);
+  if (noNotes.songs !== 28) fail(`show notes: the no-notes show did not render (${noNotes.songs} songs, expected 28)`);
+  else if (noNotes.block || noNotes.label) fail('show notes: empty notes block rendered on a show with none');
+  else pass('a show with 28 songs and no notes renders no block and no header');
+
   // --- The ?nosw guard ------------------------------------------------------
   //
   // Checked by REGISTERING A WORKER FIRST and then confirming ?nosw tears it

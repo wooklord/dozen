@@ -770,13 +770,37 @@ button.gap-figure:active {
   margin-bottom: var(--s-4);
 }
 
-.setlist-label {
+/* Headers INSIDE the setlist card: the set labels, and the show-notes header.
+ *
+ * One rule so the two cannot drift apart, but two class names so neither lies
+ * about what it is. Putting `.setlist-label` on the show-notes header would
+ * have been fewer characters and a trap -- a selector that means "this is a
+ * set" would then also match something that is not one, which is how a future
+ * check reads the wrong element and passes for the wrong reason. */
+.setlist-label,
+.setlist-note-label {
   font-size: var(--t-xs);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--yolk);
   margin-bottom: var(--s-1);
+}
+
+/* Last block in the card, after the footnotes. The rule above it separates it
+   from the setlist without the border a separate card would have introduced --
+   the whole point of moving it in here is that a note and the thing it
+   annotates are not divided. */
+.setlist-shownotes {
+  margin-top: var(--s-4);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line-soft);
+}
+
+.setlist-note-text {
+  margin: 0;
+  font-size: var(--t-sm);
+  color: var(--ink-dim);
 }
 
 /* Carton's notation renders verbatim. "->" and ">" are different marks and
