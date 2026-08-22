@@ -308,6 +308,7 @@ then passes for the wrong reason, and reports health it never established.
 | `grep venueLine` in the file | that the symbol is **imported** | the **call site**, added moments earlier. The bug and its false confirmation came from one mistake |
 | Read `.build-marker` in the header | that BUILD is displayed | the **cache-age chip**, which used the same class. It would have read "just now" and reported a successful deploy |
 | Read the rendered jam colour from a local page | that the new token shipped | the **service worker's cached shell**, still serving the previous build's stylesheet. `getComputedStyle` returned a real colour, from the wrong stylesheet |
+| `fetch` the live `version.js` after a push | that **the deploy landed for users** | a **fresh CDN edge**, while the edge serving the browser was still nine builds behind. Both numbers were real; only one was what a visitor got |
 
 The shape is always a **proxy**: the check tests a side effect rather than the
 thing itself, and the side effect has more than one cause.
@@ -518,6 +519,42 @@ Two checks that do work, in order:
    previously-registered service worker serves a stale shell.
 
 Cache-bust the fetch (`?t=<timestamp>`) so a CDN copy is not mistaken for the new build.
+
+#### The browser path and the fetch path can disagree (seen 2026-08-21)
+
+Pushing 0.1.42, `scripts/verify-deploy.mjs` reported:
+
+```
+  ok    served HTML meta = 0.1.42
+  ok    served version.js = 0.1.42
+  FAIL  sheet shows 0.1.33, expected 0.1.42
+```
+
+**That was the check working, not flaking.** GitHub Pages is CDN-fronted and
+edges do not flip together. The two file checks sent cache-busted `fetch`es and
+got fresh copies; the browser navigated to a plain URL and was served a
+**nine-build-stale module** from a different edge. Both numbers were real. Only
+one described what a person loading the site would actually get — and it was the
+browser one.
+
+**So the browser path is the authoritative one.** It is the only check that
+exercises what a visitor exercises: HTML, modules, the service worker and the
+CDN, in the combination a real load uses. A green `fetch` of `version.js` proves
+a file is reachable at some edge; it does not prove the app is that build.
+
+`Page.navigate` now carries the same `?t=` bust the fetches do, so the check can
+tell a stale edge apart from a bad deploy instead of conflating them.
+
+**When the browser check disagrees with the file checks, re-run it before
+concluding — but do not dismiss it.** Propagation skew resolves in a minute or
+two, and a second run agreeing is the evidence that it was skew. What it is
+never evidence of is "nothing happened": for the length of that window, visitors
+were served the old app. If it persists past a few minutes, it is a real deploy
+failure — go read the Actions run.
+
+Deliberately NOT `?nosw` on this navigation. A real visitor has a service
+worker; suppressing it here would make the check less like the thing it is
+meant to verify, not more.
 
 #### When it does not match
 

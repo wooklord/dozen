@@ -318,6 +318,59 @@ server.listen(PORT, async () => {
   } else pass(`light highlight ${lightJam.jamColor} differs from dark and from body text`);
   await evaluate(`document.documentElement.removeAttribute('data-theme');`);
 
+  // --- The jam key ----------------------------------------------------------
+  //
+  // The key explains the green, so the check that matters is that its swatch
+  // is THE SAME COLOUR as the highlighted titles it describes -- compared
+  // against the rendered setlist, not against a hex written here. A literal
+  // expected value would keep passing after the token was retuned and the key
+  // had started explaining the wrong colour, which is the exact drift the CSS
+  // avoids by using var(--jam).
+  console.log('\njam key:');
+  await evaluate(`location.hash = '#/show/1779890028';`);
+  await sleep(1200);
+  const key = await evaluate(`(() => {
+    const card = document.querySelector('.section .card');
+    const k = card ? card.querySelector('.jam-key') : null;
+    const sample = k ? k.querySelector('.jam-key-sample') : null;
+    const song = document.querySelector('.setlist-song[data-jam="true"]');
+    const sets = card ? card.querySelector('.setlist-set') : null;
+    return {
+      inCard: !!k,
+      swatch: sample ? getComputedStyle(sample).color : null,
+      songColor: song ? getComputedStyle(song).color : null,
+      text: k ? k.textContent.replace(/\\s+/g, ' ').trim() : null,
+      // A key explaining a colour has to come before the colour.
+      beforeSetlist: k && sets
+        ? !!(k.compareDocumentPosition(sets) & Node.DOCUMENT_POSITION_FOLLOWING)
+        : false,
+    };
+  })()`);
+
+  if (!key.inCard) fail('jam key: not rendered inside the setlist card');
+  else pass('key renders inside the setlist card');
+  if (key.swatch !== key.songColor) {
+    fail(`jam key: swatch ${key.swatch} does not match the highlighted titles ${key.songColor}`);
+  } else pass(`swatch matches the highlighted titles (${key.swatch})`);
+  if (!key.beforeSetlist) fail('jam key: sits after the setlist it explains');
+  else pass('key sits above the first set');
+  if (!/jam chart entry/i.test(key.text || '')) fail(`jam key: reads ${JSON.stringify(key.text)}`);
+  else pass(`reads ${JSON.stringify(key.text)}`);
+
+  // ONE condition, shared with the entries section. Checked on a show with no
+  // entries: neither may appear. If these ever split, this is what catches it.
+  await evaluate(`location.hash = '#/show/1627919708';`);
+  await sleep(1100);
+  const noKey = await evaluate(`(() => ({
+    songs: document.querySelectorAll('.setlist-song').length,
+    key: document.querySelectorAll('.jam-key').length,
+    cards: document.querySelectorAll('.jam-card-song').length,
+  }))()`);
+  if (noKey.songs !== 28) fail(`jam key: the no-jam show did not render (${noKey.songs} songs, expected 28)`);
+  else if (noKey.key || noKey.cards) {
+    fail(`jam key: show with no entries rendered key=${noKey.key} entryCards=${noKey.cards} — the two conditions have split`);
+  } else pass('a show with no entries renders neither the key nor the section');
+
   // --- Show notes live INSIDE the setlist card ------------------------------
   //
   // 2026-08-06 has show notes AND 7 jam entries, so one visit covers both the

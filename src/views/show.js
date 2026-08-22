@@ -61,11 +61,36 @@ export function renderShow(ctx, showId) {
 
   const rows = index.setlistByShow.get(Number(show.show_id)) || [];
 
+  // ONE condition for both jam-related things on this screen: the key inside
+  // the setlist card and the entries section below it. Hoisted above both so
+  // there is a single decision rather than two that can disagree -- a key
+  // explaining a colour that is not on screen, or green titles with nothing
+  // saying what they are, are both possible if these drift apart.
+  const jams = index.jamByShow.get(Number(show.show_id));
+  const hasJams = Boolean(jams?.length);
+
   // Directly under the setlist, inside the same section, in both branches: the
   // link is a pointer to the source of THIS setlist, so it belongs against the
   // setlist rather than up in the action row. When no setlist was recorded it
   // matters more, not less -- it is where the reader goes to check.
   const sourceLink = () => el('div.link-row.setlist-source', null, [cartonLink(showPermalink(show))]);
+
+  // A key, not a paragraph. One line: a sample in the actual highlight colour,
+  // then what it means.
+  //
+  // The swatch takes its colour from --jam in CSS, never a literal here. A
+  // hardcoded hex would be a second copy of a value that has already been
+  // retuned four times, and the failure mode is silent -- a key confidently
+  // explaining a colour the setlist above it no longer uses.
+  //
+  // The sample is the WORD "Song", set exactly like a setlist title, rather
+  // than a dot or a square: it demonstrates the thing instead of describing it,
+  // and it is what the eye is actually going to match against.
+  const jamKey = () =>
+    el('div.jam-key', null, [
+      el('span.jam-key-sample', { text: 'Song', 'aria-hidden': 'true' }),
+      el('span.jam-key-label', { text: 'jam chart entry' }),
+    ]);
 
   // Show notes belong INSIDE the setlist card, last: setlist -> footnotes ->
   // notes. They annotate this setlist, so a card of their own below put a
@@ -89,6 +114,10 @@ export function renderShow(ctx, showId) {
       el('div.section', null, [
         sectionHead('Setlist', el('span.badge.badge-set', { text: showStructure(index, show.show_id) || '' })),
         el('div.card', null, [
+          // The key sits INSIDE the card, above the first set: it explains a
+          // colour, so it has to be read before the colour rather than after
+          // it. Same condition as the entries section -- see `hasJams`.
+          hasJams ? jamKey() : null,
           setlistBlock(rows, { index, onSong: (id) => navigate(`#/song/${id}`) }),
           showNotes(),
         ]),
@@ -118,8 +147,8 @@ export function renderShow(ctx, showId) {
   //
   // Absent rather than empty when a show has none, same rule as album
   // membership on song detail: jamByShow only holds shows that have entries.
-  const jams = index.jamByShow.get(Number(show.show_id));
-  if (jams?.length) {
+  // `hasJams` is computed once, above the setlist, and gates the key too.
+  if (hasJams) {
     const jamSection = el('div.section');
     append(
       jamSection,

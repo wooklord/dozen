@@ -85,7 +85,15 @@ async function checkRenderedUi() {
     const ev = async (expression) => (await send('Runtime.evaluate', { expression, returnByValue: true }))?.result?.value;
 
     await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
-    await send('Page.navigate', { url: HOST + '/' });
+    // Cache-bust the NAVIGATION, not just the fetches above.
+    //
+    // This check once reported 0.1.33 while both file checks read 0.1.42 --
+    // nine builds apart. The fetches carried `?t=` and got fresh copies; the
+    // page navigation did not, and the browser was served a stale module from
+    // a CDN edge mid-propagation. The check was right: at that moment a real
+    // visitor was getting the old app. But it could not distinguish that from
+    // a genuinely bad deploy, which is what this fixes.
+    await send('Page.navigate', { url: HOST + '/' + bust() });
     let booted = false;
     for (let i = 0; i < 150; i++) {
       await sleep(2000);

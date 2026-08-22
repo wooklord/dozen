@@ -770,6 +770,38 @@ button.gap-figure:active {
   margin-bottom: var(--s-4);
 }
 
+/* The jam key: one line at the top of the setlist card saying what the green
+ * titles below it are.
+ *
+ * `var(--jam)` and nothing else. The literal hex belongs in exactly one place
+ * (tokens.css) -- a copy here would be a key that keeps confidently explaining
+ * a colour the setlist has stopped using, and nothing on screen would look
+ * wrong. That value has already been retuned four times.
+ *
+ * Rendered only when the show HAS jam entries, on the same condition as the
+ * entries section below the card.
+ */
+.jam-key {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+/* Set exactly like a setlist title, because that is what it is a sample of. */
+.jam-key-sample {
+  color: var(--jam);
+  font-size: var(--t-md);
+  line-height: 1.2;
+}
+
+.jam-key-label {
+  font-size: var(--t-xs);
+  color: var(--ink-faint);
+}
+
 /* Headers INSIDE the setlist card: the set labels, and the show-notes header.
  *
  * One rule so the two cannot drift apart, but two class names so neither lies
