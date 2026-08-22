@@ -3,3 +3,8 @@ docs/local_notes/
 
 # stray headless-Chrome profile from an early smoke run (now uses os.tmpdir)
 .smoke-profile-*/
+
+# Editor/working backups. LICENSE.BAK was swept in by a careless `git add -A`
+# in 0.1.50 and pushed; untracked again immediately after.
+*.BAK
+*.bak
