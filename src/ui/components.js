@@ -366,15 +366,30 @@ export function openFootnote(text, index) {
  * inline clutter -- hover does not exist on a phone.
  */
 /**
- * @param {object} opts
- * @param {Node|null} [opts.footnoteExtra]  An extra <li> appended to the
- *   footnote list. Used for the jam key, which has to be a real member of that
- *   list rather than a block under it -- otherwise it aligns to the card edge
- *   and reads as a separate note. When a show has NO footnotes the list is
- *   created anyway so the item has somewhere to live; it then renders as a
- *   one-item list, which is still the footnote column and still reads right.
+ * THE JAM KEY IS BUILT HERE, not by callers.
+ *
+ * The rule is "the key follows the colour": anywhere a setlist renders with
+ * jam-charted songs in it, the key naming that colour renders too. This
+ * function is where the green is applied, so this is the only place that can
+ * enforce it. It was briefly a caller's job and appeared on show detail alone,
+ * which left the green unexplained on the Home and Shows cards.
+ *
+ * The condition is the rows' own `isjamchart`, which is exactly what drives the
+ * highlight three lines further down -- one decision, not two that can
+ * disagree. It is also the same flag `index.jamByShow` is built by filtering
+ * on, so the key and show detail's entries section stay in step.
  */
-export function setlistBlock(rows, { onSong, index, footnoteExtra = null } = {}) {
+export function setlistBlock(rows, { onSong, index } = {}) {
+  // A real <li> in the footnote list rather than a block under it: as a sibling
+  // it left-aligned past the footnote numbers and read as a separate note. As a
+  // member it inherits the list's flex row, so the bullet lands in the marker
+  // column and the words in the text column. Colour comes from --jam in CSS.
+  const hasJam = rows.some((r) => Number(r.isjamchart) === 1);
+  const jamKey = () =>
+    el('li.jam-key', null, [
+      el('span.jam-key-bullet', { 'aria-hidden': 'true', text: '●' }),
+      el('span', { text: 'jam chart entry' }),
+    ]);
   const wrap = el('div');
   const footnotes = [];
 
@@ -444,13 +459,17 @@ export function setlistBlock(rows, { onSong, index, footnoteExtra = null } = {})
     append(wrap, el('div.setlist-set', null, [el('div.setlist-label', { text: group.label }), flow]));
   }
 
-  if (footnotes.length || footnoteExtra) {
+  // The list renders when there are footnotes OR a key to put in it. A setlist
+  // with jam entries and no footnotes -- which happens, three shows in the
+  // archive and any number of Home cards -- gets a one-item list holding just
+  // the key. That is still the footnote column, so the key is still aligned.
+  if (footnotes.length || hasJam) {
     const list = el('ul.fn-list');
     footnotes.forEach((n, i) => {
       append(list, el('li', null, [el('span.fn-marker', { text: String(i + 1) }), el('span', { text: n })]));
     });
     // Last item in the list, after the real footnotes.
-    if (footnoteExtra) append(list, footnoteExtra);
+    if (hasJam) append(list, jamKey());
     append(wrap, list);
   }
 

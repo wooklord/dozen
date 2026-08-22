@@ -85,20 +85,10 @@ export function renderShow(ctx, showId) {
   // Colour comes from --jam in CSS, never a literal here. A hardcoded hex
   // would be a second copy of a value already retuned four times, and it fails
   // silently: a key confidently naming a colour the setlist no longer uses.
-  // A real <li> in the footnote list, not a block under it. As a sibling of
-  // the list it left-aligned past the footnote numbers and read as a separate
-  // note appended below; as a member it inherits the list's own flex row, so
-  // the bullet sits in the marker column and the words land in the same text
-  // column as every footnote.
+  // The jam key is NOT built here. setlistBlock renders it wherever a setlist
+  // has jam-charted songs, so it appears on the Home and Shows cards too --
+  // the key follows the colour. `hasJams` below gates only the entries section.
   //
-  // Bullet colour is var(--jam) in CSS, never a literal -- the key has to name
-  // whatever colour the setlist is actually using.
-  const jamKey = () =>
-    el('li.jam-key', null, [
-      el('span.jam-key-bullet', { 'aria-hidden': 'true', text: '●' }),
-      el('span', { text: 'jam chart entry' }),
-    ]);
-
   // Show notes belong INSIDE the setlist card, last: setlist -> footnotes ->
   // notes. They annotate this setlist, so a card of their own below put a
   // border between a note and the thing it is a note about.
@@ -121,17 +111,7 @@ export function renderShow(ctx, showId) {
       el('div.section', null, [
         sectionHead('Setlist', el('span.badge.badge-set', { text: showStructure(index, show.show_id) || '' })),
         el('div.card', null, [
-          setlistBlock(rows, {
-            index,
-            onSong: (id) => navigate(`#/song/${id}`),
-            // Handed INTO the block so it lands inside the footnote list.
-            // When the show has no footnotes the list is created for it alone;
-            // three shows in the archive are in that position and both paths
-            // are covered in the smoke test.
-            //
-            // Same condition as the entries section below the card: `hasJams`.
-            footnoteExtra: hasJams ? jamKey() : null,
-          }),
+          setlistBlock(rows, { index, onSong: (id) => navigate(`#/song/${id}`) }),
           showNotes(),
         ]),
         sourceLink(),
