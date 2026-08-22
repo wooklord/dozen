@@ -843,8 +843,16 @@ button.gap-figure:active {
    and there is nothing to position here. Colour is on the BULLET only -- the
    words take the list's --ink-dim like every other footnote, because the point
    is that this reads as one more item, not as a coloured note. */
-.jam-key-bullet {
+/* ONE colour declaration for the whole row, so the bullet and the words cannot
+   disagree. The words are green because the key shows you the thing it names --
+   a green bullet beside grey text explains the bullet, not the song titles.
+   The row overrides .fn-list's --ink-dim; it is the only item in that list
+   that is not quoting The Carton. */
+.jam-key {
   color: var(--jam);
+}
+
+.jam-key-bullet {
   font-size: var(--t-xs);
   font-weight: 700;
   padding: 0 1px;

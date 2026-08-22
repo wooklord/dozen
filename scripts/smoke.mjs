@@ -67,15 +67,32 @@ const REDIRECTS = [
   { from: '#/', to: '#/home' },
 ];
 
-// The four ways into a gap chart. Each is clicked for real.
+// The four ways into a gap chart, as of 0.1.48. Each is clicked for real.
+//
+// The Home and Shows CARDS used to carry a Gap chart button and no longer do
+// -- those cards are an entry point, not a control panel, and the button
+// duplicated one on show detail. What remains is checked here, and the
+// now-absent ones are asserted absent below, because "the button is gone" and
+// "the route is unreachable" are different claims.
 const GAP_ENTRY_POINTS = [
-  { name: 'Shows card', at: '#/shows',
-    click: `[...document.querySelectorAll('.btn-small')].find(b => b.textContent.trim() === 'Gap chart')` },
   { name: 'show detail', at: null, // filled in at runtime from a real show id
     click: `[...document.querySelectorAll('.btn-small')].find(b => b.textContent.trim() === 'Gap chart')` },
-  { name: 'Home venue history', at: '#/home',
-    click: `[...document.querySelectorAll('.btn-small')].find(b => b.textContent.trim() === 'Gap chart')` },
+  // The Shows tab's compact rows only exist for SEARCH results -- the empty
+  // query lands on full cards, which have no row-action. So this one types a
+  // query first; without that it reports "no control found" and would look
+  // like a missing entry point rather than the wrong screen state.
+  { name: 'Shows search row', at: '#/shows',
+    setup: `(() => {
+      const s = document.querySelector('.search');
+      if (!s) return false;
+      s.value = '2019';
+      s.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    })()`,
+    click: `document.querySelector('.row-action')` },
   { name: 'song performance row', at: '#/song/49',
+    click: `document.querySelector('.row-action')` },
+  { name: 'venue show row', at: '#/venue/73',
     click: `document.querySelector('.row-action')` },
 ];
 
@@ -188,6 +205,11 @@ server.listen(PORT, async () => {
       if (!opened) { fail(`${ep.name}: could not open show detail`); continue; }
       await sleep(900);
     }
+    if (ep.setup) {
+      const ready = await evaluate(ep.setup);
+      if (!ready) { fail(`${ep.name}: setup failed`); continue; }
+      await sleep(900); // search is debounced
+    }
     const clicked = await evaluate(`(() => { const b = ${ep.click}; if (!b) return false; b.click(); return true; })()`);
     if (!clicked) { fail(`${ep.name}: no gap chart control found`); continue; }
     await sleep(1100);
@@ -198,6 +220,43 @@ server.listen(PORT, async () => {
     else if (boundary) fail(`${ep.name}: gap chart rendered the error boundary`);
     else if (!text.toLowerCase().includes('gap chart')) fail(`${ep.name}: gap chart did not render`);
     else pass(`${ep.name} -> ${hash}`);
+  }
+
+  // The cards must carry Show detail and NOTHING else. Asserted as an exact
+  // button list per card, not as "Gap chart is absent": a card that rendered no
+  // actions at all would satisfy the weaker check while being just as broken.
+  // Clear the search the Shows entry point typed. shows.js keeps its query at
+  // MODULE level, so leaving it set puts every later Shows check on a
+  // search-results screen -- a test contaminating the screen it goes on to
+  // assert about. That is exactly what happened on the first run of this.
+  await evaluate(`location.hash = '#/shows';`);
+  await sleep(900);
+  await evaluate(`(() => {
+    const s = document.querySelector('.search');
+    if (!s) return false;
+    s.value = '';
+    s.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  })()`);
+  await sleep(1000);
+
+  console.log('\ncards carry one button:');
+  for (const [screen, hash] of [['Home', '#/home'], ['Shows', '#/shows']]) {
+    await evaluate(`location.hash = ${JSON.stringify(hash)};`);
+    await sleep(1600);
+    const r = await evaluate(`(() => {
+      const cards = [...document.querySelectorAll('.card')].filter(c => c.querySelector('.setlist-song'));
+      return {
+        cards: cards.length,
+        buttonSets: cards.map(c => [...c.querySelectorAll('.card-actions .btn-small')].map(b => b.textContent.trim())),
+        anyGapChart: cards.some(c => [...c.querySelectorAll('.btn-small')].some(b => b.textContent.trim() === 'Gap chart')),
+      };
+    })()`);
+    if (!r.cards) fail(`${screen}: no setlist cards rendered`);
+    else if (r.anyGapChart) fail(`${screen}: a card still offers Gap chart`);
+    else if (!r.buttonSets.every((s) => s.length === 1 && s[0] === 'Show detail')) {
+      fail(`${screen}: expected exactly ['Show detail'] per card, got ${JSON.stringify(r.buttonSets)}`);
+    } else pass(`${screen}: all ${r.cards} card(s) carry exactly ['Show detail']`);
   }
 
   // --- Jam chart highlight + per-show jam entries ---------------------------
@@ -362,9 +421,6 @@ server.listen(PORT, async () => {
   else if (home.withShowDetail !== home.setlistCards) {
     fail(`Home: ${home.setlistCards} setlist card(s), only ${home.withShowDetail} offer Show detail`);
   } else pass(`all ${home.setlistCards} setlist card(s) offer Show detail`);
-  if (home.withGapChart !== home.setlistCards) {
-    fail(`Home: ${home.withGapChart} of ${home.setlistCards} setlist card(s) offer Gap chart`);
-  } else pass(`all ${home.setlistCards} setlist card(s) still offer Gap chart`);
   if (home.actionsBelowSetlist !== home.setlistCards) {
     fail(`Home: actions sit BELOW the setlist on only ${home.actionsBelowSetlist} of ${home.setlistCards} card(s)`);
   } else pass(`actions sit below the setlist on all ${home.setlistCards} card(s)`);
@@ -504,9 +560,15 @@ server.listen(PORT, async () => {
     if (align.bulletColor !== align.songColor) {
       fail(`jam key: bullet ${align.bulletColor} != highlighted titles ${align.songColor}`);
     } else pass(`bullet matches the highlighted titles (${align.bulletColor})`);
-    if (align.textColor !== align.fnColor) {
-      fail(`jam key: text ${align.textColor} does not match footnote text ${align.fnColor}`);
-    } else pass('text takes the same colour as the footnotes');
+    // The WORDS are green too, matching the rendered setlist -- not a hardcoded
+    // hex, and deliberately NOT the footnote grey. The key shows you the thing
+    // it names; green bullet beside grey words would explain the bullet.
+    if (align.textColor !== align.songColor) {
+      fail(`jam key: text ${align.textColor} != highlighted titles ${align.songColor}`);
+    } else pass(`text is the jam colour, matching the setlist (${align.textColor})`);
+    if (align.textColor === align.fnColor) {
+      fail('jam key: text is the same grey as the footnotes — it reverted');
+    } else pass(`text is distinct from the footnote grey (${align.fnColor})`);
   }
 
   // --- Small buttons: smaller box, 44px tap target intact -------------------

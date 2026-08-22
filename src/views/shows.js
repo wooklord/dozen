@@ -233,21 +233,11 @@ export function renderShows(ctx) {
                 : el('span.badge', { text: 'No setlist recorded' }),
             ],
           ),
-          actions: [
-            el(
-              'button.btn.btn-small',
-              { type: 'button', onclick: () => navigate(`#/show/${show.show_id}`) },
-              'Show detail',
-            ),
-            rows.length
-              ? el(
-                  'button.btn.btn-small',
-                  { type: 'button', onclick: () => navigate(`#/gapchart/${show.show_id}`) },
-                  'Gap chart',
-                )
-              : null,
-            cartonLink(showPermalink(show), 'Carton'),
-          ],
+          showId: show.show_id,
+          navigate,
+          // The Carton link is genuinely specific to this screen -- Home puts
+          // its own in the section head instead.
+          extraActions: [cartonLink(showPermalink(show), 'Carton')],
         }),
       );
     }

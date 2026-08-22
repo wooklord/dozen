@@ -228,18 +228,8 @@ function renderNextShow(screen, { index, navigate }, show, today) {
           style: { fontWeight: '600' },
           text: formatShowDate(lastAtVenue.showdate),
         }),
-        actions: [
-          el(
-            'button.btn.btn-small',
-            { type: 'button', onclick: () => navigate(`#/show/${lastAtVenue.show_id}`) },
-            'Show detail',
-          ),
-          el(
-            'button.btn.btn-small',
-            { type: 'button', onclick: () => navigate(`#/gapchart/${lastAtVenue.show_id}`) },
-            'Gap chart',
-          ),
-        ],
+        showId: lastAtVenue.show_id,
+        navigate,
       }),
     );
   } else {
@@ -281,18 +271,8 @@ function renderNoUpcoming(screen, { index, navigate }, today) {
           el('div', { style: { fontWeight: '650' }, text: formatShowDate(latest.showdate) }),
           venueLine(latest, { small: true }),
         ]),
-        actions: [
-          el(
-            'button.btn.btn-small',
-            { type: 'button', onclick: () => navigate(`#/show/${latest.show_id}`) },
-            'Show detail',
-          ),
-          el(
-            'button.btn.btn-small',
-            { type: 'button', onclick: () => navigate(`#/gapchart/${latest.show_id}`) },
-            'Gap chart',
-          ),
-        ],
+        showId: latest.show_id,
+        navigate,
       }),
     ]),
   );
@@ -330,18 +310,8 @@ function renderOnThisDate(screen, { index, navigate }, anchorDate, excludeShowId
           ]),
           venueLine(s, { small: true }),
         ]),
-        actions: [
-          el(
-            'button.btn.btn-small',
-            { type: 'button', onclick: () => navigate(`#/show/${s.show_id}`) },
-            'Show detail',
-          ),
-          el(
-            'button.btn.btn-small',
-            { type: 'button', onclick: () => navigate(`#/gapchart/${s.show_id}`) },
-            'Gap chart',
-          ),
-        ],
+        showId: s.show_id,
+        navigate,
       }),
     );
   }

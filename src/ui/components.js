@@ -489,15 +489,40 @@ export function setlistCard({
   rows = [],
   index,
   onSong,
-  actions = [],
+  showId = null,
+  navigate = null,
+  extraActions = [],
   empty = null,
   style = null,
 } = {}) {
-  const acts = actions.filter(Boolean);
+  // THE ACTION SET IS OWNED HERE, not passed in. A setlist card gets ONE
+  // button -- Show detail -- and this builds it. Callers each used to supply
+  // their own array, which made "what buttons does a setlist card have" a
+  // question with four answers across two files; removing one from all of them
+  // was four edits that could each be forgotten. It is now one.
+  //
+  // These cards are an ENTRY POINT, not a control panel. Gap chart used to sit
+  // here and does not any more: it duplicated the button on show detail, which
+  // is where you are heading anyway. That makes a gap chart two taps from Home
+  // rather than one, deliberately.
+  //
+  // `extraActions` is for things genuinely specific to one screen -- the Shows
+  // tab's Carton link -- not for re-adding navigation removed on purpose.
+  const acts = [
+    showId != null && navigate
+      ? el(
+          'button.btn.btn-small',
+          { type: 'button', onclick: () => navigate(`#/show/${showId}`) },
+          'Show detail',
+        )
+      : null,
+    ...extraActions,
+  ].filter(Boolean);
+
   return el('div.card', style ? { style } : null, [
     head,
     rows.length ? el('div.setlist-card-body', null, setlistBlock(rows, { index, onSong })) : empty,
-    acts.length ? el("div.card-actions", null, acts) : null,
+    acts.length ? el('div.card-actions', null, acts) : null,
   ]);
 }
 
