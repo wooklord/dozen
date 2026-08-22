@@ -15,6 +15,7 @@ import {
   sectionHead,
   emptyState,
   setlistBlock,
+  setlistCard,
   cartonLink,
   showPermalink,
   venueLine,
@@ -219,15 +220,15 @@ function renderNextShow(screen, { index, navigate }, show, today) {
   if (lastAtVenue) {
     append(
       venueSection,
-      el('div.card', null, [
-        el('div', {
-          style: { marginBottom: '10px', fontWeight: '600' },
+      setlistCard({
+        index,
+        rows: index.setlistByShow.get(Number(lastAtVenue.show_id)) || [],
+        onSong: (id) => navigate(`#/song/${id}`),
+        head: el('div', {
+          style: { fontWeight: '600' },
           text: formatShowDate(lastAtVenue.showdate),
         }),
-        // Show detail first, matching the "Most recent show" card, which is the
-        // one card on this screen that already had both. Order is consistent
-        // everywhere: the show, then the chart derived from it.
-        el('div.card-actions', { style: { marginBottom: '10px' } }, [
+        actions: [
           el(
             'button.btn.btn-small',
             { type: 'button', onclick: () => navigate(`#/show/${lastAtVenue.show_id}`) },
@@ -238,12 +239,8 @@ function renderNextShow(screen, { index, navigate }, show, today) {
             { type: 'button', onclick: () => navigate(`#/gapchart/${lastAtVenue.show_id}`) },
             'Gap chart',
           ),
-        ]),
-        setlistBlock(index.setlistByShow.get(Number(lastAtVenue.show_id)) || [], {
-          index,
-          onSong: (id) => navigate(`#/song/${id}`),
-        }),
-      ]),
+        ],
+      }),
     );
   } else {
     append(venueSection, emptyState('No previous setlist recorded at this venue.'));
@@ -276,10 +273,15 @@ function renderNoUpcoming(screen, { index, navigate }, today) {
     screen,
     el('div.section', null, [
       sectionHead('Most recent show', cartonLink(showPermalink(latest), 'Carton')),
-      el('div.card', null, [
-        el('div', { style: { fontWeight: '650' }, text: formatShowDate(latest.showdate) }),
-        venueLine(latest, { small: true }),
-        el('div.card-actions', null, [
+      setlistCard({
+        index,
+        rows: index.setlistByShow.get(Number(latest.show_id)) || [],
+        onSong: (id) => navigate(`#/song/${id}`),
+        head: el('div', null, [
+          el('div', { style: { fontWeight: '650' }, text: formatShowDate(latest.showdate) }),
+          venueLine(latest, { small: true }),
+        ]),
+        actions: [
           el(
             'button.btn.btn-small',
             { type: 'button', onclick: () => navigate(`#/show/${latest.show_id}`) },
@@ -290,12 +292,8 @@ function renderNoUpcoming(screen, { index, navigate }, today) {
             { type: 'button', onclick: () => navigate(`#/gapchart/${latest.show_id}`) },
             'Gap chart',
           ),
-        ]),
-        el('div', { style: { marginTop: '12px' } }, setlistBlock(
-          index.setlistByShow.get(Number(latest.show_id)) || [],
-          { index, onSong: (id) => navigate(`#/song/${id}`) },
-        )),
-      ]),
+        ],
+      }),
     ]),
   );
 }
@@ -320,13 +318,19 @@ function renderOnThisDate(screen, { index, navigate }, anchorDate, excludeShowId
   for (const s of anniversaries.slice().reverse()) {
     append(
       section,
-      el('div.card', { style: { marginBottom: '10px' } }, [
-        el('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '8px' } }, [
-          el('div', { style: { fontWeight: '600' }, text: formatShowDate(s.showdate) }),
-          cartonLink(showPermalink(s), 'Carton'),
+      setlistCard({
+        style: { marginBottom: '10px' },
+        index,
+        rows: index.setlistByShow.get(Number(s.show_id)) || [],
+        onSong: (id) => navigate(`#/song/${id}`),
+        head: el('div', null, [
+          el('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '8px' } }, [
+            el('div', { style: { fontWeight: '600' }, text: formatShowDate(s.showdate) }),
+            cartonLink(showPermalink(s), 'Carton'),
+          ]),
+          venueLine(s, { small: true }),
         ]),
-        venueLine(s, { small: true }),
-        el('div.card-actions', { style: { marginBottom: '8px' } }, [
+        actions: [
           el(
             'button.btn.btn-small',
             { type: 'button', onclick: () => navigate(`#/show/${s.show_id}`) },
@@ -337,12 +341,8 @@ function renderOnThisDate(screen, { index, navigate }, anchorDate, excludeShowId
             { type: 'button', onclick: () => navigate(`#/gapchart/${s.show_id}`) },
             'Gap chart',
           ),
-        ]),
-        setlistBlock(index.setlistByShow.get(Number(s.show_id)) || [], {
-          index,
-          onSong: (id) => navigate(`#/song/${id}`),
-        }),
-      ]),
+        ],
+      }),
     );
   }
   append(screen, section);

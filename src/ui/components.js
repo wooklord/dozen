@@ -365,7 +365,16 @@ export function openFootnote(text, index) {
  * and both survive to the screen. Footnotes become tappable markers rather than
  * inline clutter -- hover does not exist on a phone.
  */
-export function setlistBlock(rows, { onSong, index } = {}) {
+/**
+ * @param {object} opts
+ * @param {Node|null} [opts.footnoteExtra]  An extra <li> appended to the
+ *   footnote list. Used for the jam key, which has to be a real member of that
+ *   list rather than a block under it -- otherwise it aligns to the card edge
+ *   and reads as a separate note. When a show has NO footnotes the list is
+ *   created anyway so the item has somewhere to live; it then renders as a
+ *   one-item list, which is still the footnote column and still reads right.
+ */
+export function setlistBlock(rows, { onSong, index, footnoteExtra = null } = {}) {
   const wrap = el('div');
   const footnotes = [];
 
@@ -435,15 +444,61 @@ export function setlistBlock(rows, { onSong, index } = {}) {
     append(wrap, el('div.setlist-set', null, [el('div.setlist-label', { text: group.label }), flow]));
   }
 
-  if (footnotes.length) {
+  if (footnotes.length || footnoteExtra) {
     const list = el('ul.fn-list');
     footnotes.forEach((n, i) => {
       append(list, el('li', null, [el('span.fn-marker', { text: String(i + 1) }), el('span', { text: n })]));
     });
+    // Last item in the list, after the real footnotes.
+    if (footnoteExtra) append(list, footnoteExtra);
     append(wrap, list);
   }
 
   return wrap;
+}
+
+/**
+ * A card showing one show's setlist, with its own actions underneath.
+ *
+ * THIS EXISTS TO OWN THE ORDER: head, then setlist, then actions. Nothing
+ * else about it is clever, and the order is the whole point.
+ *
+ * Before this, four cards across two screens each assembled their own. The
+ * Shows tab (0.1.23) put its actions under the setlist; Home (0.1.24) put them
+ * above it, one build later, and all three Home cards stayed that way for
+ * twenty-one builds. Adding a button to a Home card in 0.1.45 inherited the
+ * wrong position without anyone touching layout. A card layout that each
+ * screen re-implements drifts exactly like that, so callers now supply the
+ * CONTENT and this supplies the STRUCTURE.
+ *
+ * Actions sit at the bottom because they are about the thing you just read.
+ * Above the setlist they interrupt the card's subject to offer navigation
+ * away from it.
+ *
+ * @param {object} opts
+ * @param {Node|null} opts.head      title block -- date, venue, badges
+ * @param {Array} opts.rows          setlist rows; empty renders `empty`
+ * @param {object} opts.index        live index, passed through to setlistBlock
+ * @param {Function} opts.onSong     song tap handler
+ * @param {Array} opts.actions       buttons/links; falsy entries drop out
+ * @param {Node|null} opts.empty     shown instead of a setlist when rows is empty
+ * @param {object|null} opts.style   card style overrides (spacing between cards)
+ */
+export function setlistCard({
+  head = null,
+  rows = [],
+  index,
+  onSong,
+  actions = [],
+  empty = null,
+  style = null,
+} = {}) {
+  const acts = actions.filter(Boolean);
+  return el('div.card', style ? { style } : null, [
+    head,
+    rows.length ? el('div.setlist-card-body', null, setlistBlock(rows, { index, onSong })) : empty,
+    acts.length ? el("div.card-actions", null, acts) : null,
+  ]);
 }
 
 /**

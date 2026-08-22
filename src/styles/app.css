@@ -443,10 +443,57 @@ button.gap-figure:active {
   margin-top: var(--s-2);
 }
 
-.btn-small {
-  min-height: 34px;
+/* NOTE: setlistCard's action row uses plain .card-actions and its --s-2 top
+   margin. A dedicated footer class at --s-3 was tried and reverted: it made
+   every Shows card 4px taller, and the Shows tab is the screen Home is being
+   matched TO. Changing the reference while aligning to it is how you end up
+   with two screens that are consistent with each other and with nothing they
+   used to be. Verified pixel-identical against the previous build. */
+
+/* The setlist inside a card, between the head and the actions. Zeroed when it
+   is the first child so a card with no head does not open with a gap. */
+.setlist-card-body {
+  margin-top: var(--s-3);
+}
+.setlist-card-body:first-child {
+  margin-top: 0;
+}
+
+/* Small buttons: Venue history, Show detail, Gap chart -- all three, one rule.
+ *
+ * `.btn.btn-small` rather than `.btn-small` ON PURPOSE. The old single-class
+ * rule sat EARLIER in this file than `.btn`, so at equal specificity `.btn`'s
+ * `min-height: var(--tap)` won and the 34px here never applied -- these have
+ * been rendering at 44px. The doubled selector makes the intent actually take
+ * effect instead of silently losing.
+ *
+ * VISUAL BOX SHRINKS, TAP TARGET DOES NOT. The box is 36px; ::after restores a
+ * full var(--tap) hit region, centred, so the thing you press is still 44px
+ * tall while the thing you see is smaller. That floor is not style -- it is
+ * what makes these usable one-handed in a dark venue.
+ *
+ * Why this is safe to shrink now: the size was compensating for borders that
+ * measured 1.28:1 against the fill. --btn-line fixed that at 3.4:1, so the
+ * edge carries the affordance and the box no longer has to.
+ */
+.btn.btn-small {
+  min-height: 36px;
   padding: 0 var(--s-3);
   font-size: var(--t-sm);
+  position: relative;
+}
+
+/* The hit region. Overhangs the visible box by 4px top and bottom -- enough to
+   restore 44px, small enough not to swallow taps meant for the setlist above.
+   Pointer events on a pseudo-element land on its host, so this needs no JS. */
+.btn.btn-small::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: var(--tap);
 }
 
 /* Trailing icon action on a row, alongside the row's own navigation. */
@@ -792,10 +839,26 @@ button.gap-figure:active {
  * footnotes rather than as a new block. Rendered only when the show HAS jam
  * entries, on the same condition as the entries section below the card.
  */
-.jam-key {
-  margin-top: var(--s-3);
-  font-size: var(--t-sm);
+/* It is an <li> inside .fn-list, so the list's own flex row does the aligning
+   and there is nothing to position here. Colour is on the BULLET only -- the
+   words take the list's --ink-dim like every other footnote, because the point
+   is that this reads as one more item, not as a coloured note. */
+.jam-key-bullet {
   color: var(--jam);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  padding: 0 1px;
+}
+
+/* The marker column is FIXED WIDTH for both a digit and the bullet. Sized by
+   content they differed by 0.4px, which is invisible on its own and still
+   means the text column is not a column. This also squares up the footnote
+   rows themselves, which were already ragged between "1" and a wider glyph. */
+.fn-marker,
+.jam-key-bullet {
+  min-width: 1.2ch;
+  text-align: center;
+  box-sizing: content-box;
 }
 
 /* Headers INSIDE the setlist card: the set labels, and the show-notes header.

@@ -9,6 +9,7 @@
 import { el, append, debounce, icon, ICONS } from '../ui/dom.js';
 import {
   setlistBlock,
+  setlistCard,
   cartonLink,
   showPermalink,
   attribution,
@@ -214,8 +215,12 @@ export function renderShows(ctx) {
       const rows = index.setlistByShow.get(Number(show.show_id)) || [];
       append(
         section,
-        el('div.card', { style: { marginBottom: '12px' } }, [
-          el(
+        setlistCard({
+          style: { marginBottom: '12px' },
+          index,
+          rows,
+          onSong: (id) => navigate(`#/song/${id}`),
+          head: el(
             'div',
             { style: { display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'baseline' } },
             [
@@ -228,13 +233,7 @@ export function renderShows(ctx) {
                 : el('span.badge', { text: 'No setlist recorded' }),
             ],
           ),
-          rows.length
-            ? el('div', { style: { marginTop: '12px' } }, setlistBlock(rows, {
-                index,
-                onSong: (id) => navigate(`#/song/${id}`),
-              }))
-            : null,
-          el('div.card-actions', null, [
+          actions: [
             el(
               'button.btn.btn-small',
               { type: 'button', onclick: () => navigate(`#/show/${show.show_id}`) },
@@ -248,8 +247,8 @@ export function renderShows(ctx) {
                 )
               : null,
             cartonLink(showPermalink(show), 'Carton'),
-          ]),
-        ]),
+          ],
+        }),
       );
     }
 

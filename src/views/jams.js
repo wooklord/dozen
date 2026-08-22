@@ -18,22 +18,25 @@ const JAM_SORTS = [
 import { formatShowDateShort } from '../util/dates.js';
 
 /**
- * "Entries begin in YYYY..." -- both years pulled from the index, never typed.
+ * The coverage boundary, and only the boundary.
  *
- * Returns a bare string so it drops into the sub-line beside the gap link.
- * Renders nothing at all if the archive somehow has no jam entries, rather
- * than a sentence with a blank where a year should be.
+ * The year is read from the index every load, never typed: The Carton keeps
+ * adding entries, and a year written into this sentence would go stale with
+ * nothing looking wrong. Same reasoning as the gap explainer reading its
+ * counts from the live index.
+ *
+ * DELIBERATELY NOT followed by a clause explaining what to infer from it.
+ * That was tried and cut: a sentence whose job is to interpret another
+ * sentence is exactly the kind of density this screen does not need. The fact
+ * is stated; the reader can do the rest.
+ *
+ * Returns a bare string so it drops into the sub-line beside the gap link, and
+ * nothing at all when there are no entries, rather than a sentence with a
+ * blank where a year should be.
  */
 function coverageNote(index) {
   const from = index.counts.jamchartsFrom;
-  if (!from) return '';
-  const jamYear = from.slice(0, 4);
-  const archiveYear = (index.counts.archiveFrom || '').slice(0, 4);
-  // Only draw the contrast when the archive actually starts earlier; if the
-  // two ever converge the second clause would be saying nothing.
-  return archiveYear && archiveYear < jamYear
-    ? `Entries begin in ${jamYear}, though the archive goes back to ${archiveYear} — a song with none may simply predate the charts. `
-    : `Entries begin in ${jamYear}. `;
+  return from ? `Entries begin in ${from.slice(0, 4)}. ` : '';
 }
 
 export function renderJams(ctx) {

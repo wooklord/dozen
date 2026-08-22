@@ -85,7 +85,19 @@ export function renderShow(ctx, showId) {
   // Colour comes from --jam in CSS, never a literal here. A hardcoded hex
   // would be a second copy of a value already retuned four times, and it fails
   // silently: a key confidently naming a colour the setlist no longer uses.
-  const jamKey = () => el('div.jam-key', { text: 'jam chart entry' });
+  // A real <li> in the footnote list, not a block under it. As a sibling of
+  // the list it left-aligned past the footnote numbers and read as a separate
+  // note appended below; as a member it inherits the list's own flex row, so
+  // the bullet sits in the marker column and the words land in the same text
+  // column as every footnote.
+  //
+  // Bullet colour is var(--jam) in CSS, never a literal -- the key has to name
+  // whatever colour the setlist is actually using.
+  const jamKey = () =>
+    el('li.jam-key', null, [
+      el('span.jam-key-bullet', { 'aria-hidden': 'true', text: '●' }),
+      el('span', { text: 'jam chart entry' }),
+    ]);
 
   // Show notes belong INSIDE the setlist card, last: setlist -> footnotes ->
   // notes. They annotate this setlist, so a card of their own below put a
@@ -109,17 +121,17 @@ export function renderShow(ctx, showId) {
       el('div.section', null, [
         sectionHead('Setlist', el('span.badge.badge-set', { text: showStructure(index, show.show_id) || '' })),
         el('div.card', null, [
-          setlistBlock(rows, { index, onSong: (id) => navigate(`#/song/${id}`) }),
-          // Sibling of the setlist block rather than a child of it, which is
-          // what makes the no-footnotes case need no branch: `.fn-list` is the
-          // LAST thing setlistBlock renders, so a node placed straight after
-          // the block lands under the last footnote when there are footnotes,
-          // and in the slot the footnote list would have occupied when there
-          // are none. Three shows in the archive have jam entries and zero
-          // footnotes; both paths are covered in the smoke test.
-          //
-          // Same condition as the entries section below the card -- `hasJams`.
-          hasJams ? jamKey() : null,
+          setlistBlock(rows, {
+            index,
+            onSong: (id) => navigate(`#/song/${id}`),
+            // Handed INTO the block so it lands inside the footnote list.
+            // When the show has no footnotes the list is created for it alone;
+            // three shows in the archive are in that position and both paths
+            // are covered in the smoke test.
+            //
+            // Same condition as the entries section below the card: `hasJams`.
+            footnoteExtra: hasJams ? jamKey() : null,
+          }),
           showNotes(),
         ]),
         sourceLink(),

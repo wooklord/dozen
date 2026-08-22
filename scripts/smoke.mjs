@@ -328,26 +328,35 @@ server.listen(PORT, async () => {
   console.log('\nHome show-detail buttons:');
   await evaluate(`location.hash = '#/home';`);
   await sleep(1400);
-  const home = await evaluate(`(() => {
-    const rows = [...document.querySelectorAll('.card-actions')];
-    const withSetlist = rows.filter(r => {
-      const card = r.closest('.card') || r.parentElement;
-      return card && card.querySelector('.setlist-song');
-    });
+  // Position is asserted against the setlist itself, not just existence --
+  // "the buttons are on the card" was true of the broken layout too, where
+  // they sat ABOVE the setlist for twenty-one builds.
+  const CARD_PROBE = `(() => {
+    const cards = [...document.querySelectorAll('.card')].filter(c => c.querySelector('.setlist-song'));
     const label = (r, t) => [...r.querySelectorAll('.btn-small')].some(b => b.textContent.trim() === t);
     return {
-      actionRows: rows.length,
-      setlistCards: withSetlist.length,
-      withShowDetail: withSetlist.filter(r => label(r, 'Show detail')).length,
-      withGapChart: withSetlist.filter(r => label(r, 'Gap chart')).length,
-      // Order must match everywhere: the show, then the chart derived from it.
-      orderOk: withSetlist.every(r => {
-        const t = [...r.querySelectorAll('.btn-small')].map(b => b.textContent.trim());
+      setlistCards: cards.length,
+      withShowDetail: cards.filter(c => { const a = c.querySelector('.card-actions'); return a && label(a, 'Show detail'); }).length,
+      withGapChart: cards.filter(c => { const a = c.querySelector('.card-actions'); return a && label(a, 'Gap chart'); }).length,
+      // THE POSITION CHECK: actions must follow the LAST setlist song in
+      // their own card, in document order.
+      actionsBelowSetlist: cards.filter(c => {
+        const a = c.querySelector('.card-actions');
+        const songs = [...c.querySelectorAll('.setlist-song')];
+        const last = songs[songs.length - 1];
+        return a && last && !!(last.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING);
+      }).length,
+      // Button order within the row: the show, then the chart derived from it.
+      buttonOrderOk: cards.every(c => {
+        const a = c.querySelector('.card-actions');
+        if (!a) return true;
+        const t = [...a.querySelectorAll('.btn-small')].map(b => b.textContent.trim());
         const i = t.indexOf('Show detail'), j = t.indexOf('Gap chart');
         return i === -1 || j === -1 || i < j;
       }),
     };
-  })()`);
+  })()`;
+  const home = await evaluate(CARD_PROBE);
 
   if (!home.setlistCards) fail('Home: no cards with a setlist found — the page did not render as expected');
   else if (home.withShowDetail !== home.setlistCards) {
@@ -356,8 +365,23 @@ server.listen(PORT, async () => {
   if (home.withGapChart !== home.setlistCards) {
     fail(`Home: ${home.withGapChart} of ${home.setlistCards} setlist card(s) offer Gap chart`);
   } else pass(`all ${home.setlistCards} setlist card(s) still offer Gap chart`);
-  if (!home.orderOk) fail('Home: Show detail must come before Gap chart');
+  if (home.actionsBelowSetlist !== home.setlistCards) {
+    fail(`Home: actions sit BELOW the setlist on only ${home.actionsBelowSetlist} of ${home.setlistCards} card(s)`);
+  } else pass(`actions sit below the setlist on all ${home.setlistCards} card(s)`);
+  if (!home.buttonOrderOk) fail('Home: Show detail must come before Gap chart');
   else pass('Show detail precedes Gap chart on every card');
+
+  // The Shows tab is the screen Home is being made to match, and it was
+  // already correct -- so it is checked too. If a shared renderer ever moves
+  // the actions, both screens go red together instead of silently diverging
+  // the way they did for twenty-one builds.
+  await evaluate(`location.hash = '#/shows';`);
+  await sleep(1600);
+  const shows = await evaluate(CARD_PROBE);
+  if (!shows.setlistCards) fail('Shows: no setlist cards rendered');
+  else if (shows.actionsBelowSetlist !== shows.setlistCards) {
+    fail(`Shows: actions sit BELOW the setlist on only ${shows.actionsBelowSetlist} of ${shows.setlistCards} card(s)`);
+  } else pass(`Shows tab matches: actions below the setlist on all ${shows.setlistCards} card(s)`);
 
   // Each new button must actually navigate, not just exist. Clicking is the
   // only thing that proves the route it points at is real.
@@ -393,17 +417,10 @@ server.listen(PORT, async () => {
   // and this is not a loop.
   let expectedYears = null;
   try {
-    const [jamRes, setRes] = await Promise.all([
-      fetch('https://thecarton.net/api/v2/jamcharts.json'),
-      fetch('https://thecarton.net/api/v2/setlists.json?limit=20000'),
-    ]);
+    const [jamRes] = await Promise.all([fetch('https://thecarton.net/api/v2/jamcharts.json')]);
     const jamRows = (await jamRes.json()).data || [];
-    const setRows = (await setRes.json()).data || [];
-    // The 4000-row trap: assert the pull is complete before trusting its min.
-    if (setRows.length < 6000) throw new Error(`setlists truncated: ${setRows.length} rows`);
     expectedYears = {
       jam: jamRows.map((j) => j.showdate).sort()[0].slice(0, 4),
-      archive: setRows.map((r) => r.showdate).sort()[0].slice(0, 4),
     };
   } catch (err) {
     fail(`jams: could not reach The Carton to cross-check the note (${err.message})`);
@@ -411,11 +428,9 @@ server.listen(PORT, async () => {
 
   if (!cov.text) fail('jams: no sub-line rendered');
   else if (!expectedYears) { /* already reported above */ }
-  else if (!cov.text.includes(`begin in ${expectedYears.jam}`)) {
+  else if (!cov.text.includes(`Entries begin in ${expectedYears.jam}.`)) {
     fail(`jams: note says ${JSON.stringify(cov.text)}, Carton says entries begin ${expectedYears.jam}`);
-  } else if (!cov.text.includes(`back to ${expectedYears.archive}`)) {
-    fail(`jams: note omits the archive start year ${expectedYears.archive}`);
-  } else pass(`coverage note agrees with The Carton (${expectedYears.jam} / ${expectedYears.archive})`);
+  } else pass(`coverage note agrees with The Carton (entries begin ${expectedYears.jam})`);
 
   // --- The jam key ----------------------------------------------------------
   //
@@ -449,14 +464,79 @@ server.listen(PORT, async () => {
   if (!key.inCard) fail('jam key: not rendered inside the setlist card');
   else pass('key renders inside the setlist card');
 
-  // Against the RENDERED setlist, never an expected hex -- a literal would keep
-  // passing after the token drifted and the key had started naming the wrong
-  // colour, which is the exact failure var(--jam) exists to prevent.
-  if (key.keyColor !== key.songColor) {
-    fail(`jam key: key is ${key.keyColor}, highlighted titles are ${key.songColor}`);
-  } else pass(`key colour matches the highlighted titles (${key.keyColor})`);
+  // ALIGNMENT, not existence. The key must be a member of the footnote list
+  // and its text must start in the same column as the footnote text -- the
+  // previous version existed and was still misaligned, so "it is on the card"
+  // proves nothing here.
+  const align = await evaluate(`(() => {
+    const list = document.querySelector('.card .fn-list');
+    const key = list ? list.querySelector('li.jam-key') : null;
+    if (!list || !key) return { inList: false };
+    const fnRow = [...list.querySelectorAll('li')].find(li => li.querySelector('.fn-marker'));
+    const x = (n) => n ? Math.round(n.getBoundingClientRect().x * 10) / 10 : null;
+    const keyText = key.querySelector('span:not(.jam-key-bullet)');
+    const fnText = fnRow ? fnRow.querySelector('span:not(.fn-marker)') : null;
+    const bullet = key.querySelector('.jam-key-bullet');
+    const marker = fnRow ? fnRow.querySelector('.fn-marker') : null;
+    const song = document.querySelector('.setlist-song[data-jam="true"]');
+    return {
+      inList: true,
+      isLast: list.lastElementChild === key,
+      textX: x(keyText), fnTextX: x(fnText),
+      bulletX: x(bullet), markerX: x(marker),
+      bulletColor: bullet ? getComputedStyle(bullet).color : null,
+      songColor: song ? getComputedStyle(song).color : null,
+      textColor: keyText ? getComputedStyle(keyText).color : null,
+      fnColor: fnText ? getComputedStyle(fnText).color : null,
+    };
+  })()`);
 
-  if (key.text !== 'jam chart entry') fail(`jam key: reads ${JSON.stringify(key.text)}, expected "jam chart entry"`);
+  if (!align.inList) fail('jam key: not a member of the footnote list');
+  else {
+    if (!align.isLast) fail('jam key: not the last item in the footnote list');
+    else pass('key is the last item in the footnote list');
+    if (align.textX !== align.fnTextX) {
+      fail(`jam key: text starts at x=${align.textX}, footnote text at x=${align.fnTextX}`);
+    } else pass(`text column matches the footnote rows (x=${align.textX})`);
+    if (align.bulletX !== align.markerX) {
+      fail(`jam key: bullet at x=${align.bulletX}, footnote markers at x=${align.markerX}`);
+    } else pass(`bullet sits in the marker column (x=${align.bulletX})`);
+    if (align.bulletColor !== align.songColor) {
+      fail(`jam key: bullet ${align.bulletColor} != highlighted titles ${align.songColor}`);
+    } else pass(`bullet matches the highlighted titles (${align.bulletColor})`);
+    if (align.textColor !== align.fnColor) {
+      fail(`jam key: text ${align.textColor} does not match footnote text ${align.fnColor}`);
+    } else pass('text takes the same colour as the footnotes');
+  }
+
+  // --- Small buttons: smaller box, 44px tap target intact -------------------
+  //
+  // The floor is the thing under test. Measured from the rendered ::after hit
+  // region, not from the button box and not assumed from the CSS.
+  console.log('\nsmall button tap targets:');
+  const taps = await evaluate(`(() => {
+    const btns = [...document.querySelectorAll('.btn.btn-small')];
+    if (!btns.length) return null;
+    const rows = btns.map(b => {
+      const box = b.getBoundingClientRect();
+      const after = getComputedStyle(b, '::after');
+      // The hit region is the pseudo-element's height, centred on the box.
+      const hit = parseFloat(after.height) || box.height;
+      return { label: b.textContent.trim(), box: Math.round(box.height * 10) / 10, hit: Math.round(hit * 10) / 10 };
+    });
+    return { count: rows.length, minBox: Math.min(...rows.map(r => r.box)), minHit: Math.min(...rows.map(r => r.hit)), sample: rows.slice(0, 3) };
+  })()`);
+  if (!taps) fail('buttons: no .btn.btn-small found');
+  else if (taps.minHit < 44) fail(`buttons: smallest tap target is ${taps.minHit}px — under the 44px floor`);
+  else if (taps.minBox >= 44) fail(`buttons: visual box is still ${taps.minBox}px — it did not shrink`);
+  else pass(`${taps.count} small buttons: box ${taps.minBox}px, tap target ${taps.minHit}px`);
+
+  // Wording. The bullet is decorative and aria-hidden, so the words are read
+  // off the text span rather than the row's textContent.
+  const keyWords = await evaluate(
+    `(() => { const s = document.querySelector('li.jam-key span:not(.jam-key-bullet)'); return s ? s.textContent.trim() : null; })()`,
+  );
+  if (keyWords !== 'jam chart entry') fail(`jam key: reads ${JSON.stringify(keyWords)}, expected "jam chart entry"`);
   else pass('reads "jam chart entry" and nothing else');
 
   if (!key.hadFootnotes) fail('jam key: this show was chosen because it HAS footnotes — it rendered none');
@@ -489,12 +569,33 @@ server.listen(PORT, async () => {
     };
   })()`);
 
+  // With no real footnotes the list is created for the key alone, so it should
+  // be a ONE-ITEM list -- still the footnote column, still aligned, not a
+  // stray block. Asserting "exactly one item, and it is the key" is what
+  // distinguishes that from the list failing to render at all.
+  const noFnList = await evaluate(`(() => {
+    const list = document.querySelector('.card .fn-list');
+    if (!list) return { list: false };
+    const items = [...list.children];
+    const key = list.querySelector('li.jam-key');
+    const bullet = key ? key.querySelector('.jam-key-bullet') : null;
+    const song = document.querySelector('.setlist-song[data-jam="true"]');
+    return {
+      list: true,
+      items: items.length,
+      onlyItemIsKey: items.length === 1 && items[0] === key,
+      realFootnotes: list.querySelectorAll('.fn-marker').length,
+      bulletColor: bullet ? getComputedStyle(bullet).color : null,
+      songColor: song ? getComputedStyle(song).color : null,
+    };
+  })()`);
+
   if (noFn.songs !== 9) fail(`jam key (no footnotes): show did not render (${noFn.songs} songs, expected 9)`);
-  else if (noFn.footnotes !== 0) fail(`jam key (no footnotes): this show should have no footnote list, found ${noFn.footnotes}`);
-  else if (!noFn.key) fail('jam key (no footnotes): key vanished when there were no footnotes to sit under');
-  else if (!noFn.afterLastSet) fail('jam key (no footnotes): key is not in the slot the footnotes would occupy');
-  else if (noFn.color !== noFn.songColor) fail(`jam key (no footnotes): ${noFn.color} vs ${noFn.songColor}`);
-  else pass('a show with jam entries and NO footnotes still renders the key, after the last set');
+  else if (!noFnList.list) fail('jam key (no footnotes): no list rendered — the key has nowhere to live');
+  else if (noFnList.realFootnotes !== 0) fail(`jam key (no footnotes): expected no real footnotes, found ${noFnList.realFootnotes}`);
+  else if (!noFnList.onlyItemIsKey) fail(`jam key (no footnotes): list has ${noFnList.items} items, expected just the key`);
+  else if (noFnList.bulletColor !== noFnList.songColor) fail(`jam key (no footnotes): ${noFnList.bulletColor} vs ${noFnList.songColor}`);
+  else pass('a show with no footnotes renders the key as a one-item list, aligned the same way');
 
   // ONE condition, shared with the entries section. Checked on a show with no
   // entries: neither may appear. If these ever split, this is what catches it.
