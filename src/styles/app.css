@@ -1107,6 +1107,24 @@ button.gap-figure:active {
   text-underline-offset: 2px;
 }
 
+/* Creator credit, at the foot of the Settings & data sheet.
+ *
+ * MUST STAY QUIETER THAN .attrib. That footer credits The Carton and Songfish
+ * on every screen; this is one line, two taps in, a size step below it
+ * (--t-xs against --t-sm) in the same --ink-faint. They supply the data, this
+ * is the reader built on it, and the type should keep saying so. If these two
+ * ever need retuning, the credit moves DOWN, never up.
+ *
+ * --ink-faint on the sheet's --surface is audited in scripts/contrast.mjs:
+ * 4.73:1 dark, 5.65:1 light. 11px is normal text under WCAG, so 4.5 applies
+ * and both clear it.
+ */
+.creator-credit {
+  margin: var(--s-4) 0 0;
+  font-size: var(--t-xs);
+  color: var(--ink-faint);
+}
+
 /* Outbound link back to The Carton, on every show, song and venue surface.
    These sit beside the content they point at, on almost every screen, and at
    13px/600 they were pulling the eye off it. Held small and quiet: --t-xs at

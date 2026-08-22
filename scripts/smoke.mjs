@@ -800,6 +800,65 @@ server.listen(PORT, async () => {
   else if (noNotes.block || noNotes.label) fail('show notes: empty notes block rendered on a show with none');
   else pass('a show with 28 songs and no notes renders no block and no header');
 
+  // --- Creator credit, and the hierarchy it must not break ------------------
+  //
+  // The assertion that matters is not "the credit exists" -- it is that it
+  // stays QUIETER than the Carton attribution. That hierarchy is a deliberate
+  // decision (they supply the data, this is the reader on top of it) and it is
+  // the kind of thing a later type change would invert without anyone noticing.
+  //
+  // Both are measured from computed style on the rendered page, not read from
+  // the stylesheet, so a specificity accident counts as a failure too.
+  console.log('\ncreator credit:');
+  await evaluate(`location.hash = '#/home';`);
+  await sleep(1400);
+  const credit = await evaluate(`(() => {
+    const attrib = document.querySelector('.attrib');
+    const attribStyle = attrib ? getComputedStyle(attrib) : null;
+    const opened = (() => {
+      const b = document.querySelector('.header-status .icon-btn-bordered');
+      if (!b) return false; b.click(); return true;
+    })();
+    return { opened, attribSize: attribStyle ? parseFloat(attribStyle.fontSize) : null,
+             attribColor: attribStyle ? attribStyle.color : null };
+  })()`);
+  await sleep(900);
+  const c = await evaluate(`(() => {
+    const sheet = document.querySelector('.sheet');
+    if (!sheet) return { sheet: false };
+    const n = sheet.querySelector('.creator-credit');
+    if (!n) return { sheet: true, present: false };
+    const s = getComputedStyle(n);
+    const kids = [...sheet.children].filter(x => x.nodeType === 1);
+    // The sheet wraps its content in a grid div; find the credit's real parent
+    // and check it is that container's last element.
+    const parent = n.parentElement;
+    return {
+      sheet: true,
+      present: true,
+      text: n.textContent.trim(),
+      size: parseFloat(s.fontSize),
+      color: s.color,
+      isLast: parent.lastElementChild === n,
+    };
+  })()`);
+
+  if (!credit.opened || !c.sheet) fail('credit: could not open the Settings & data sheet');
+  else if (!c.present) fail('credit: no .creator-credit in the sheet');
+  else {
+    pass(`renders in the sheet: ${JSON.stringify(c.text)}`);
+    if (!c.isLast) fail('credit: not the last element in the sheet');
+    else pass('sits last, below the data section');
+
+    // THE HIERARCHY CHECK.
+    if (credit.attribSize === null) fail('credit: no .attrib on the page to compare against');
+    else if (c.size >= credit.attribSize) {
+      fail(`credit: ${c.size}px is not quieter than the Carton attribution's ${credit.attribSize}px`);
+    } else pass(`quieter than the Carton attribution (${c.size}px vs ${credit.attribSize}px)`);
+  }
+  await evaluate(`(() => { const b = document.querySelector('.sheet-close, .scrim'); if (b) b.click(); })()`);
+  await sleep(500);
+
   // --- The ?nosw guard ------------------------------------------------------
   //
   // Checked by REGISTERING A WORKER FIRST and then confirming ?nosw tears it

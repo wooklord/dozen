@@ -373,6 +373,19 @@ function openSettingsSheet() {
           'More on gap',
         ),
       ]),
+
+      // Creator credit. LAST, smallest, quietest thing in the sheet, and
+      // deliberately a step below .attrib -- 11px against its 13px, same
+      // --ink-faint.
+      //
+      // The Carton and Songfish credit is NOT touched and stays the more
+      // prominent of the two, on every screen rather than two taps into a
+      // sheet. They are the reason this app has anything to show; this is the
+      // reader built on top of it, and the hierarchy should say so.
+      //
+      // Name only. No email, no link, no other identifier -- see the narrow
+      // exception recorded in CLAUDE.md.
+      el('p.creator-credit', { text: 'Built by Kyle McKinley' }),
     ]);
   });
 }

@@ -284,6 +284,46 @@ Credit The Carton and Songfish visibly, and deep-link back to the corresponding 
 page from every show, song, and venue view. This is a fan app riding on someone else's work and it
 should send traffic home.
 
+## Personal identifiers: the rule, and the two deliberate exceptions
+
+**This repository is public.** The standing rule is **no personal identifiers in
+tracked files** — no real names, no email addresses, no handles, no locations.
+
+**There are exactly two exceptions, both deliberate, both made knowingly by the
+repo owner. Do not "fix" them.**
+
+| Where | What | Why |
+|---|---|---|
+| `LICENSE`, the copyright line | the owner's name, after `Copyright (c) 2026` | A copyright notice without a holder asserts nothing. The name IS the legal function of the line |
+| Settings & data sheet, last line | the owner's name, after `Built by` | Creator credit, rendered by `.creator-credit` in `src/app.js` |
+
+**This file does not spell the name**, on purpose: recording an exception is not
+a reason to add a third instance of the thing being excepted. Read the two
+places above if you need the exact string.
+
+**The exception is narrow and stays narrow.** Those two places only. Specifically
+NOT:
+
+- no email address anywhere, in either place or any other
+- no name in commit messages, commit-adjacent docs, README, or code comments
+- no handle, no location, no other identifier
+- no name in `package.json`, `manifest.webmanifest`, or any metadata file
+- no expansion to other screens — the credit is two taps into a sheet, and that
+  is the whole of its presence in the UI
+
+If you are about to add the name somewhere a third row would be needed for,
+that is out of scope: ask first.
+
+**The credit must stay quieter than the Carton attribution.** `.attrib` credits
+The Carton and Songfish on every screen at 13px; `.creator-credit` is 11px, one
+line, two taps in. They supply the data; this is the reader built on it. If the
+two are ever retuned, the credit moves DOWN, never up.
+
+> `.bak` is in `.gitignore`, which means `git status` will not show a stray
+> `*.bak` and neither will a casual `ls | grep`. Run `git check-ignore -v <path>`
+> before concluding a file is absent — an ignore rule added for good reasons hid
+> `LICENSE.BAK` from exactly the search that was looking for it.
+
 ## Non-goals
 
 No accounts in phase 1. No analytics. No ads. No external APIs beyond `thecarton.net`. No invented
