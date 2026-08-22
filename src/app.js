@@ -498,10 +498,15 @@ function renderViewError(err, hash) {
 // "Home" rather than "Show": it sat next to "Shows" and read as a near
 // duplicate, and the screen is more than the next show -- venue history and
 // On This Date live here too.
+// DISPLAY ORDER ONLY. Shows precedes Songs because that is the information
+// hierarchy -- a show contains songs. Routes, route names, redirects and the
+// default landing screen are unaffected by this array; nothing keys off a
+// tab's position. Active state and the picks badge both match on `href`, and
+// the bar is `repeat(5, 1fr)`, which is a count rather than an order.
 const TABS = [
   ['#/home', 'Home', ICONS.house],
-  ['#/songs', 'Songs', ICONS.gap],
   ['#/shows', 'Shows', ICONS.list],
+  ['#/songs', 'Songs', ICONS.gap],
   ['#/jams', 'Jams', ICONS.jam],
   ['#/picks', 'Picks', ICONS.picks],
 ];

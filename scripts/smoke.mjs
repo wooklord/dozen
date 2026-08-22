@@ -800,6 +800,59 @@ server.listen(PORT, async () => {
   else if (noNotes.block || noNotes.label) fail('show notes: empty notes block rendered on a show with none');
   else pass('a show with 28 songs and no notes renders no block and no header');
 
+  // --- Tab bar: display order, and active state by IDENTITY not position ----
+  //
+  // The order is pinned because it is a decision (a show contains songs, so
+  // Shows precedes Songs) and because layout-diff cannot see it: that tool
+  // compares geometry, and five equal-width cells have identical boxes
+  // whatever labels sit in them. A reorder is invisible to it by design.
+  //
+  // The second half is the one that matters more. Active state and the picks
+  // badge match on `href`, not on index, and this asserts that by navigating
+  // to a route and requiring THAT tab to be current -- not "the second tab".
+  // If anything ever starts keying off position, a reorder breaks it here.
+  console.log('\ntab bar:');
+  await evaluate(`location.hash = '#/home';`);
+  await sleep(1200);
+  const tabs = await evaluate(`(() => {
+    const t = [...document.querySelectorAll('#tabbar .tab')];
+    return t.map(x => ({
+      label: x.querySelector('span:not(.tab-count)').textContent.trim(),
+      href: x.getAttribute('href'),
+    }));
+  })()`);
+
+  const EXPECTED_TABS = [
+    ['Home', '#/home'],
+    ['Shows', '#/shows'],
+    ['Songs', '#/songs'],
+    ['Jams', '#/jams'],
+    ['Picks', '#/picks'],
+  ];
+  const gotOrder = tabs.map((t) => `${t.label}:${t.href}`).join(' ');
+  const wantOrder = EXPECTED_TABS.map(([l, h]) => `${l}:${h}`).join(' ');
+  if (gotOrder !== wantOrder) fail(`tabs: order is\n      ${gotOrder}\n      expected\n      ${wantOrder}`);
+  else pass(`order: ${tabs.map((t) => t.label).join(' · ')}`);
+
+  // Each tab's label must match its own href -- a swap that moved labels but
+  // not hrefs would still pass a bare order check on labels alone.
+  for (const [label, href] of EXPECTED_TABS) {
+    const found = tabs.find((t) => t.href === href);
+    if (!found) { fail(`tabs: no tab with href ${href}`); continue; }
+    if (found.label !== label) fail(`tabs: ${href} is labelled ${JSON.stringify(found.label)}, expected ${JSON.stringify(label)}`);
+  }
+
+  // Active state follows identity. Checked on the two that were swapped.
+  for (const hash of ['#/shows', '#/songs', '#/jams']) {
+    await evaluate(`location.hash = ${JSON.stringify(hash)};`);
+    await sleep(700);
+    const current = await evaluate(
+      `(() => { const a = document.querySelector('#tabbar .tab[aria-current="page"]'); return a ? a.getAttribute('href') : null; })()`,
+    );
+    if (current !== hash) fail(`tabs: at ${hash} the current tab is ${current}`);
+    else pass(`${hash} marks its own tab current`);
+  }
+
   // --- Creator credit, and the hierarchy it must not break ------------------
   //
   // The assertion that matters is not "the credit exists" -- it is that it
