@@ -75,6 +75,17 @@
      the same way -- changing warmth and loudness together makes a
      side-by-side unjudgeable. */
   --dk-jam: #8ace98;
+  /* Button borders. NOT --line: at 1.28:1 against the button fill that
+     hairline stopped reading as an edge at arm.s length on a dark screen --
+     which is the distance this app is used at, in a venue, not zoomed in on
+     a desktop. Measured against WCAG 1.4.11 (non-text contrast, 3:1) on every
+     ground a button lands on:
+       dark  #7a6b5c  3.43:1 surface / 3.66:1 shell / 3.14:1 pressed
+       light #94836b  3.67:1 surface / 3.41:1 shell / 3.12:1 pressed
+     --line stays as it is for hairline RULES between rows, which are meant to
+     be barely there. A control that has to look tappable is a different job,
+     so it gets a different token rather than a louder --line. */
+  --dk-btn-line: #7a6b5c;
   --dk-danger: #e5734a;
   --dk-scrim: rgba(0, 0, 0, 0.5);
   --dk-cell-inset: rgba(0, 0, 0, 0.4);
@@ -106,6 +117,7 @@
   --lt-yolk-line: rgba(148, 89, 6, 0.32);
   --lt-yolk-ink: #fffaf1;
   --lt-jam: #376841;
+  --lt-btn-line: #94836b;
   --lt-danger: #b03a06;
   --lt-scrim: rgba(0, 0, 0, 0.38);
   --lt-cell-inset: rgba(0, 0, 0, 0.12);
@@ -131,6 +143,7 @@
   --yolk-line: var(--dk-yolk-line);
   --yolk-ink: var(--dk-yolk-ink);
   --jam: var(--dk-jam);
+  --btn-line: var(--dk-btn-line);
   --danger: var(--dk-danger);
   --scrim: var(--dk-scrim);
   --cell-inset: var(--dk-cell-inset);
@@ -143,6 +156,10 @@
     "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
+  /* 10px exists only for the inline Carton links, which sit a step below the
+     smallest label size. Kept in the scale rather than written as a literal at
+     the use site -- a one-off px value is how a type scale stops being one. */
+  --t-2xs: 10px;
   --t-xs: 11px;
   --t-sm: 13px;
   --t-md: 15px;
@@ -188,6 +205,7 @@
     --yolk-line: var(--lt-yolk-line);
     --yolk-ink: var(--lt-yolk-ink);
     --jam: var(--lt-jam);
+    --btn-line: var(--lt-btn-line);
     --danger: var(--lt-danger);
     --scrim: var(--lt-scrim);
     --cell-inset: var(--lt-cell-inset);
@@ -216,6 +234,7 @@
   --yolk-line: var(--lt-yolk-line);
   --yolk-ink: var(--lt-yolk-ink);
   --jam: var(--lt-jam);
+  --btn-line: var(--lt-btn-line);
   --danger: var(--lt-danger);
   --scrim: var(--lt-scrim);
   --cell-inset: var(--lt-cell-inset);

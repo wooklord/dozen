@@ -545,6 +545,22 @@ export function buildIndex(raw) {
       venues: venues.length,
       jamcharts: jamcharts.length,
 
+      // How far back jam chart coverage actually reaches, derived rather than
+      // written into prose. The Carton adds entries, so a hardcoded year would
+      // silently become a lie -- same reasoning as the gap denominator counts
+      // being read from the live index instead of typed into the explainer.
+      //
+      // Measured 2026-08-21: earliest entry is 2024-01-05, and the archive's
+      // own first setlist is 2013-02-23. The two are eleven years apart, which
+      // is the fact worth surfacing: a song having no jam entries says nothing
+      // about anything played before coverage began.
+      jamchartsFrom: jamcharts.length
+        ? jamcharts.reduce((min, j) => (j.showdate < min ? j.showdate : min), jamcharts[0].showdate)
+        : null,
+      archiveFrom: setlists.length
+        ? setlists.reduce((min, r) => (r.showdate < min ? r.showdate : min), setlists[0].showdate)
+        : null,
+
       // Full accounting for the gap denominator, so the Data panel can state
       // it from live values rather than hardcoded numbers. Excluding shows
       // with no setlist is a counting CONVENTION, not a cleanup detail: it

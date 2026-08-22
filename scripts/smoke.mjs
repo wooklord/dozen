@@ -318,6 +318,105 @@ server.listen(PORT, async () => {
   } else pass(`light highlight ${lightJam.jamColor} differs from dark and from body text`);
   await evaluate(`document.documentElement.removeAttribute('data-theme');`);
 
+  // --- Home: every setlist card offers Show detail --------------------------
+  //
+  // Counted against the cards that HAVE a setlist, not asserted as a fixed
+  // number: Home's shape depends on whether an upcoming show exists and on how
+  // many anniversaries today has, so a hardcoded count would pass or fail for
+  // reasons unrelated to the buttons. Every card showing a past show's setlist
+  // must offer a way into that show.
+  console.log('\nHome show-detail buttons:');
+  await evaluate(`location.hash = '#/home';`);
+  await sleep(1400);
+  const home = await evaluate(`(() => {
+    const rows = [...document.querySelectorAll('.card-actions')];
+    const withSetlist = rows.filter(r => {
+      const card = r.closest('.card') || r.parentElement;
+      return card && card.querySelector('.setlist-song');
+    });
+    const label = (r, t) => [...r.querySelectorAll('.btn-small')].some(b => b.textContent.trim() === t);
+    return {
+      actionRows: rows.length,
+      setlistCards: withSetlist.length,
+      withShowDetail: withSetlist.filter(r => label(r, 'Show detail')).length,
+      withGapChart: withSetlist.filter(r => label(r, 'Gap chart')).length,
+      // Order must match everywhere: the show, then the chart derived from it.
+      orderOk: withSetlist.every(r => {
+        const t = [...r.querySelectorAll('.btn-small')].map(b => b.textContent.trim());
+        const i = t.indexOf('Show detail'), j = t.indexOf('Gap chart');
+        return i === -1 || j === -1 || i < j;
+      }),
+    };
+  })()`);
+
+  if (!home.setlistCards) fail('Home: no cards with a setlist found — the page did not render as expected');
+  else if (home.withShowDetail !== home.setlistCards) {
+    fail(`Home: ${home.setlistCards} setlist card(s), only ${home.withShowDetail} offer Show detail`);
+  } else pass(`all ${home.setlistCards} setlist card(s) offer Show detail`);
+  if (home.withGapChart !== home.setlistCards) {
+    fail(`Home: ${home.withGapChart} of ${home.setlistCards} setlist card(s) offer Gap chart`);
+  } else pass(`all ${home.setlistCards} setlist card(s) still offer Gap chart`);
+  if (!home.orderOk) fail('Home: Show detail must come before Gap chart');
+  else pass('Show detail precedes Gap chart on every card');
+
+  // Each new button must actually navigate, not just exist. Clicking is the
+  // only thing that proves the route it points at is real.
+  const clicked = await evaluate(`(() => {
+    const b = [...document.querySelectorAll('.card-actions .btn-small')].find(x => x.textContent.trim() === 'Show detail');
+    if (!b) return false; b.click(); return true;
+  })()`);
+  await sleep(1100);
+  const landed = String(await evaluate('location.hash'));
+  const detailText = String(await evaluate(screenText));
+  if (!clicked) fail('Home: no Show detail button to click');
+  else if (!landed.startsWith('#/show/')) fail(`Home: Show detail went to ${landed}`);
+  else if (!/setlist/i.test(detailText)) fail('Home: Show detail did not render a setlist');
+  else pass(`Show detail navigates -> ${landed}`);
+
+  // --- Jam chart coverage note, derived not hardcoded ------------------------
+  //
+  // Asserts the years shown MATCH THE DATA, by recomputing them from the index
+  // the page is holding. A check for the literal "2024" would keep passing
+  // after The Carton added an earlier entry and the sentence went wrong, which
+  // is the whole reason the note is derived.
+  console.log('\njam chart coverage note:');
+  await evaluate(`location.hash = '#/jams';`);
+  await sleep(1200);
+  const cov = await evaluate(`(() => {
+    const sub = document.querySelector('.screen-sub');
+    return { text: sub ? sub.textContent.replace(/\\s+/g, ' ').trim() : null };
+  })()`);
+  // Cross-checked against THE CARTON, not against the app's own index.
+  // Comparing the sentence to index.counts.jamchartsFrom would be comparing a
+  // value to itself -- it would pass just as happily if the derivation picked
+  // the wrong minimum. One extra request per run; the app is user-initiated
+  // and this is not a loop.
+  let expectedYears = null;
+  try {
+    const [jamRes, setRes] = await Promise.all([
+      fetch('https://thecarton.net/api/v2/jamcharts.json'),
+      fetch('https://thecarton.net/api/v2/setlists.json?limit=20000'),
+    ]);
+    const jamRows = (await jamRes.json()).data || [];
+    const setRows = (await setRes.json()).data || [];
+    // The 4000-row trap: assert the pull is complete before trusting its min.
+    if (setRows.length < 6000) throw new Error(`setlists truncated: ${setRows.length} rows`);
+    expectedYears = {
+      jam: jamRows.map((j) => j.showdate).sort()[0].slice(0, 4),
+      archive: setRows.map((r) => r.showdate).sort()[0].slice(0, 4),
+    };
+  } catch (err) {
+    fail(`jams: could not reach The Carton to cross-check the note (${err.message})`);
+  }
+
+  if (!cov.text) fail('jams: no sub-line rendered');
+  else if (!expectedYears) { /* already reported above */ }
+  else if (!cov.text.includes(`begin in ${expectedYears.jam}`)) {
+    fail(`jams: note says ${JSON.stringify(cov.text)}, Carton says entries begin ${expectedYears.jam}`);
+  } else if (!cov.text.includes(`back to ${expectedYears.archive}`)) {
+    fail(`jams: note omits the archive start year ${expectedYears.archive}`);
+  } else pass(`coverage note agrees with The Carton (${expectedYears.jam} / ${expectedYears.archive})`);
+
   // --- The jam key ----------------------------------------------------------
   //
   // The key explains the green, so the check that matters is that its swatch

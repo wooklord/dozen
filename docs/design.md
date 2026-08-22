@@ -253,3 +253,24 @@ the loudest thing on the page.
 Contrast after the change, both themes, measured not eyeballed: `.carton-link` 5.09:1 on the dark
 shell and 5.25:1 on the light shell; `.info-link` 9.07:1 and 7.09:1. 11px is normal text under
 WCAG, so the 4.5:1 threshold applies to the smaller link and it clears.
+
+#### Receded again, and the primary rule retired (0.1.45)
+
+`.carton-link` is now **10px, weight 400**. The screen has gained jam highlights, a jam key, a jam
+entries section and show notes inside the setlist card since these links were last tuned, and they
+were taking more attention than attribution needs. **Attribution must be present and findable, not
+prominent.**
+
+**The "Carton stays visibly primary over Venue info" rule is retired.** It was set when Venue info
+shipped and the screen was simpler. Carton links are now quieter than `.info-link` on every axis —
+10px/400 against 13px/600 — and that is intended, not a regression to correct. `.info-link` was not
+touched.
+
+**Colour is at its floor.** At 10px these are normal text under WCAG, so 4.5:1 applies, and
+`--ink-faint` measures 5.05:1 on the dark shell and **4.73:1 on a dark card** — roughly 0.2 of
+headroom. Any further quieting must come from weight, never colour; and size cannot go below 10px
+either. Past those two floors this stops being quiet and starts being **hard to find**, which is
+the one thing it may not become.
+
+The `↗` is load-bearing for findability at this size, not decoration — it is what makes these
+scannable as links. It should not be dropped in a future tidy-up.

@@ -224,7 +224,15 @@ function renderNextShow(screen, { index, navigate }, show, today) {
           style: { marginBottom: '10px', fontWeight: '600' },
           text: formatShowDate(lastAtVenue.showdate),
         }),
+        // Show detail first, matching the "Most recent show" card, which is the
+        // one card on this screen that already had both. Order is consistent
+        // everywhere: the show, then the chart derived from it.
         el('div.card-actions', { style: { marginBottom: '10px' } }, [
+          el(
+            'button.btn.btn-small',
+            { type: 'button', onclick: () => navigate(`#/show/${lastAtVenue.show_id}`) },
+            'Show detail',
+          ),
           el(
             'button.btn.btn-small',
             { type: 'button', onclick: () => navigate(`#/gapchart/${lastAtVenue.show_id}`) },
@@ -319,6 +327,11 @@ function renderOnThisDate(screen, { index, navigate }, anchorDate, excludeShowId
         ]),
         venueLine(s, { small: true }),
         el('div.card-actions', { style: { marginBottom: '8px' } }, [
+          el(
+            'button.btn.btn-small',
+            { type: 'button', onclick: () => navigate(`#/show/${s.show_id}`) },
+            'Show detail',
+          ),
           el(
             'button.btn.btn-small',
             { type: 'button', onclick: () => navigate(`#/gapchart/${s.show_id}`) },

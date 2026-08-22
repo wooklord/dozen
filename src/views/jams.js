@@ -17,6 +17,25 @@ const JAM_SORTS = [
 ];
 import { formatShowDateShort } from '../util/dates.js';
 
+/**
+ * "Entries begin in YYYY..." -- both years pulled from the index, never typed.
+ *
+ * Returns a bare string so it drops into the sub-line beside the gap link.
+ * Renders nothing at all if the archive somehow has no jam entries, rather
+ * than a sentence with a blank where a year should be.
+ */
+function coverageNote(index) {
+  const from = index.counts.jamchartsFrom;
+  if (!from) return '';
+  const jamYear = from.slice(0, 4);
+  const archiveYear = (index.counts.archiveFrom || '').slice(0, 4);
+  // Only draw the contrast when the archive actually starts earlier; if the
+  // two ever converge the second clause would be saying nothing.
+  return archiveYear && archiveYear < jamYear
+    ? `Entries begin in ${jamYear}, though the archive goes back to ${archiveYear} — a song with none may simply predate the charts. `
+    : `Entries begin in ${jamYear}. `;
+}
+
 export function renderJams(ctx) {
   const { index, navigate } = ctx;
   const screen = el('div.screen');
@@ -26,6 +45,16 @@ export function renderJams(ctx) {
     screen,
     el('p.screen-sub', null, [
       `${index.counts.jamcharts} entries across ${index.songs.filter((s) => s.isJamChart).length} songs, as listed by The Carton. `,
+      // Coverage window, read from the data every load. The Carton keeps adding
+      // entries, so a year typed into this sentence would go stale without
+      // anything looking wrong -- the same reason the gap explainer reads its
+      // counts from the live index instead of quoting them.
+      //
+      // Worth stating because the two windows are eleven years apart: jam chart
+      // coverage begins in 2024 while the archive starts in 2013, so a song
+      // with no entries may simply predate the charts. That is a statement
+      // about coverage, not about the song.
+      coverageNote(index),
       gapExplainerLink(index, 'How gap is counted'),
     ]),
   );

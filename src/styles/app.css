@@ -217,8 +217,14 @@ a {
   margin-bottom: var(--s-2);
 }
 
+/* One step up from --t-xs as of 0.1.45. At 11px uppercase with 0.08em
+   tracking these read as fine print rather than as headings; 13px is the same
+   treatment at a size that holds its own above a card. Applies to EVERY
+   section title, deliberately -- "Last time here" and "On this date" are the
+   same element as the rest, and a special case for two of them is how a type
+   scale starts drifting. */
 .section-title {
-  font-size: var(--t-xs);
+  font-size: var(--t-sm);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1042,15 +1048,38 @@ button.gap-figure:active {
    rule and that credit stays at full strength. Toning these down is a density
    decision about repeated inline links; the disclaimer is the actual credit
    and it is not being quieted. */
+/* Receded again in 0.1.45. The screen has gained jam highlights, a jam key, a
+ * jam entries section and show notes inside the card since these links were
+ * last tuned, and they were taking more attention than attribution needs.
+ * Attribution must be present and findable, not prominent.
+ *
+ * THE OLD "Carton stays visibly primary over Venue info" RULE IS RETIRED.
+ * It was set when Venue info shipped and the screen was simpler. Carton links
+ * are now quieter than .info-link on every axis, and that is intended, not a
+ * regression to be corrected. Do not re-invert this without a reason.
+ *
+ * COLOUR IS AT ITS FLOOR AND MUST NOT GO DIMMER. At 10px these are NORMAL text
+ * under WCAG, so 4.5:1 applies, and --ink-faint already measures:
+ *     dark  5.05:1 on the shell, 4.73:1 on a card
+ *     light 5.25:1 on the shell, 5.65:1 on a card
+ * The dark card figure has ~0.2 of headroom. Any further quieting has to come
+ * from weight or size, never from colour -- and size is at its floor too:
+ * below 10px this stops being quiet and starts being hard to find, which is
+ * the one thing this is not allowed to become.
+ *
+ * The ↗ is load-bearing for findability: it is what makes these scannable as
+ * links at this size. It is not decoration and should not be dropped as part
+ * of some future tidy-up.
+ */
 .carton-link {
   display: inline-flex;
   align-items: center;
   gap: var(--s-1);
   min-height: var(--tap);
-  font-size: var(--t-xs);
+  font-size: var(--t-2xs);
   color: var(--ink-faint);
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 400;
 }
 .carton-link:active {
   color: var(--ink-dim);
@@ -1177,11 +1206,14 @@ button.gap-figure:active {
   word-break: break-all;
 }
 
+/* Border is --btn-line, not --line: see tokens.css. A control has to read as
+   tappable at arm.s length on a dark screen in a venue, which --line at 1.28:1
+   did not. */
 .btn {
   min-height: var(--tap);
   padding: 0 var(--s-4);
   border-radius: var(--r-cell);
-  border: 1px solid var(--line);
+  border: 1px solid var(--btn-line);
   background: var(--surface);
   color: var(--ink);
   font-size: var(--t-md);
