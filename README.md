@@ -70,6 +70,56 @@ each one to render content unique to itself. Unit tests cover pure functions
 and cannot catch a view that throws — that failure mode once shipped three
 releases in a row. Run it before pushing.
 
+### The rest of the checks
+
+| Command | Speed | Needs | When |
+|---|---|---|---|
+| `node --test` | instant | — | always |
+| `node scripts/smoke.mjs` | ~1 min | Chrome, network | **before every push** |
+| `node scripts/contrast.mjs` | instant | — | eyeballing a colour |
+| `node scripts/layout-diff.mjs` | ~3 min | Chrome, git, network | after a deliberate layout change |
+| `node scripts/verify-deploy.mjs` | ~1 min | Chrome, live host | **after every push** |
+
+**`contrast.mjs`** — measures WCAG contrast for every foreground/background
+pair the app actually renders, reading the hexes out of `src/styles/tokens.css`
+so nothing here can drift from the stylesheet. With two arguments it measures
+one pair and also reports Lab **b\*** (the warm/cool axis the jam colour was
+chosen on) and ΔE:
+
+```sh
+node scripts/contrast.mjs                        # audit the palette
+node scripts/contrast.mjs '#8ace98' '#1c1815'    # one pair
+```
+
+The audit's assertions also run inside `node --test` (`tests/contrast.test.mjs`),
+so a palette edit that drops a pair below AA fails the suite rather than waiting
+for someone to remember to run this.
+
+**`layout-diff.mjs`** — answers "I changed one screen, did anything *else*
+move?" It renders every route twice — once from a git worktree at a ref, once
+from the working tree — and diffs the geometry of every visible box. Untouched
+screens must come back byte-identical.
+
+```sh
+node scripts/layout-diff.mjs            # HEAD, 390px
+node scripts/layout-diff.mjs HEAD~3     # three builds back
+node scripts/layout-diff.mjs HEAD 1440  # desktop
+```
+
+It is **not** part of the smoke run: it goes red on any intended layout change,
+which is most commits, and as a gate that would train you to ignore it.
+
+**`verify-deploy.mjs`** — reads the BUILD number back off the live host in
+three independent places, then walks every route on the live site and requires
+each to render. The build-number checks only prove a *number* propagated;
+GitHub Pages is CDN-fronted and edges do not flip together, so the live site has
+served a fresh `version.js` alongside a stale view module. The route walk is
+what catches that.
+
+`scripts/routes.mjs` holds the route list and each route's expected marker,
+shared by all three browser checks so they cannot disagree about what a route
+should say.
+
 ## Architecture
 
 ```

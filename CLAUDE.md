@@ -436,6 +436,67 @@ Two other bypasses were considered and rejected:
   hostname above: it would mean the offline path is never exercised outside
   production.
 
+### A check written in scratch is written once and trusted forever
+
+**If a check is worth writing twice, it is worth committing.**
+
+Scratch scripts get written fast, trusted once, and never maintained. That is
+the exact condition under which a wrong check survives: nothing re-reads it,
+nothing runs it in CI, and the next session either rebuilds it from memory or
+trusts last session's output. Three of them cost time in a single session:
+
+| The scratch check | What went wrong |
+|---|---|
+| Live feature check | hardcoded `0.1.40` as the expected build. Went stale one build later and failed for a reason that had nothing to do with the deploy |
+| Layout diff | reported a route "identical" when **both** sides rendered nothing — two empty arrays compare equal. It read as proof a screen was untouched and was proof of nothing |
+| Live text assertion | grabbed a row's `textContent` and swallowed a decorative bullet, so `"jam chart entry"` came back as `"●jam chart entry"` |
+
+The worst of these is the second, because it **passed**. The other two went red
+and cost a few minutes; that one reported health it had never established.
+
+The strongest evidence is older. `docs/design.md` told people to
+"re-run `scratchpad/contrast.mjs` after any palette change" for **twenty-two
+builds**. That file was never committed, so the instruction was unfollowable —
+and the palette audit only ever ran when someone rebuilt the script by hand.
+It is now `scripts/contrast.mjs` plus `tests/contrast.test.mjs`, and it runs on
+every `node --test`.
+
+**The rule.** Scratch is for a question asked once. The moment you find
+yourself writing the same check a second time — or referring to one from a doc
+— it moves to `scripts/` or `tests/` and gets the same discipline as everything
+else there: no hardcoded expected value where a derived one exists, assert
+content unique to the target rather than that an artefact was produced, and
+**prove it red before trusting it green**.
+
+Deliberately still in scratch: one-off investigations (why a flake happens,
+where 4px went) and screenshot capture for eyeballing. A screenshot script
+asserts nothing and cannot go red, so committing it buys maintenance cost and
+no safety. A repo of half-trusted checks is worse than a few good ones.
+
+### The checks, and when to run each
+
+| Command | Speed | Network | Run it |
+|---|---|---|---|
+| `node --test` | instant | none | always, before anything else |
+| `node scripts/smoke.mjs` | ~1 min | Carton (cold pull) | **before every push** |
+| `node scripts/contrast.mjs` | instant | none | when eyeballing a colour; the assertions already run in `node --test` |
+| `node scripts/layout-diff.mjs [ref] [width]` | ~3 min | Carton (two cold boots) | after a deliberate layout change, to see what else moved |
+| `node scripts/verify-deploy.mjs` | ~1 min | live host | **after every push** |
+
+`scripts/routes.mjs` holds the route list and its markers, shared by the smoke
+test, the deploy check and the layout diff. Three copies would drift, and the
+copy that drifted would be the one checking production.
+
+**Only the smoke test and `node --test` gate a push.** The layout diff goes red
+on any *intended* layout change, which is most commits — as a gate it would
+train you to ignore it.
+
+**Network-dependent assertions SKIP, they do not fail.** The smoke test
+cross-checks the jam coverage note against The Carton; if Carton is
+unreachable, that reports `SKIPPED` rather than red. An unreachable third party
+is not a defect in this repo, and a suite that cries wolf gets ignored. It does
+not claim health either — it says plainly that the claim went unchecked.
+
 ### Run the route smoke test before pushing
 
 ```sh

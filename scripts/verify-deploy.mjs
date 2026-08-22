@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { ROUTES } from './routes.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HOST = process.env.DOZEN_HOST || 'https://dozen.wooklord.net';
@@ -121,6 +122,31 @@ async function checkRenderedUi() {
     if (!shown) return bad('no BUILD entry reachable in the Settings & data sheet');
     if (shown !== expected) return bad(`sheet shows ${shown}, expected ${expected}`);
     ok(`reachable in the UI in two taps = ${shown}`);
+
+    // --- 4. every route actually renders, live -----------------------------
+    //
+    // The three checks above all confirm ONE THING: that a build number
+    // propagated. They do not establish that every module did. Pages is
+    // CDN-fronted and edges do not flip together -- pushing 0.1.44, the live
+    // site served a fresh version.js and a STALE views/show.js at the same
+    // moment, which every build-number check happily passed.
+    //
+    // So the deploy gate also walks the routes and requires each to render its
+    // own marker, exactly as the smoke test does locally. Same shared list, so
+    // the two cannot disagree about what a route should say.
+    for (const r of ROUTES) {
+      await ev(`location.hash = ${JSON.stringify(r.hash)};`);
+      await sleep(900);
+      const text = String(await ev(`(document.getElementById('main').innerText || '')`));
+      const boundary = await ev(
+        `!!(document.querySelector('.banner strong') &&
+            document.querySelector('.banner strong').textContent.includes('failed to load'))`,
+      );
+      if (boundary) bad(`${r.hash} rendered the error boundary on the live site`);
+      else if (!text.toLowerCase().includes(r.expect.toLowerCase())) {
+        bad(`${r.hash} did not render live (expected ${JSON.stringify(r.expect)})`);
+      } else ok(`${r.hash} renders live`);
+    }
   } finally {
     try { chrome.kill(); } catch {}
     try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 }); } catch {}

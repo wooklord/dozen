@@ -154,7 +154,9 @@ white as small text (tab labels, badges, set labels). Corrected values:
 
 **The two themes deliberately do not share the same yolk hex.** They have to be equally *readable*,
 which is not the same as being identical — a colour that works on near-black does not automatically
-work on white. Re-run `scratchpad/contrast.mjs` after any palette change.
+work on white. Re-run `node scripts/contrast.mjs` after any palette change — and `tests/contrast.test.mjs`
+asserts every documented pair on every `node --test`, so a regression fails the suite rather
+than waiting for someone to remember.
 
 ## Type
 
