@@ -73,6 +73,46 @@ export function deltaE(a, b) {
   return Math.round(Math.hypot(l1 - l2, a1 - a2, b1 - b2) * 10) / 10;
 }
 
+// --- Translucent colours ----------------------------------------------------
+//
+// Several tokens are rgba(): --yolk-line, --yolk-wash, --shell-alpha. A
+// contrast figure for those is meaningless until they are composited onto
+// whatever is behind them, and the answer changes depending on what that is.
+// The pressed-chip border is translucent over a translucent wash over an
+// opaque card, so it needs compositing twice.
+//
+// Source-over compositing, which is what the browser does:
+//   result = fg * alpha + bg * (1 - alpha)
+// Correct in sRGB byte space here because that is where the browser blends
+// too; blending in linear light would give a different (and wrong) answer.
+
+/** Parse `rgba(r, g, b, a)` or `rgb(r, g, b)` into [r, g, b, a]. */
+export function rgba(value) {
+  const m = String(value).match(/rgba?\(([^)]+)\)/i);
+  if (!m) throw new Error(`not an rgb/rgba colour: ${value}`);
+  const parts = m[1].split(',').map((x) => parseFloat(x.trim()));
+  if (parts.length < 3) throw new Error(`malformed colour: ${value}`);
+  return [parts[0], parts[1], parts[2], parts.length > 3 ? parts[3] : 1];
+}
+
+const toHex = (n) => Math.round(Math.max(0, Math.min(255, n))).toString(16).padStart(2, '0');
+
+/**
+ * Flatten a translucent colour onto an opaque one, returning an opaque hex.
+ * `over` may itself be a hex or another rgba(), so calls can be nested.
+ */
+export function composite(fg, over) {
+  const [fr, fg_, fb, fa] = typeof fg === 'string' && fg.startsWith('#')
+    ? [...hex(fg), 1]
+    : rgba(fg);
+  const [br, bg_, bb] = typeof over === 'string' && over.startsWith('#') ? hex(over) : rgba(over);
+  return '#' + [
+    toHex(fr * fa + br * (1 - fa)),
+    toHex(fg_ * fa + bg_ * (1 - fa)),
+    toHex(fb * fa + bb * (1 - fa)),
+  ].join('');
+}
+
 // --- Reading the palette out of tokens.css ----------------------------------
 
 /**
@@ -85,7 +125,7 @@ export function deltaE(a, b) {
 export function readPalette(cssPath = path.join(ROOT, 'src/styles/tokens.css')) {
   const css = fs.readFileSync(cssPath, 'utf8');
   const out = { dk: {}, lt: {} };
-  for (const m of css.matchAll(/--(dk|lt)-([a-z0-9-]+):\s*(#[0-9a-fA-F]{3,8})\s*;/g)) {
+  for (const m of css.matchAll(/--(dk|lt)-([a-z0-9-]+):\s*(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\))\s*;/g)) {
     out[m[1]][m[2]] = m[3].toLowerCase();
   }
   if (!Object.keys(out.dk).length || !Object.keys(out.lt).length) {
@@ -136,11 +176,42 @@ export const PAIRS = [
   { fg: 'ink-label', bg: 'surface', min: 4.5, where: 'section labels and stat labels in a card' },
 
   // Non-text: the button edge has to read as an edge.
-  { fg: 'btn-line', bg: 'surface', min: 3, where: 'button and chip border against its own fill' },
-  { fg: 'btn-line', bg: 'shell', min: 3, where: 'small button border against the page' },
-  { fg: 'btn-line', bg: 'surface-up', min: 3, where: 'small button border when pressed' },
+  // One token now carries every control edge in the app: .btn, .chip,
+  // .status-chip, .icon-btn-bordered, .search and .segmented. Each sits on a
+  // different ground, so all three are asserted rather than assuming one
+  // covers the rest.
+  { fg: 'btn-line', bg: 'surface', min: 3, where: 'button, chip and search border against their fill' },
+  { fg: 'btn-line', bg: 'shell', min: 3, where: 'status chip and settings gear in the header; search on the page' },
+  { fg: 'btn-line', bg: 'surface-up', min: 3, where: 'pressed button, and the segmented theme control fill' },
 
   { fg: 'danger', bg: 'shell', min: 4.5, where: 'error text, the NO SW chip' },
+];
+
+/**
+ * Measured shortfalls that are KNOWN, DOCUMENTED and NOT YET FIXED.
+ *
+ * Reported by the CLI, deliberately not asserted by tests/contrast.test.mjs --
+ * a red suite for a thing nobody has decided to change trains you to ignore
+ * red. Equally it is not omitted, because an unrecorded gap is one that gets
+ * rediscovered from scratch.
+ *
+ * KEEP THIS LIST EMPTY IF YOU CAN. Every entry is a decision someone deferred.
+ */
+export const KNOWN_GAPS = [
+  {
+    what: '.chip[aria-pressed="true"] border (--yolk-line)',
+    measured: 'dark 2.14:1 against its own fill, light 1.53:1 — needs 3:1',
+    why:
+      'Translucent --yolk-line over translucent --yolk-wash over the shell. ' +
+      'Composited properly with composite(), not estimated. The SELECTED state ' +
+      'of a sort/filter chip therefore has a weaker boundary than its ' +
+      'unselected state, which now uses --btn-line at 3.4:1.',
+    note:
+      'Not a total loss of affordance: the pressed state also recolours the ' +
+      'label to --yolk and fills with --yolk-wash. Fixing it means raising ' +
+      "--yolk-line's alpha or giving the pressed chip an opaque border, and " +
+      'both change how selection looks. Left for an explicit decision.',
+  },
 ];
 
 /** Measure every pair in both themes. Returns rows, worst first. */
@@ -183,5 +254,14 @@ if (isMain) {
     console.log(`  ${mark} ${r.theme}  ${(r.fg + ' on ' + r.bg).padEnd(26)} ${val}   ${r.where}`);
   }
   console.log(`\n${bad.length ? `${bad.length} pair(s) below threshold` : 'all pairs clear their threshold'}`);
+
+  if (KNOWN_GAPS.length) {
+    console.log(`\n${KNOWN_GAPS.length} KNOWN GAP(S) — measured, documented, not yet fixed:`);
+    for (const g of KNOWN_GAPS) {
+      console.log(`  - ${g.what}`);
+      console.log(`      ${g.measured}`);
+    }
+    console.log('  (not asserted by node --test; each is an open decision)');
+  }
   process.exit(bad.length ? 1 : 0);
 }

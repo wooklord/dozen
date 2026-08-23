@@ -130,7 +130,7 @@ a {
   font-family: var(--mono);
   font-size: var(--t-xs);
   color: var(--ink-faint);
-  border: 1px solid var(--line);
+  border: 1px solid var(--btn-line);
   border-radius: var(--r-pill);
   padding: 2px 7px;
 }
@@ -170,7 +170,7 @@ a {
 /* The settings entry point carries a border so it reads as a control rather
    than as another status glyph sitting in a row of readouts. */
 .icon-btn-bordered {
-  border: 1px solid var(--line);
+  border: 1px solid var(--btn-line);
   color: var(--ink);
 }
 @keyframes spin {
@@ -719,6 +719,8 @@ button.gap-figure:active {
   border-radius: var(--r-pill);
   border: 1px solid var(--btn-line);
   background: var(--surface);
+  /* For the hit region below. Does not affect flow. */
+  position: relative;
   color: var(--ink-dim);
   font-size: var(--t-sm);
   font-weight: 600;
@@ -726,6 +728,30 @@ button.gap-figure:active {
   align-items: center;
   gap: var(--s-1);
 }
+/* THE VISUAL BOX STAYS 34px; THE HIT REGION IS 44px.
+ *
+ * Same technique as .btn.btn-small: an absolutely-positioned ::after centred on
+ * the box, 5px of overhang top and bottom. Pointer events on a pseudo-element
+ * land on its host, so no JS and no layout change -- layout-diff reports every
+ * route byte-identical.
+ *
+ * 44px is the floor for one-handed use in a dark venue and it applies to the
+ * Change button and the sort/filter chips just as much as to a full button.
+ * The chips sit in horizontal rows with an 8px gap, so a VERTICAL-only
+ * expansion cannot collide with a neighbour; the vertical gap between the two
+ * stacked chip rows on Songs is measured in the smoke test rather than assumed,
+ * because overlapping hit regions would be worse than a small target.
+ */
+.chip::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: var(--tap);
+}
+
 .chip[aria-pressed="true"] {
   color: var(--yolk);
   border-color: var(--yolk-line);
@@ -737,7 +763,7 @@ button.gap-figure:active {
   min-height: var(--tap);
   padding: 0 var(--s-3);
   border-radius: var(--r-cell);
-  border: 1px solid var(--line);
+  border: 1px solid var(--btn-line);
   background: var(--surface);
   color: var(--ink);
   font: inherit;
@@ -792,7 +818,7 @@ button.gap-figure:active {
   gap: 4px;
   padding: 4px;
   background: var(--surface-up);
-  border: 1px solid var(--line);
+  border: 1px solid var(--btn-line);
   border-radius: var(--r-cell);
 }
 

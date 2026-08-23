@@ -936,6 +936,82 @@ server.listen(PORT, async () => {
     };
   })()`);
 
+  // Every bordered control carries the SAME edge. One token, six selectors --
+  // .btn, .chip, .status-chip, .icon-btn-bordered, .search, .segmented -- and
+  // 0.1.46 shipped having done only two of them. Compared against a rendered
+  // .btn rather than a literal, so a future retune moves all of them together.
+  // SWEPT ACROSS SCREENS, and every selector must be seen SOMEWHERE.
+  //
+  // The first version of this checked one screen and skipped anything absent
+  // from it -- so `.search`, which only exists on Songs and Shows, reported
+  // "not on this screen" and passed. A check that passes because the element
+  // is missing is the exact trap this repo keeps re-learning; it was caught by
+  // re-introducing the 0.1.46 bug on `.search` and watching it stay green.
+  // `.segmented` needs the settings sheet opened, so that is done too.
+  const BORDERED = ['.chip', '.status-chip', '.icon-btn-bordered', '.search', '.segmented'];
+  const seen = new Map();
+  let wantBorder = null;
+  for (const [where, hash, openSheet] of [
+    ['Home', '#/home', false],
+    ['Songs', '#/songs', false],
+    ['settings sheet', '#/home', true],
+  ]) {
+    await evaluate(`location.hash = ${JSON.stringify(hash)};`);
+    await sleep(1300);
+    if (openSheet) {
+      await evaluate(`(() => { const b = document.querySelector('.header-status .icon-btn-bordered'); if (b) b.click(); })()`);
+      await sleep(800);
+    }
+    const r = await evaluate(`(() => {
+      const btn = document.querySelector('.btn');
+      const want = btn ? getComputedStyle(btn).borderTopColor : null;
+      const out = {};
+      for (const sel of ${JSON.stringify(BORDERED)}) {
+        const n = document.querySelector(sel);
+        if (!n) continue;
+        const s = getComputedStyle(n);
+        out[sel] = { color: s.borderTopColor, width: s.borderTopWidth };
+      }
+      return { want, out };
+    })()`);
+    if (r.want) wantBorder = r.want;
+    for (const [sel, v] of Object.entries(r.out)) if (!seen.has(sel)) seen.set(sel, { ...v, where });
+    if (openSheet) {
+      await evaluate(`(() => { const s = document.querySelector('.scrim'); if (s) s.click(); })()`);
+      await sleep(400);
+    }
+  }
+
+  const never = BORDERED.filter((s) => !seen.has(s));
+  if (!wantBorder) fail('controls: never found a .btn to compare borders against');
+  else if (never.length) {
+    fail(`controls: ${never.join(', ')} never appeared on any swept screen — unverified, not passing`);
+  } else {
+    const wrong = [...seen.entries()].filter(([, v]) => v.color !== wantBorder);
+    if (wrong.length) {
+      fail(`controls: ${wrong.map(([s, v]) => `${s} is ${v.color} (on ${v.where})`).join(', ')} — expected ${wantBorder}`);
+    } else pass(`all ${seen.size} bordered controls share the button edge (${wantBorder})`);
+  }
+
+  // Chip TAP TARGET, measured from the rendered ::after rather than the CSS.
+  // 34px box, 44px hit region -- the floor for one-handed use in a venue.
+  const chipHit = await evaluate(`(() => {
+    const chips = [...document.querySelectorAll('.chip')];
+    if (!chips.length) return null;
+    return chips.map((c) => {
+      const b = c.getBoundingClientRect();
+      const a = getComputedStyle(c, '::after');
+      const ah = parseFloat(a.height) || 0;
+      return { text: c.textContent.trim(), box: Math.round(b.height), hit: Math.round(Math.max(b.height, ah)) };
+    });
+  })()`);
+  if (!chipHit) fail('chips: none found to measure');
+  else {
+    const short = chipHit.filter((c) => c.hit < 44);
+    if (short.length) fail(`chips: ${short.map((c) => `${JSON.stringify(c.text)} ${c.hit}px`).join(', ')} under the 44px floor`);
+    else pass(`${chipHit.length} chip(s): ${chipHit[0].box}px box, ${chipHit[0].hit}px tap target`);
+  }
+
   if (!chipBorder.found) fail(`chips: need both a .chip and a .btn on Home (chip=${chipBorder.chip} btn=${chipBorder.btn})`);
   else if (chipBorder.chipColor !== chipBorder.btnColor) {
     fail(`chips: ${JSON.stringify(chipBorder.chipText)} border ${chipBorder.chipColor} != ${JSON.stringify(chipBorder.btnText)} ${chipBorder.btnColor}`);
