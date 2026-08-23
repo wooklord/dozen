@@ -1305,6 +1305,11 @@ button.gap-figure:active {
   border: 1px solid var(--btn-line);
   background: var(--surface);
   color: var(--ink);
+  /* Some .btn instances are anchors, not buttons -- the outbound "Venue info"
+     control on show detail is an <a> so that open-in-new-tab and middle-click
+     work. Without this the browser underlines it and it stops matching the
+     buttons beside it. Harmless on a real <button>, which has none anyway. */
+  text-decoration: none;
   font-size: var(--t-md);
   font-weight: 600;
   display: inline-flex;

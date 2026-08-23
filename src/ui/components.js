@@ -99,6 +99,35 @@ export function venueInfoLink(venue, label = 'Venue info') {
 }
 
 /**
+ * The same outbound Maps link, wearing the small-button treatment, or null.
+ *
+ * SHOW DETAIL ONLY. The venue screen keeps venueInfoLink() -- there it sits in
+ * a link row beside the Carton link, and promoting it there would put two
+ * different visual weights in one row. Separate function rather than an option
+ * so neither call site can drift into the other's treatment by accident.
+ *
+ * Still an <a>, not a <button>: this leaves the app, and the anchor is what
+ * makes open-in-new-tab, middle-click and right-click work. It only borrows
+ * .btn.btn-small for appearance, so it is visually one of the set -- same
+ * size, border, padding and 44px hit region -- with no arrow and no variant
+ * styling of its own.
+ *
+ * The null-guard is venueMapsUrl(), exactly as venueInfoLink uses it: one
+ * place decides whether a usable URL exists. No button rather than a disabled
+ * or empty one.
+ */
+export function venueInfoButton(venue, label = 'Venue info') {
+  const href = venueMapsUrl(venue);
+  if (!href) return null;
+  return el('a.btn.btn-small', {
+    href,
+    target: '_blank',
+    rel: 'noopener noreferrer',
+    text: label,
+  });
+}
+
+/**
  * How gap is counted, reachable from any gap figure in the app.
  *
  * Two things a reader needs and cannot infer from the number itself:

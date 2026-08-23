@@ -7,7 +7,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { venueMapsUrl } from '../src/ui/components.js';
+import { venueMapsUrl, venueInfoButton, venueInfoLink } from '../src/ui/components.js';
 import { MAPS_SEARCH_BASE } from '../src/config.js';
 
 const query = (url) => decodeURIComponent(url.slice(MAPS_SEARCH_BASE.length));
@@ -85,3 +85,35 @@ test('the URL uses the config base and the documented key-less form', () => {
   assert.ok(url.startsWith(MAPS_SEARCH_BASE));
   assert.ok(url.includes('api=1'), 'must use the key-less search form');
 });
+
+// --- the null-guard, shared by both renderers -------------------------------
+//
+// Show detail renders Venue info as a BUTTON (venueInfoButton) and the venue
+// screen renders it as a LINK (venueInfoLink). Two renderers, one decision
+// about whether there is anything to link to -- both call venueMapsUrl and
+// both return null on its null.
+//
+// Testable without a DOM precisely because the guard returns BEFORE building
+// an element: no usable URL means no control at all, not a disabled or empty
+// one. If either ever started returning a rendered-but-inert control, these
+// would fail on the missing DOM rather than pass quietly.
+//
+// No live venue triggers this path -- all 440 have a usable name, checked
+// against the API -- so it cannot be exercised in the smoke test. That is
+// exactly why it is pinned here instead.
+const NO_LINK = [
+  ['blank name', { venuename: '' }],
+  ['whitespace name', { venuename: '   ' }],
+  ['missing name', { city: 'Boston', state: 'MA' }],
+  ['placeholder TBD', { venuename: 'TBD', city: 'Boston' }],
+  ['placeholder Unknown', { venuename: 'Unknown Venue' }],
+  ['dashes', { venuename: '---' }],
+];
+
+for (const [label, venue] of NO_LINK) {
+  test(`no Maps URL means no Venue info control — ${label}`, () => {
+    assert.equal(venueMapsUrl(venue), null, 'venueMapsUrl should refuse this venue');
+    assert.equal(venueInfoButton(venue), null, 'venueInfoButton must return null, not a control');
+    assert.equal(venueInfoLink(venue), null, 'venueInfoLink must return null, not a control');
+  });
+}

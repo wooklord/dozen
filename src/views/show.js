@@ -9,7 +9,7 @@ import {
   sectionHead,
   emptyState,
   venueLine,
-  venueInfoLink,
+  venueInfoButton,
 } from '../ui/components.js';
 import { showStructure, setLabel } from '../data/index.js';
 import { formatShowDate } from '../util/dates.js';
@@ -34,13 +34,19 @@ export function renderShow(ctx, showId) {
 
   append(screen, el('h1.screen-title', { text: formatShowDate(show.showdate) }));
   append(screen, venueLine(show));
-  // Beside the venue line, not inside venueLine() -- that helper is shared with
-  // the Shows search rows, which stay dense and get no link.
-  const mapsLink = venueInfoLink(show);
-  if (mapsLink) append(screen, el('div.link-row', null, [mapsLink]));
-  // Two buttons only. The Carton link used to be a third child here and wrapped
-  // onto its own line on a narrow phone, which read as a stranded third action
-  // rather than a footnote. It now sits under the setlist -- see below.
+  // Three controls in one row: Gap chart, Venue history, Venue info. Venue
+  // info used to sit above this row as a lone .info-link; it is the same
+  // outbound Maps link, now wearing the small-button treatment so the row
+  // reads as one set rather than a button row with a link floating over it.
+  //
+  // The Carton link is NOT in this row and is not affected. It sits under the
+  // setlist card as a source note, deliberately small and receded since
+  // 0.1.45. It was a third child here once, in 0.1.36, and wrapped onto its
+  // own line on a narrow phone -- which is why the wrapping headroom of this
+  // row is measured rather than assumed whenever something joins it.
+  //
+  // Venue info drops out entirely when the venue has no usable Maps query --
+  // no empty control, no disabled one. Same guard as before.
   append(
     screen,
     el('div.card-actions', null, [
@@ -56,6 +62,7 @@ export function renderShow(ctx, showId) {
         { type: 'button', onclick: () => navigate(`#/venue/${show.venue_id}`) },
         'Venue history',
       ),
+      venueInfoButton(show),
     ]),
   );
 
@@ -75,16 +82,6 @@ export function renderShow(ctx, showId) {
   // matters more, not less -- it is where the reader goes to check.
   const sourceLink = () => el('div.link-row.setlist-source', null, [cartonLink(showPermalink(show))]);
 
-  // Three words in the highlight colour, sitting with the footnotes.
-  //
-  // The footnote list is already where this setlist's marks get explained, so
-  // a colour key belongs there rather than at the top of the card competing
-  // with the setlist for attention. The words ARE the sample -- no swatch, no
-  // label, no sentence.
-  //
-  // Colour comes from --jam in CSS, never a literal here. A hardcoded hex
-  // would be a second copy of a value already retuned four times, and it fails
-  // silently: a key confidently naming a colour the setlist no longer uses.
   // The jam key is NOT built here. setlistBlock renders it wherever a setlist
   // has jam-charted songs, so it appears on the Home and Shows cards too --
   // the key follows the colour. `hasJams` below gates only the entries section.

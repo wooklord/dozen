@@ -800,6 +800,75 @@ server.listen(PORT, async () => {
   else if (noNotes.block || noNotes.label) fail('show notes: empty notes block rendered on a show with none');
   else pass('a show with 28 songs and no notes renders no block and no header');
 
+  // --- Show detail action row: one set, not two visual weights --------------
+  //
+  // Venue info was a link floating above this row and is now a third control
+  // in it. The assertion is that it is INDISTINGUISHABLE from the buttons it
+  // joined -- compared against them, not against expected literals, so it
+  // stays matched if the button treatment is ever retuned again.
+  //
+  // Also asserts the row stays on ONE LINE. It lost a control in 0.1.36 for
+  // exactly this reason: the Carton link wrapped on a narrow phone and read as
+  // a stranded third action.
+  console.log('\nshow detail action row:');
+  await evaluate(`location.hash = '#/show/1779890028';`);
+  await sleep(1400);
+  const row = await evaluate(`(() => {
+    const r = document.querySelector('.card-actions');
+    if (!r) return null;
+    const kids = [...r.children];
+    const style = (n) => {
+      const s = getComputedStyle(n);
+      const b = n.getBoundingClientRect();
+      return {
+        text: n.textContent.trim(), tag: n.tagName,
+        h: Math.round(b.height), top: Math.round(b.top),
+        font: s.fontSize, weight: s.fontWeight,
+        border: s.borderTopWidth + ' ' + s.borderTopColor,
+        radius: s.borderTopLeftRadius, deco: s.textDecorationLine,
+        hit: getComputedStyle(n, '::after').height,
+      };
+    };
+    return {
+      count: kids.length,
+      items: kids.map(style),
+      lines: new Set(kids.map(k => Math.round(k.getBoundingClientRect().top))).size,
+      // Nothing may sit outside the row claiming to be the same control.
+      strayInfoLink: !!document.querySelector('.info-link'),
+    };
+  })()`);
+
+  if (!row) fail('action row: no .card-actions on show detail');
+  else {
+    const info = row.items.find((i) => i.text === 'Venue info');
+    const others = row.items.filter((i) => i.text !== 'Venue info');
+    if (!info) fail(`action row: no Venue info control (found ${JSON.stringify(row.items.map((i) => i.text))})`);
+    else if (!others.length) fail('action row: nothing for Venue info to be compared against');
+    else {
+      pass(`row: ${row.items.map((i) => i.text).join(' · ')}`);
+
+      // Compared field by field against a control it joined.
+      const ref = others[0];
+      const mismatched = ['h', 'font', 'weight', 'border', 'radius', 'deco', 'hit']
+        .filter((k) => info[k] !== ref[k]);
+      if (mismatched.length) {
+        fail(`action row: Venue info differs from ${JSON.stringify(ref.text)} on ${mismatched.join(', ')}\n` +
+             `      info: ${JSON.stringify(mismatched.map((k) => info[k]))}\n` +
+             `      ref : ${JSON.stringify(mismatched.map((k) => ref[k]))}`);
+      } else pass(`matches ${JSON.stringify(ref.text)} exactly (${info.h}px box, ${info.hit} hit, ${info.font}/${info.weight}, border ${info.border})`);
+
+      // Still a real link, so open-in-new-tab and middle-click work.
+      if (info.tag !== 'A') fail(`action row: Venue info is <${info.tag}>, expected <A> so it can open in a new tab`);
+      else pass('Venue info is still an anchor, not a button');
+    }
+
+    if (row.lines !== 1) fail(`action row: wrapped onto ${row.lines} lines at 390px`);
+    else pass('one line at 390px');
+
+    if (row.strayInfoLink) fail('action row: an old .info-link is still rendering on show detail');
+    else pass('no leftover .info-link on the screen');
+  }
+
   // --- Tab bar: display order, and active state by IDENTITY not position ----
   //
   // The order is pinned because it is a decision (a show contains songs, so
