@@ -28,6 +28,27 @@
   --dk-ink: #f5efe6;
   --dk-ink-dim: #bcb2a3;
   --dk-ink-faint: #8d8375;
+  /* Section and stat labels. A DEDICATED TOKEN, not --ink-faint.
+
+     --ink-faint is shared by twenty selectors, and three of them are
+     deliberately quiet and must not move: .carton-link (at its documented
+     4.73:1 floor), .creator-credit (which has to stay quieter than .attrib)
+     and .attrib itself. Inactive .tab labels ride on it too, where raising
+     it would narrow the gap against the yolk active state. A global bump to
+     brighten "RECENT SHOWS" would have dragged all of that up with it.
+
+     Measured, before -> after, on the two grounds these labels land on:
+       dark   shell 5.05 -> 6.85   surface 4.73 -> 6.42
+       light  shell 5.25 -> 6.01   surface 5.65 -> 6.47
+
+     Deliberately still BELOW --ink-dim (8.99 dark, 7.09 light). These are
+     labels, not headings: comfortably readable at arm's length in a dark
+     room without competing with the content underneath them. The light bump
+     is smaller than the dark one because dark was the case that needed it.
+
+     Used by .section-title and .stat-label only. Anything else wanting to be
+     quiet still uses --ink-faint. */
+  --dk-ink-label: #a39b8f;
   --dk-ink-venue: #f5efe6;
   --dk-ink-place: #cabfae;
   --dk-yolk: #f5a623;
@@ -109,6 +130,7 @@
   --lt-ink: #1e1913;
   --lt-ink-dim: #5c5246;
   --lt-ink-faint: #6f6657;
+  --lt-ink-label: #655d53;
   --lt-ink-venue: #1e1913;
   --lt-ink-place: #4f463b;
   --lt-yolk: #945906;
@@ -135,6 +157,7 @@
   --ink: var(--dk-ink);
   --ink-dim: var(--dk-ink-dim);
   --ink-faint: var(--dk-ink-faint);
+  --ink-label: var(--dk-ink-label);
   --ink-venue: var(--dk-ink-venue);
   --ink-place: var(--dk-ink-place);
   --yolk: var(--dk-yolk);
@@ -197,6 +220,7 @@
     --ink: var(--lt-ink);
     --ink-dim: var(--lt-ink-dim);
     --ink-faint: var(--lt-ink-faint);
+    --ink-label: var(--lt-ink-label);
     --ink-venue: var(--lt-ink-venue);
     --ink-place: var(--lt-ink-place);
     --yolk: var(--lt-yolk);
@@ -226,6 +250,7 @@
   --ink: var(--lt-ink);
   --ink-dim: var(--lt-ink-dim);
   --ink-faint: var(--lt-ink-faint);
+  --ink-label: var(--lt-ink-label);
   --ink-venue: var(--lt-ink-venue);
   --ink-place: var(--lt-ink-place);
   --yolk: var(--lt-yolk);

@@ -869,6 +869,84 @@ server.listen(PORT, async () => {
     else pass('no leftover .info-link on the screen');
   }
 
+  // --- Section labels are brighter than the deliberately-quiet things -------
+  //
+  // Section and stat labels moved to their own --ink-label so they could be
+  // raised without dragging up .carton-link, .creator-credit and .attrib,
+  // which share --ink-faint and are quiet on purpose.
+  //
+  // Asserted as a RELATIONSHIP on rendered colour: labels brighter than the
+  // Carton link, and the quiet three still identical to each other. A future
+  // global bump of --ink-faint would keep the first half true and break the
+  // second, which is exactly the mistake this token split exists to prevent.
+  console.log('\nlabel vs quiet-text hierarchy:');
+  await evaluate(`location.hash = '#/shows';`);
+  await sleep(1500);
+  const lum = `(hex) => { const m = hex.match(/\\d+/g).map(Number);
+    const f = (v) => { v /= 255; return v <= 0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4); };
+    return 0.2126*f(m[0]) + 0.7152*f(m[1]) + 0.0722*f(m[2]); }`;
+  const hier = await evaluate(`(() => {
+    const lum = ${lum};
+    const col = (s) => { const n = document.querySelector(s); return n ? getComputedStyle(n).color : null; };
+    const label = col('.section-title');
+    const carton = col('.carton-link');
+    const attrib = col('.attrib');
+    return { label, carton, attrib,
+             labelBrighter: label && carton ? lum(label) > lum(carton) : null,
+             cartonMatchesAttrib: carton === attrib };
+  })()`);
+
+  if (!hier.label || !hier.carton) fail(`hierarchy: need a .section-title and a .carton-link on Shows (${hier.label} / ${hier.carton})`);
+  else if (!hier.labelBrighter) fail(`hierarchy: section labels ${hier.label} are not brighter than Carton links ${hier.carton}`);
+  else pass(`section labels ${hier.label} brighter than Carton links ${hier.carton}`);
+  if (!hier.attrib) fail('hierarchy: no .attrib to compare');
+  else if (!hier.cartonMatchesAttrib) fail(`hierarchy: .carton-link ${hier.carton} and .attrib ${hier.attrib} no longer share a colour — one of them moved`);
+  else pass(`Carton link and attribution still share ${hier.attrib}`);
+
+  // --- Chips carry the same border as buttons -------------------------------
+  //
+  // 0.1.46 raised the button border to --btn-line and stopped at the gap chart
+  // and show detail buttons, so chips stayed on --line at 1.28:1 and started
+  // disappearing once everything around them read properly. This pins them
+  // together.
+  //
+  // Compared against a rendered .btn rather than an expected colour: if
+  // --btn-line is ever retuned, both move and this stays true. A literal would
+  // need updating in lockstep and would eventually be the thing that drifted.
+  //
+  // Size is deliberately NOT compared. A chip is 34px and a small button 36px;
+  // that difference is established and this check is not the place to enforce
+  // it away.
+  console.log('\nchip borders:');
+  await evaluate(`location.hash = '#/home';`);
+  await sleep(1400);
+  const chipBorder = await evaluate(`(() => {
+    const chip = document.querySelector('.chip');
+    const btn = document.querySelector('.btn');
+    if (!chip || !btn) return { found: false, chip: !!chip, btn: !!btn };
+    const cs = getComputedStyle(chip), bs = getComputedStyle(btn);
+    return {
+      found: true,
+      chipText: chip.textContent.trim(),
+      chipColor: cs.borderTopColor, chipWidth: cs.borderTopWidth,
+      btnText: btn.textContent.trim(),
+      btnColor: bs.borderTopColor, btnWidth: bs.borderTopWidth,
+      chipH: Math.round(chip.getBoundingClientRect().height),
+      btnH: Math.round(btn.getBoundingClientRect().height),
+    };
+  })()`);
+
+  if (!chipBorder.found) fail(`chips: need both a .chip and a .btn on Home (chip=${chipBorder.chip} btn=${chipBorder.btn})`);
+  else if (chipBorder.chipColor !== chipBorder.btnColor) {
+    fail(`chips: ${JSON.stringify(chipBorder.chipText)} border ${chipBorder.chipColor} != ${JSON.stringify(chipBorder.btnText)} ${chipBorder.btnColor}`);
+  } else if (chipBorder.chipWidth !== chipBorder.btnWidth) {
+    fail(`chips: border width ${chipBorder.chipWidth} != ${chipBorder.btnWidth}`);
+  } else {
+    pass(`${JSON.stringify(chipBorder.chipText)} border matches ${JSON.stringify(chipBorder.btnText)} (${chipBorder.chipWidth} ${chipBorder.chipColor})`);
+    // Recorded, not enforced: the size difference is intentional.
+    pass(`sizes left alone: chip ${chipBorder.chipH}px, button ${chipBorder.btnH}px`);
+  }
+
   // --- Tab bar: display order, and active state by IDENTITY not position ----
   //
   // The order is pinned because it is a decision (a show contains songs, so

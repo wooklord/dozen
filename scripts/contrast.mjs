@@ -129,8 +129,14 @@ export const PAIRS = [
   { fg: 'ink-faint', bg: 'shell', min: 4.5, where: 'Carton links, cache chip' },
   { fg: 'ink-faint', bg: 'surface', min: 4.5, where: 'Carton links inside a card' },
 
+  // Section and stat labels. A dedicated token so brightening them cannot
+  // drag up .carton-link, .creator-credit or .attrib, which share --ink-faint
+  // and are deliberately quiet.
+  { fg: 'ink-label', bg: 'shell', min: 4.5, where: 'section labels on the page ground' },
+  { fg: 'ink-label', bg: 'surface', min: 4.5, where: 'section labels and stat labels in a card' },
+
   // Non-text: the button edge has to read as an edge.
-  { fg: 'btn-line', bg: 'surface', min: 3, where: 'small button border against its own fill' },
+  { fg: 'btn-line', bg: 'surface', min: 3, where: 'button and chip border against its own fill' },
   { fg: 'btn-line', bg: 'shell', min: 3, where: 'small button border against the page' },
   { fg: 'btn-line', bg: 'surface-up', min: 3, where: 'small button border when pressed' },
 

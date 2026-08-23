@@ -228,7 +228,7 @@ a {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ink-faint);
+  color: var(--ink-label);
   margin: 0;
 }
 
@@ -697,12 +697,27 @@ button.gap-figure:active {
   display: none;
 }
 
+/* Border is --btn-line, not --line. 0.1.46 fixed the gap chart and show detail
+ * buttons and stopped there, so chips stayed at 1.28:1 against their own fill
+ * and started disappearing once everything around them read properly. Same
+ * fill as .btn (--surface), so the same measured figures apply: 3.43:1 dark,
+ * 3.67:1 light, both clearing WCAG 1.4.11's 3:1 for a non-text boundary.
+ *
+ * BORDER ONLY. The 34px box, the --s-3 padding, the --t-sm/600 type and the
+ * pill radius are all untouched -- a chip is a different size from a button
+ * and that is established, not something to normalise here. Note the tap
+ * target is therefore still 34px, unlike .btn.btn-small's 44px: a real gap,
+ * deliberately left alone in this change.
+ *
+ * This rule is shared by the Home "Change" button, the "Back" chip and the
+ * sort/filter chips, so all of them gain the stronger edge together.
+ */
 .chip {
   flex: none;
   min-height: 34px;
   padding: 0 var(--s-3);
   border-radius: var(--r-pill);
-  border: 1px solid var(--line);
+  border: 1px solid var(--btn-line);
   background: var(--surface);
   color: var(--ink-dim);
   font-size: var(--t-sm);
@@ -1084,7 +1099,7 @@ button.gap-figure:active {
 
 .stat-label {
   font-size: var(--t-xs);
-  color: var(--ink-faint);
+  color: var(--ink-label);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-top: 2px;
