@@ -82,7 +82,23 @@ async function checkRenderedUi() {
     let id = 0; const pending = new Map();
     ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m.result); pending.delete(m.id); } };
     await new Promise((r) => (ws.onopen = r));
-    const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
+    // EVERY CDP CALL IS TIMED OUT. Without this a dropped or lost reply leaves
+    // the promise pending forever and the script exits with "unsettled
+    // top-level await" -- no result, no failure, nothing to act on. That
+    // happened on the first run of the live route walk: a check that hangs is
+    // worse than one that fails, because it reports nothing at all.
+    const CDP_TIMEOUT = 20000;
+    const send = (method, params = {}) =>
+      new Promise((resolve, reject) => {
+        const i = ++id;
+        const timer = setTimeout(() => {
+          pending.delete(i);
+          reject(new Error(`CDP ${method} timed out after ${CDP_TIMEOUT}ms`));
+        }, CDP_TIMEOUT);
+        pending.set(i, (result) => { clearTimeout(timer); resolve(result); });
+        try { ws.send(JSON.stringify({ id: i, method, params })); }
+        catch (err) { clearTimeout(timer); pending.delete(i); reject(err); }
+      });
     const ev = async (expression) => (await send('Runtime.evaluate', { expression, returnByValue: true }))?.result?.value;
 
     await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
@@ -155,7 +171,10 @@ async function checkRenderedUi() {
 
 await checkHtml();
 await checkVersionJs();
-await checkRenderedUi();
+// A thrown check must FAIL the run, not abort it silently. Before this, a CDP
+// timeout escaped as an unhandled rejection and the process exited without
+// printing a verdict at all.
+await checkRenderedUi().catch((err) => bad(`rendered UI check threw: ${err.message}`));
 
 console.log('\n' + (failures ? `DEPLOY NOT VERIFIED — ${failures} problem(s)` : `DEPLOY VERIFIED — live BUILD is ${expected}`));
 process.exit(failures ? 1 : 0);
