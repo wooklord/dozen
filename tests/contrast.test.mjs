@@ -115,3 +115,60 @@ test('PAIRS covers the tokens most likely to be retuned', () => {
     assert.ok(PAIRS.some((p) => p.fg === fg), `${fg} is no longer audited`);
   }
 });
+
+// --- CIEDE2000, validated against published data ----------------------------
+//
+// deltaE00 decides a real design question (see docs/design.md): it is the
+// metric that says whether the jam colour separates from the body text beside
+// it. A wrong implementation would answer that question confidently and
+// incorrectly, so it is checked against Sharma, Wu & Dalal (2005) Table 1
+// rather than against itself.
+//
+// These pairs are chosen from that table for the cases that catch the usual
+// implementation mistakes: hue-angle wrapping across 0/360, the Rt rotation
+// term in the blue region, and the chroma-dependent G factor.
+//
+// One further pair from the table (L*35 greens) is deliberately NOT included:
+// the implementation and an independent hand-derivation both give 1.8645 for
+// it, and the published figure could not be confirmed with enough confidence
+// to assert against. Recording an unverified number as "published data" would
+// make this file lie about what it proves. Nineteen pairs still pin every
+// branch of the formula.
+import { deltaE00Lab } from '../scripts/contrast.mjs';
+
+const SHARMA = [
+  [[50.0000, 2.6772, -79.7751], [50.0000, 0.0000, -82.7485], 2.0425],
+  [[50.0000, 3.1571, -77.2803], [50.0000, 0.0000, -82.7485], 2.8615],
+  [[50.0000, 2.8361, -74.0200], [50.0000, 0.0000, -82.7485], 3.4412],
+  [[50.0000, -1.3802, -84.2814], [50.0000, 0.0000, -82.7485], 1.0000],
+  [[50.0000, -1.1848, -84.8006], [50.0000, 0.0000, -82.7485], 1.0000],
+  [[50.0000, -0.9009, -85.5211], [50.0000, 0.0000, -82.7485], 1.0000],
+  [[50.0000, 0.0000, 0.0000], [50.0000, -1.0000, 2.0000], 2.3669],
+  [[50.0000, -1.0000, 2.0000], [50.0000, 0.0000, 0.0000], 2.3669],
+  [[50.0000, 2.4900, -0.0010], [50.0000, -2.4900, 0.0009], 7.1792],
+  [[50.0000, 2.4900, -0.0010], [50.0000, -2.4900, 0.0011], 7.2195],
+  [[50.0000, -0.0010, 2.4900], [50.0000, 0.0009, -2.4900], 4.8045],
+  [[50.0000, 2.5000, 0.0000], [50.0000, 0.0000, -2.5000], 4.3065],
+  [[50.0000, 2.5000, 0.0000], [73.0000, 25.0000, -18.0000], 27.1492],
+  [[50.0000, 2.5000, 0.0000], [50.0000, 3.1736, 0.5854], 1.0000],
+  [[50.0000, 2.5000, 0.0000], [50.0000, 3.2972, 0.0000], 1.0000],
+  [[60.2574, -34.0099, 36.2677], [60.4626, -34.1751, 39.4387], 1.2644],
+  [[63.0109, -31.0961, -5.8663], [62.8187, -29.7946, -4.0864], 1.2630],
+  [[22.7233, 20.0904, -46.6940], [23.0331, 14.9730, -42.5619], 2.0373],
+  [[2.0776, 0.0795, -1.1350], [0.9033, -0.0636, -0.5514], 0.9082],
+];
+
+test('CIEDE2000 matches Sharma, Wu & Dalal (2005) test data', () => {
+  const wrong = [];
+  for (const [a, b, want] of SHARMA) {
+    const got = deltaE00Lab(a, b);
+    if (Math.abs(got - want) > 0.01) wrong.push(`${JSON.stringify(a)} vs ${JSON.stringify(b)}: got ${got}, expected ${want}`);
+  }
+  assert.deepEqual(wrong, [], 'CIEDE2000 implementation disagrees with published values');
+});
+
+test('CIEDE2000 is symmetric', () => {
+  for (const [a, b] of SHARMA) {
+    assert.equal(deltaE00Lab(a, b), deltaE00Lab(b, a));
+  }
+});

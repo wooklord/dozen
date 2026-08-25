@@ -73,6 +73,91 @@ export function deltaE(a, b) {
   return Math.round(Math.hypot(l1 - l2, a1 - a2, b1 - b2) * 10) / 10;
 }
 
+/**
+ * CIEDE2000 colour difference.
+ *
+ * USE THIS, NOT deltaE(), WHEN COMPARING TWO DARK COLOURS.
+ *
+ * Plain CIE76 deltaE treats a unit of Lab distance as equally visible
+ * everywhere, which it is not. Between two dark colours it substantially
+ * OVERSTATES the difference. That is not academic here: measured against the
+ * body text beside it, the jam green scores deltaE76 42.7 in light and 40.3 in
+ * dark -- predicting light mode separates BETTER, which is the opposite of what
+ * the screen shows. CIEDE2000's lightness and chroma weighting is what fixes
+ * that ordering.
+ *
+ * Implementation follows Sharma, Wu & Dalal (2005), including the hue-angle
+ * wrapping the original paper leaves ambiguous. Validated against that paper's
+ * test data in tests/contrast.test.mjs -- do not "simplify" it without running
+ * those.
+ */
+export function deltaE00(c1, c2) {
+  return deltaE00Lab(lab(c1), lab(c2));
+}
+
+/** CIEDE2000 on raw Lab triples, so it can be validated against published data. */
+export function deltaE00Lab([L1, A1, B1], [L2, A2, B2]) {
+  const rad = Math.PI / 180;
+  const deg = 180 / Math.PI;
+
+  const C1 = Math.hypot(A1, B1);
+  const C2 = Math.hypot(A2, B2);
+  const Cbar = (C1 + C2) / 2;
+  const Cbar7 = Cbar ** 7;
+  const G = 0.5 * (1 - Math.sqrt(Cbar7 / (Cbar7 + 25 ** 7)));
+
+  const a1p = (1 + G) * A1;
+  const a2p = (1 + G) * A2;
+  const C1p = Math.hypot(a1p, B1);
+  const C2p = Math.hypot(a2p, B2);
+
+  const hp = (b, ap) => {
+    if (b === 0 && ap === 0) return 0;
+    const h = Math.atan2(b, ap) * deg;
+    return h >= 0 ? h : h + 360;
+  };
+  const h1p = hp(B1, a1p);
+  const h2p = hp(B2, a2p);
+
+  const dLp = L2 - L1;
+  const dCp = C2p - C1p;
+
+  let dhp;
+  if (C1p * C2p === 0) dhp = 0;
+  else if (Math.abs(h2p - h1p) <= 180) dhp = h2p - h1p;
+  else if (h2p - h1p > 180) dhp = h2p - h1p - 360;
+  else dhp = h2p - h1p + 360;
+  const dHp = 2 * Math.sqrt(C1p * C2p) * Math.sin((dhp / 2) * rad);
+
+  const Lbarp = (L1 + L2) / 2;
+  const Cbarp = (C1p + C2p) / 2;
+
+  let hbarp;
+  if (C1p * C2p === 0) hbarp = h1p + h2p;
+  else if (Math.abs(h1p - h2p) <= 180) hbarp = (h1p + h2p) / 2;
+  else if (h1p + h2p < 360) hbarp = (h1p + h2p + 360) / 2;
+  else hbarp = (h1p + h2p - 360) / 2;
+
+  const T = 1
+    - 0.17 * Math.cos((hbarp - 30) * rad)
+    + 0.24 * Math.cos(2 * hbarp * rad)
+    + 0.32 * Math.cos((3 * hbarp + 6) * rad)
+    - 0.20 * Math.cos((4 * hbarp - 63) * rad);
+
+  const dTheta = 30 * Math.exp(-(((hbarp - 275) / 25) ** 2));
+  const Cbarp7 = Cbarp ** 7;
+  const Rc = 2 * Math.sqrt(Cbarp7 / (Cbarp7 + 25 ** 7));
+  const Sl = 1 + (0.015 * (Lbarp - 50) ** 2) / Math.sqrt(20 + (Lbarp - 50) ** 2);
+  const Sc = 1 + 0.045 * Cbarp;
+  const Sh = 1 + 0.015 * Cbarp * T;
+  const Rt = -Math.sin(2 * dTheta * rad) * Rc;
+
+  const dE = Math.sqrt(
+    (dLp / Sl) ** 2 + (dCp / Sc) ** 2 + (dHp / Sh) ** 2 + Rt * (dCp / Sc) * (dHp / Sh),
+  );
+  return Math.round(dE * 100) / 100;
+}
+
 // --- Translucent colours ----------------------------------------------------
 //
 // Several tokens are rgba(): --yolk-line, --yolk-wash, --shell-alpha. A

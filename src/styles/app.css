@@ -486,6 +486,14 @@ button.gap-figure:active {
 /* The hit region. Overhangs the visible box by 4px top and bottom -- enough to
    restore 44px, small enough not to swallow taps meant for the setlist above.
    Pointer events on a pseudo-element land on its host, so this needs no JS. */
+/* The offsite arrow inside a button. Proportioned like .carton-link's (0.85em)
+   and pulled back to the same 4px gap that link uses -- .btn's own gap is
+   --s-2, which is right between words and too wide before a glyph. */
+.btn-arrow {
+  font-size: 0.85em;
+  margin-left: calc(var(--s-1) - var(--s-2));
+}
+
 .btn.btn-small::after {
   content: "";
   position: absolute;
@@ -979,6 +987,8 @@ button.gap-figure:active {
  */
 .setlist-song.jam {
   color: var(--jam);
+  /* Light theme only, via the token: see tokens.css. Dark inherits. */
+  font-weight: var(--jam-weight);
 }
 
 /* The press underline follows the text it belongs to. Left at --yolk it would

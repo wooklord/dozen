@@ -119,12 +119,21 @@ export function venueInfoLink(venue, label = 'Venue info') {
 export function venueInfoButton(venue, label = 'Venue info') {
   const href = venueMapsUrl(venue);
   if (!href) return null;
-  return el('a.btn.btn-small', {
-    href,
-    target: '_blank',
-    rel: 'noopener noreferrer',
-    text: label,
-  });
+  return el(
+    'a.btn.btn-small',
+    { href, target: '_blank', rel: 'noopener noreferrer' },
+    [
+      label,
+      // Same offsite convention as .carton-link. It is not decoration: it is
+      // the only thing distinguishing this from the two controls beside it,
+      // which navigate WITHIN the app. It was lost when this became a button
+      // in 0.1.53 -- exactly the tidy-up the .carton-link comment warns about.
+      //
+      // A real element rather than ::after, because .btn.btn-small::after is
+      // already the 44px hit region. Two things cannot share one pseudo.
+      el('span.btn-arrow', { 'aria-hidden': 'true', text: '↗' }),
+    ],
+  );
 }
 
 /**

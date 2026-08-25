@@ -92,6 +92,60 @@ questions, different hue family, so the two share a block without either getting
 *would* break the rule is a warm second colour, which is exactly what the chartreuse turned out
 to be.
 
+#### The light theme uses WEIGHT as a second channel, and why the numbers could not decide it (0.1.56)
+
+Jam titles render at weight 600 in the **light** theme only. Dark is unchanged:
+colour alone, weight inherited from the surrounding setlist text.
+
+**The reason is a gamut limit, not a tuning failure.** In light mode the green
+must clear 4.5:1 against white, which forces it dark — the ceiling is L\* ≈ 50
+at exactly 4.5:1. sRGB has no vivid green that is also that dark. The most
+chromatic candidate that clears the threshold reached **C\* 48.7, the gamut
+ceiling at that lightness**, and still read as tinted black beside the body
+text. Rendered in a real setlist, not swatched. Colour-only has a ceiling and
+that candidate was standing on it.
+
+**THE NEGATIVE RESULT, recorded so it is not re-derived.** The obvious
+diagnosis — "the light green sits too close in lightness to the near-black body
+text" — is measurably **wrong**:
+
+```
+                      dark            light
+ΔL* vs body text      17.5            30.6     light has MORE
+Δchroma               33.2            26.0     dark has more
+ΔE76 vs body text     40.3            42.7     light "better"
+ΔE00 vs body text     25.27           31.36    light "better"
+```
+
+Light mode has the **larger** lightness separation. CIEDE2000 was implemented
+and validated against Sharma, Wu & Dalal (2005) specifically to test whether
+CIE76 was overstating the difference between two dark colours — the one
+mechanism that would have flipped the ordering. **It did not.** ΔE00 agrees with
+ΔE76 that light separates more.
+
+So no standard colour-difference metric reproduces what the screen shows. The
+only number that moves the right way is chroma, and the working hypothesis —
+offered as hypothesis — is adaptation: against a bright neutral both colours
+read as "dark marks", while against near-black the green is among the brightest
+things present and its chroma reads fully.
+
+**The consequence for method: b\* could arbitrate the warmth question, and
+nothing could arbitrate this one.** The renders decided it, with the numbers as
+guardrails. Do not go looking for a metric to justify a different answer; that
+search has already been done and came back empty.
+
+**The accepted cost.** Bold glyphs are wider, so light-mode setlists reflow
+slightly. Measured at 390px against 0.1.55: 7 boxes on Home, 81 on Shows, all of
+them `.setlist-song`, **width only** — heights unchanged, y positions holding,
+no non-setlist screen touched. Songs, Jams, Picks, song detail and venue detail
+are byte-identical.
+
+**One caveat, real and accepted: with enough jam entries on a line, a wrap point
+can move.** The sampled boxes showed no vertical change, but a long enough run
+of highlighted titles will re-wrap. That is inherent to any weight-based
+option — there is no version of "use weight" that does not change glyph widths —
+and it is the accepted cost of the separation.
+
 #### Warmth is a measured axis here, not a vibe
 
 On the Lab **b\*** axis (yellow positive, blue negative) every token in this palette is warm:

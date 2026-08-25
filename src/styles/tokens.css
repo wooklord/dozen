@@ -107,6 +107,23 @@
      be barely there. A control that has to look tappable is a different job,
      so it gets a different token rather than a louder --line. */
   --dk-btn-line: #7a6b5c;
+  /* Jam highlight WEIGHT. A per-theme token, like the hexes above.
+
+     Dark inherits: the highlight is carried by colour alone and works. On a
+     near-black ground the green is one of the brighter things present and
+     its chroma reads fully, so nothing else is needed.
+
+     Light is 600, because colour alone CANNOT carry it there. To clear
+     4.5:1 against white the green has to be dark, and sRGB has no vivid
+     green that is also that dark -- the most chromatic candidate that
+     clears the threshold (C* 48.7, the gamut ceiling at that lightness)
+     still read as tinted black beside the body text. That is a gamut limit,
+     not a tuning problem. Full reasoning and the rendered comparison are in
+     docs/design.md.
+
+     `inherit` rather than 400 on purpose: it ties the dark value to whatever
+     the surrounding setlist text weighs, so the two can never drift apart. */
+  --dk-jam-weight: inherit;
   --dk-danger: #e5734a;
   --dk-scrim: rgba(0, 0, 0, 0.5);
   --dk-cell-inset: rgba(0, 0, 0, 0.4);
@@ -140,6 +157,7 @@
   --lt-yolk-ink: #fffaf1;
   --lt-jam: #376841;
   --lt-btn-line: #94836b;
+  --lt-jam-weight: 600;
   --lt-danger: #b03a06;
   --lt-scrim: rgba(0, 0, 0, 0.38);
   --lt-cell-inset: rgba(0, 0, 0, 0.12);
@@ -166,6 +184,7 @@
   --yolk-line: var(--dk-yolk-line);
   --yolk-ink: var(--dk-yolk-ink);
   --jam: var(--dk-jam);
+  --jam-weight: var(--dk-jam-weight);
   --btn-line: var(--dk-btn-line);
   --danger: var(--dk-danger);
   --scrim: var(--dk-scrim);
@@ -229,6 +248,7 @@
     --yolk-line: var(--lt-yolk-line);
     --yolk-ink: var(--lt-yolk-ink);
     --jam: var(--lt-jam);
+    --jam-weight: var(--lt-jam-weight);
     --btn-line: var(--lt-btn-line);
     --danger: var(--lt-danger);
     --scrim: var(--lt-scrim);
@@ -259,6 +279,7 @@
   --yolk-line: var(--lt-yolk-line);
   --yolk-ink: var(--lt-yolk-ink);
   --jam: var(--lt-jam);
+  --jam-weight: var(--lt-jam-weight);
   --btn-line: var(--lt-btn-line);
   --danger: var(--lt-danger);
   --scrim: var(--lt-scrim);

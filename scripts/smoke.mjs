@@ -139,7 +139,7 @@ server.listen(PORT, async () => {
   for (let i = 0; i < 150; i++) {
     await sleep(2000);
     process.stdout.write('.');
-    if (await evaluate(`!document.querySelector('.loader')`)) { booted = true; break; }
+    if (await evaluate(`!!document.querySelector('#main .screen')`)) { booted = true; break; }
   }
   console.log('');
   if (!booted) { fail('app never finished booting'); finish(chrome); return; }
@@ -726,6 +726,51 @@ server.listen(PORT, async () => {
     }
   }
 
+  // --- Weight is a LIGHT-ONLY second channel --------------------------------
+  //
+  // Light uses weight because colour alone cannot carry the separation there:
+  // clearing 4.5:1 on white forces a dark green, and sRGB has no vivid green
+  // that dark. Dark needs no help and keeps colour alone. See docs/design.md.
+  //
+  // Compared against the NON-JAM setlist text in the same card, never against
+  // a literal weight. A hardcoded 600 would keep passing if the body text were
+  // ever bolded to match, which is precisely the state this must detect.
+  console.log('\njam weight, light only:');
+  await evaluate(`location.hash = '#/show/1779890028';`);
+  await sleep(1300);
+  const weights = {};
+  for (const theme of ['dark', 'light']) {
+    await evaluate(`document.documentElement.setAttribute('data-theme', ${JSON.stringify(theme)});`);
+    await sleep(500);
+    weights[theme] = await evaluate(`(() => {
+      const songs = [...document.querySelectorAll('.setlist-song')];
+      const jam = songs.find((s) => s.dataset.jam === 'true');
+      const plain = songs.find((s) => s.dataset.jam !== 'true');
+      if (!jam || !plain) return null;
+      const w = (n) => Number(getComputedStyle(n).fontWeight);
+      // Height of the line box: if weight reflowed anything, the card grows.
+      const card = jam.closest('.card');
+      return { jam: w(jam), plain: w(plain), cardH: Math.round(card.getBoundingClientRect().height) };
+    })()`);
+  }
+  await evaluate(`document.documentElement.removeAttribute('data-theme');`);
+
+  if (!weights.dark || !weights.light) fail('jam weight: could not find both a jam and a non-jam song');
+  else {
+    if (weights.dark.jam !== weights.dark.plain) {
+      fail(`jam weight (dark): jam is ${weights.dark.jam}, surrounding text ${weights.dark.plain} — dark must stay colour-only`);
+    } else pass(`dark: jam matches the setlist text (${weights.dark.jam}) — colour alone`);
+
+    if (weights.light.jam <= weights.light.plain) {
+      fail(`jam weight (light): jam is ${weights.light.jam}, not heavier than the ${weights.light.plain} around it`);
+    } else pass(`light: jam ${weights.light.jam} against surrounding ${weights.light.plain}`);
+
+    // The two themes must genuinely differ, or the token collapsed to one value.
+    if (weights.dark.jam === weights.light.jam) {
+      fail(`jam weight: both themes render ${weights.dark.jam} — the per-theme token is not applying`);
+    } else pass('the two themes use different weights, as intended');
+  }
+
   // --- Show notes live INSIDE the setlist card ------------------------------
   //
   // 2026-08-06 has show notes AND 7 jam entries, so one visit covers both the
@@ -840,8 +885,10 @@ server.listen(PORT, async () => {
 
   if (!row) fail('action row: no .card-actions on show detail');
   else {
-    const info = row.items.find((i) => i.text === 'Venue info');
-    const others = row.items.filter((i) => i.text !== 'Venue info');
+    // startsWith, not equals: the label carries a trailing offsite arrow, and
+    // an exact match would break the moment that arrow is right.
+    const info = row.items.find((i) => i.text.startsWith('Venue info'));
+    const others = row.items.filter((i) => !i.text.startsWith('Venue info'));
     if (!info) fail(`action row: no Venue info control (found ${JSON.stringify(row.items.map((i) => i.text))})`);
     else if (!others.length) fail('action row: nothing for Venue info to be compared against');
     else {
@@ -860,6 +907,22 @@ server.listen(PORT, async () => {
       // Still a real link, so open-in-new-tab and middle-click work.
       if (info.tag !== 'A') fail(`action row: Venue info is <${info.tag}>, expected <A> so it can open in a new tab`);
       else pass('Venue info is still an anchor, not a button');
+
+      // THE OFFSITE ARROW. It is the only thing marking this control as
+      // leaving the app, next to two that navigate within it, and it was lost
+      // once already when this became a button in 0.1.53. Pinned so a future
+      // tidy-up cannot quietly drop it again -- the same reason .carton-link's
+      // arrow is called out in the CSS.
+      const arrow = await evaluate(`(() => {
+        const a = [...document.querySelectorAll('.card-actions a')].find(n => n.textContent.includes('Venue info'));
+        const s = a && a.querySelector('.btn-arrow');
+        return { present: !!s, glyph: s ? s.textContent.trim() : null,
+                 hidden: s ? s.getAttribute('aria-hidden') : null };
+      })()`);
+      if (!arrow.present) fail('action row: Venue info has no offsite arrow');
+      else if (arrow.glyph !== '↗') fail(`action row: offsite glyph is ${JSON.stringify(arrow.glyph)}, expected ↗`);
+      else if (arrow.hidden !== 'true') fail('action row: the arrow is decorative and must be aria-hidden');
+      else pass('offsite arrow present, matching the Carton-link convention');
     }
 
     if (row.lines !== 1) fail(`action row: wrapped onto ${row.lines} lines at 390px`);
@@ -1182,7 +1245,7 @@ server.listen(PORT, async () => {
       caches: (await caches.keys()).length,
       controller: !!navigator.serviceWorker.controller,
       chip: !!document.querySelector('.sw-off-chip'),
-      booted: !document.querySelector('.loader'),
+      booted: !!document.querySelector('#main .screen'),
     }))()`);
 
     if (after.regs !== 0) fail(`?nosw: ${after.regs} worker(s) still registered`);

@@ -349,6 +349,9 @@ then passes for the wrong reason, and reports health it never established.
 | Read `.build-marker` in the header | that BUILD is displayed | the **cache-age chip**, which used the same class. It would have read "just now" and reported a successful deploy |
 | Read the rendered jam colour from a local page | that the new token shipped | the **service worker's cached shell**, still serving the previous build's stylesheet. `getComputedStyle` returned a real colour, from the wrong stylesheet |
 | `fetch` the live `version.js` after a push | that **the deploy landed for users** | a **fresh CDN edge**, while the edge serving the browser was still nine builds behind. Both numbers were real; only one was what a visitor got |
+| `layout-diff` reporting "identical" | that **a change moved nothing else** | the tool rendering the **wrong theme** — it never set one, so a light-only change was "verified" by a dark-mode run |
+| Waiting for `!document.querySelector('.loader')` | that **the app had finished booting** | the document **not having parsed yet**. `Page.navigate` resolves early, so the first poll saw no loader and declared success on a blank page |
+| `layout-diff` reporting "identical" (again) | that **a change moved nothing else** | both builds served from **one origin at the same urls**: the second boot fetched the new CSS and rendered the OLD parsed stylesheet |
 
 The shape is always a **proxy**: the check tests a side effect rather than the
 thing itself, and the side effect has more than one cause.
@@ -513,6 +516,42 @@ where 4px went) and screenshot capture for eyeballing. A screenshot script
 asserts nothing and cannot go red, so committing it buys maintenance cost and
 no safety. A repo of half-trusted checks is worse than a few good ones.
 
+### layout-diff's older verdicts are weaker than they read
+
+`scripts/layout-diff.mjs` has been the arbiter of "nothing else moved" since
+0.1.49. For most of that time it had two flaws that its output gave no hint of:
+
+1. **It never set a theme**, rendering whatever the headless browser defaulted
+   to. A theme-specific change could be declared safe by a run that never
+   rendered it. It was about to arbitrate exactly such a decision — the
+   light-only weight change in 0.1.56 — when this was found.
+2. **It compared boxes index-by-index**, so one added or removed element
+   renamed every later one and a change touching nothing could report the whole
+   route as changed. It now compares multisets.
+
+A tool that renders the wrong theme still reports real numbers. They are just
+real numbers about the wrong thing, which is worse than an obvious failure
+because nothing about the output looks wrong.
+
+**Treat its verdicts before 0.1.56 as weaker evidence than they appeared at the
+time.** They are not worthless — most changes were not theme-specific, and a
+genuine reflow in the rendered theme would still have shown. They are simply not
+the proof of "nothing moved" they were quoted as. No re-run is planned; this
+note exists so those results are not cited as stronger than they were.
+
+Three further faults were found in the same session and are fixed: it reported
+"identical" when **both** sides rendered nothing (now a failure, with box
+counts); it declared boot complete on an unparsed document (now waits for
+`#main .screen`); and it served both builds from one origin, where the browser
+reused the first build's parsed stylesheet (now two origins, with a self-check
+that fingerprints the stylesheets each side actually received and fails if git
+reports CSS changes but the fingerprints match).
+
+**It also makes two full archive pulls per run** — roughly 38 API requests.
+Running it repeatedly trips The Carton's documented 60/minute limit, which
+surfaces as an error boundary and reads like a harness bug. Wait a minute
+between runs.
+
 ### The checks, and when to run each
 
 | Command | Speed | Network | Run it |
@@ -520,7 +559,7 @@ no safety. A repo of half-trusted checks is worse than a few good ones.
 | `node --test` | instant | none | always, before anything else |
 | `node scripts/smoke.mjs` | ~1 min | Carton (cold pull) | **before every push** |
 | `node scripts/contrast.mjs` | instant | none | when eyeballing a colour; the assertions already run in `node --test` |
-| `node scripts/layout-diff.mjs [ref] [width]` | ~3 min | Carton (two cold boots) | after a deliberate layout change, to see what else moved |
+|  `node scripts/layout-diff.mjs [ref] [width] [theme]` | ~3 min | Carton (two cold boots) | after a deliberate layout change, to see what else moved |
 | `node scripts/verify-deploy.mjs` | ~1 min | live host | **after every push** |
 
 `scripts/routes.mjs` holds the route list and its markers, shared by the smoke
