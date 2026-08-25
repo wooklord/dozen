@@ -726,6 +726,208 @@ server.listen(PORT, async () => {
     }
   }
 
+  // --- Shows: browse by year and month, layered on the existing list --------
+  //
+  // The drill-down routes through the SAME date-search path a typed "2019"
+  // uses. So the check is that a year chip produces the same result set as
+  // typing that year -- not merely that chips exist. If the two ever diverge,
+  // the affordance has grown its own implementation, which is the thing it was
+  // built to avoid.
+  console.log('\nShows: browse by year and month:');
+  await evaluate(`location.hash = '#/shows';`);
+  await sleep(1600);
+  // Reset any query a previous section left behind.
+  await evaluate(`(() => { const s = document.querySelector('.search'); if (s) { s.value = ''; s.dispatchEvent(new Event('input', { bubbles: true })); } })()`);
+  await sleep(1100);
+
+  const landing = await evaluate(`(() => ({
+    cards: [...document.querySelectorAll('.card')].filter((c) => c.querySelector('.setlist-song')).length,
+    years: [...document.querySelectorAll('.sortbar .chip')].map((c) => c.textContent.trim()),
+    loadOlder: !!([...document.querySelectorAll('button')].find((b) => /older/i.test(b.textContent))),
+  }))()`);
+  if (!landing.cards) fail('Shows: the recent-first card list is gone from the landing state');
+  else if (!landing.loadOlder) fail('Shows: "Load older" is gone from the landing state');
+  else if (landing.years.length < 5) fail(`Shows: only ${landing.years.length} year chip(s)`);
+  else pass(`landing keeps ${landing.cards} cards + Load older, plus ${landing.years.length} year chips`);
+
+  // Type a year, record the result, then reach the same year by chip.
+  const YEAR = '2019';
+  await evaluate(`(() => { const s = document.querySelector('.search'); s.value = ${JSON.stringify(YEAR)}; s.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await sleep(1100);
+  const typed = await evaluate(`(() => {
+    const h = [...document.querySelectorAll('.section-title')].map((n) => n.textContent.trim());
+    return { head: h.find((t) => /^Shows \\(/.test(t)) || null, rows: document.querySelectorAll('.rows li').length };
+  })()`);
+
+  await evaluate(`(() => { const s = document.querySelector('.search'); s.value = ''; s.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await sleep(1100);
+  const viaChip = await evaluate(`(() => {
+    const c = [...document.querySelectorAll('.sortbar .chip')].find((x) => x.textContent.trim() === ${JSON.stringify(YEAR)});
+    if (!c) return null; c.click(); return true;
+  })()`);
+  await sleep(1100);
+  const chipped = await evaluate(`(() => {
+    const h = [...document.querySelectorAll('.section-title')].map((n) => n.textContent.trim());
+    return {
+      head: h.find((t) => /^Shows \\(/.test(t)) || null,
+      rows: document.querySelectorAll('.rows li').length,
+      searchValue: document.querySelector('.search').value,
+      months: [...document.querySelectorAll('.sortbar')].length,
+    };
+  })()`);
+
+  if (!viaChip) fail(`Shows: no ${YEAR} year chip to click`);
+  else if (chipped.head !== typed.head || chipped.rows !== typed.rows) {
+    fail(`Shows: chip gives ${JSON.stringify(chipped.head)}/${chipped.rows} rows, typing "${YEAR}" gives ${JSON.stringify(typed.head)}/${typed.rows} — the drill-down is not routing through the search path`);
+  } else pass(`year chip matches typing "${YEAR}" exactly (${chipped.head}, ${chipped.rows} rows)`);
+
+  if (chipped.searchValue !== YEAR) fail(`Shows: chip left the search box showing ${JSON.stringify(chipped.searchValue)}`);
+  else pass('the search box reflects the drill-down');
+  if (chipped.months < 2) fail('Shows: no month bar inside a year');
+  else pass('a year exposes its months');
+
+  // A month chip must narrow further, still through the same path.
+  const monthed = await evaluate(`(() => {
+    const bars = [...document.querySelectorAll('.sortbar')];
+    const monthBar = bars[bars.length - 1];
+    const c = monthBar && monthBar.querySelector('.chip');
+    if (!c) return null;
+    const label = c.textContent.trim();
+    c.click();
+    return label;
+  })()`);
+  await sleep(1100);
+  const after = await evaluate(`(() => ({
+    rows: document.querySelectorAll('.rows li').length,
+    searchValue: document.querySelector('.search').value,
+  }))()`);
+  if (!monthed) fail('Shows: no month chip to click');
+  else if (after.rows === 0) fail(`Shows: month "${monthed}" produced no rows`);
+  else if (after.rows > chipped.rows) fail(`Shows: month "${monthed}" widened the result (${after.rows} > ${chipped.rows})`);
+  else pass(`month "${monthed}" narrows ${chipped.rows} -> ${after.rows} (query ${JSON.stringify(after.searchValue)})`);
+
+  // Back to the default landing state.
+  await evaluate(`(() => { const s = document.querySelector('.search'); s.value = ''; s.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await sleep(1000);
+
+  // --- The accented figure follows the ACTIVE SORT --------------------------
+  //
+  // Asserted as a correspondence, never as "some figure is yolk". A fixed
+  // column rendering yolk regardless of sort would satisfy the weaker check
+  // while being exactly the bug -- the whole point is that the focal point
+  // MOVES. So each sort is clicked and the figure's unit is read back: sort by
+  // gap and the figure must be the gap one, sort by plays and it must be plays.
+  //
+  // A–Z is included deliberately: it orders by name, so NOTHING may be
+  // accented. That is the case a "some figure is yolk" check would fail on.
+  console.log('\nsort drives the accented figure:');
+  await evaluate(`location.hash = '#/songs';`);
+  await sleep(1500);
+  const yolk = await evaluate(`(() => {
+    const probe = document.createElement('span');
+    probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--yolk').trim();
+    document.body.appendChild(probe);
+    const c = getComputedStyle(probe).color; probe.remove(); return c;
+  })()`);
+
+  for (const [label, wantUnit, wantAccent] of [
+    ['A–Z', 'shows', false],
+    ['Coldest first', 'shows', true],
+    ['Most played', 'times', true],
+  ]) {
+    const clicked = await evaluate(`(() => {
+      const c = [...document.querySelectorAll('.sortbar .chip')].find((x) => x.textContent.trim() === ${JSON.stringify(label)});
+      if (!c) return false; c.click(); return true;
+    })()`);
+    if (!clicked) { fail(`sort: no "${label}" chip`); continue; }
+    await sleep(900);
+    const r = await evaluate(`(() => {
+      const active = [...document.querySelectorAll('.sortbar .chip')].find((x) => x.getAttribute('aria-pressed') === 'true');
+      const num = document.querySelector('.rows .gap-num');
+      const unit = document.querySelector('.rows .gap-unit');
+      return {
+        activeChip: active ? active.textContent.trim() : null,
+        unit: unit ? unit.textContent.trim().toLowerCase() : null,
+        colour: num ? getComputedStyle(num).color : null,
+        plainClass: num ? num.classList.contains('plain') : null,
+      };
+    })()`);
+
+    if (r.activeChip !== label) fail(`sort: clicked "${label}" but the pressed chip is ${JSON.stringify(r.activeChip)}`);
+    else if (!r.unit || !r.unit.includes(wantUnit)) {
+      fail(`sort "${label}": figure column shows ${JSON.stringify(r.unit)}, expected ${JSON.stringify(wantUnit)}`);
+    } else if (wantAccent && r.colour !== yolk) {
+      fail(`sort "${label}": the sorted figure is ${r.colour}, not the yolk accent ${yolk}`);
+    } else if (!wantAccent && r.colour === yolk) {
+      fail(`sort "${label}": orders by NAME, so no figure may be accented — but it is ${r.colour}`);
+    } else {
+      pass(`"${label}" -> ${r.unit} figure ${wantAccent ? `accented ${r.colour}` : `plain ${r.colour}`}`);
+    }
+  }
+
+  // --- Jams tab: the COUNT is green, the title is not -----------------------
+  //
+  // Compared against the jam colour as RENDERED on another screen, never a hex
+  // -- the same discipline as every other jam check, so a retune moves both
+  // together or fails.
+  //
+  // The negative half matters as much: green means "this was a jam chart
+  // entry", a per-performance fact. The song TITLE must stay plain here, and
+  // the Songs list must stay plain entirely. Asserting only "the count is
+  // green" would pass just as happily with green leaking across the app.
+  console.log('\njams tab, green on the count:');
+  for (const theme of ['dark', 'light']) {
+    await evaluate(`document.documentElement.setAttribute('data-theme', ${JSON.stringify(theme)});`);
+
+    // The reference: a highlighted title in a real setlist.
+    await evaluate(`location.hash = '#/show/1779890028';`);
+    await sleep(1200);
+    const ref = await evaluate(
+      `(() => { const n = document.querySelector('.setlist-song[data-jam="true"]'); return n ? getComputedStyle(n).color : null; })()`,
+    );
+
+    await evaluate(`location.hash = '#/jams';`);
+    await sleep(1400);
+    const jams = await evaluate(`(() => {
+      const count = document.querySelector('.jam-count');
+      const row = count ? count.closest('.row-shell') : null;
+      const title = row ? row.querySelector('.row-title') : null;
+      const plainTitle = document.querySelector('.row-title');
+      return {
+        count: count ? getComputedStyle(count).color : null,
+        countWeight: getComputedStyle(count).fontWeight,
+        countSize: getComputedStyle(count).fontSize,
+        title: title ? getComputedStyle(title).color : null,
+        plainTitle: plainTitle ? getComputedStyle(plainTitle).color : null,
+        unit: (() => { const u = row && row.querySelector('.gap-unit'); return u ? getComputedStyle(u).color : null; })(),
+      };
+    })()`);
+
+    if (!ref) fail(`jams (${theme}): no highlighted setlist title to compare against`);
+    else if (!jams.count) fail(`jams (${theme}): no .jam-count rendered`);
+    else if (jams.count !== ref) fail(`jams (${theme}): count is ${jams.count}, jam colour elsewhere is ${ref}`);
+    else pass(`${theme}: count ${jams.count} matches the rendered jam colour`);
+
+    if (jams.title && jams.title === jams.count) {
+      fail(`jams (${theme}): the song TITLE is green too — green marks the count, not the song`);
+    } else pass(`${theme}: title stays plain (${jams.title})`);
+
+    // Songs list must be untouched -- an explicit boundary, not an oversight.
+    await evaluate(`location.hash = '#/songs';`);
+    await sleep(1400);
+    const songs = await evaluate(`(() => {
+      const green = [...document.querySelectorAll('#main *')].filter((n) => {
+        const c = getComputedStyle(n).color;
+        return c === ${JSON.stringify(ref)};
+      }).length;
+      return { greenNodes: green, counts: document.querySelectorAll('.jam-count').length };
+    })()`);
+    if (songs.counts) fail(`jams (${theme}): .jam-count leaked onto the Songs list`);
+    else if (songs.greenNodes) fail(`jams (${theme}): ${songs.greenNodes} element(s) on Songs render the jam colour`);
+    else pass(`${theme}: Songs list carries no jam green`);
+  }
+  await evaluate(`document.documentElement.removeAttribute('data-theme');`);
+
   // --- Weight is a LIGHT-ONLY second channel --------------------------------
   //
   // Light uses weight because colour alone cannot carry the separation there:

@@ -24,11 +24,17 @@ const state = {
   query: '',
 };
 
+// [key, label, figure, drivesFigure]
+//
+// `drivesFigure` is whether the sort actually orders by the number in the
+// figure column. A-Z does not -- it orders by name -- so its figure is shown
+// but NOT accented. Accenting it would claim the list was ranked by gap when
+// it is not.
 const SORTS = [
-  ['alpha', 'A–Z', 'gap'],
-  ['gap-desc', 'Coldest first', 'gap'],
-  ['gap-asc', 'Hottest first', 'gap'],
-  ['times', 'Most played', 'times'],
+  ['alpha', 'A–Z', 'gap', false],
+  ['gap-desc', 'Coldest first', 'gap', true],
+  ['gap-asc', 'Hottest first', 'gap', true],
+  ['times', 'Most played', 'times', true],
 ];
 
 const FILTERS = [
@@ -155,7 +161,11 @@ export function renderSongs(ctx) {
       }
     });
 
-    const figure = SORTS.find(([k]) => k === state.sort)?.[2] || 'gap';
+    const active = SORTS.find(([k]) => k === state.sort);
+    const figure = active?.[2] || 'gap';
+    // Yolk marks the figure you sorted by, so the screen's focal point moves
+    // with the sort and the chips visibly tie to the rows.
+    const accent = Boolean(active?.[3]);
     const maxGap = songs.reduce((m, s) => Math.max(m, s.showsSinceLastPlayed ?? 0), 1);
     const maxTimes = songs.reduce((m, s) => Math.max(m, s.timesPlayed), 1);
 
@@ -174,6 +184,7 @@ export function renderSongs(ctx) {
         listWrap,
         songRow(s, {
           figure,
+          accent,
           maxGap: figure === 'times' ? maxTimes : maxGap,
           index,
           onOpen: (song) => navigate(`#/song/${song.song_id}`),

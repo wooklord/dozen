@@ -23,6 +23,14 @@ import { parseDateQuery, matchShowsByDate, matchVenues, matchReasonLabel } from 
 
 const PAGE = 15;
 
+// Full month names, matching what parseDateQuery accepts. The query built from
+// these has to be a string the search grammar already parses -- that is the
+// whole point of routing the drill-down through it.
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
 // Module-level so the screen keeps its place across navigation.
 const state = {
   query: '',
@@ -110,16 +118,103 @@ export function renderShows(ctx) {
 
   // ------------------------------------------------------------------ paint --
 
+  /**
+   * Browse by period, ROUTED THROUGH THE SEARCH PATH.
+   *
+   * A year chip sets the query to a bare year and repaints; a month chip sets
+   * it to "August 2019". Both are shapes `parseDateQuery` already understands
+   * (kind 'year' and kind 'month'), so this adds an affordance, not a second
+   * implementation of "which shows are in 2019". If date matching changes,
+   * this changes with it, because it IS that code.
+   *
+   * The input is kept in sync so the screen never shows chips and a search box
+   * that disagree, and so clearing the box is an obvious way back.
+   */
+  function browseTo(query) {
+    state.query = query;
+    state.limit = PAGE;
+    search.value = query;
+    paint();
+    results.scrollIntoView({ block: 'start' });
+  }
+
+  /** Years that actually have shows, newest first. Derived, never hardcoded. */
+  function archiveYears() {
+    return [...new Set(index.shows.map((s) => Number(String(s.showdate).slice(0, 4))))]
+      .filter((y) => y >= 1900 && y <= 2999)
+      .sort((a, b) => b - a);
+  }
+
+  function yearBar(activeYear = null) {
+    let activeChip = null;
+    const bar = el('div.sortbar.sortbar-secondary', null, [
+      // Back out of a drill-down without having to clear the field by hand.
+      activeYear
+        ? el('button.chip', { type: 'button', onclick: () => browseTo('') }, 'All shows')
+        : null,
+      ...archiveYears().map((y) => {
+        const chip = el(
+          'button.chip',
+          {
+            type: 'button',
+            'aria-pressed': String(activeYear === y),
+            onclick: () => browseTo(String(y)),
+          },
+          String(y),
+        );
+        if (activeYear === y) activeChip = chip;
+        return chip;
+      }),
+    ]);
+
+    // The bar scrolls horizontally and holds fourteen years, so the selected
+    // one is usually off-screen after a repaint -- you tap 2019 and the bar
+    // still reads 2026, 2025, 2024. Bring it into view so the control shows
+    // its own state. `block: 'nearest'` so this never scrolls the page.
+    if (activeChip) {
+      queueMicrotask(() => activeChip.scrollIntoView({ inline: 'center', block: 'nearest' }));
+    }
+    return bar;
+  }
+
+  /** Months that have shows in this year, in calendar order. */
+  function monthBar(year) {
+    const months = [...new Set(
+      index.shows
+        .filter((s) => Number(String(s.showdate).slice(0, 4)) === year)
+        .map((s) => Number(String(s.showdate).slice(5, 7))),
+    )].sort((a, b) => a - b);
+    if (!months.length) return null;
+    return el('div.sortbar.sortbar-secondary', null, months.map((m) =>
+      el(
+        'button.chip',
+        { type: 'button', onclick: () => browseTo(`${MONTH_NAMES[m - 1]} ${year}`) },
+        MONTH_NAMES[m - 1].slice(0, 3),
+      ),
+    ));
+  }
+
   function paint() {
     results.replaceChildren();
     const q = state.query.trim();
 
     if (!q) {
+      append(results, el('h2.section-title', { text: 'Browse by year' }));
+      append(results, yearBar());
       paintRecent();
       return;
     }
 
     const parsed = parseDateQuery(q);
+
+    // Drilling in: a year shows its months, a month keeps the year bar so you
+    // can step sideways without going back to the top.
+    if (parsed?.kind === 'year' || parsed?.kind === 'month') {
+      append(results, el('h2.section-title', { text: 'Browse by year' }));
+      append(results, yearBar(parsed.year));
+      const months = monthBar(parsed.year);
+      if (months) append(results, months);
+    }
     const dateHits = parsed ? matchShowsByDate(index.shows, parsed, index.today) : [];
     const venueHits = matchVenues(index.venues, q).sort((a, b) =>
       compareVenuesByName(a.venue, b.venue),

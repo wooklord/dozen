@@ -547,6 +547,47 @@ button.gap-figure:active {
   color: var(--yolk);
 }
 
+/* A figure the list is NOT sorted by.
+ *
+ * .gap-num is --yolk, and yolk is load-bearing: it marks the number you are
+ * meant to scan. When the sort does not order by this column -- A–Z on the
+ * Songs list -- accenting it would claim a ranking that is not there. The
+ * number stays --ink: fully readable, no longer the focal point.
+ *
+ * NOTE: gapFigure has taken an `accent` option since 0.1.27 and emitted this
+ * class, but no rule ever matched it, so `accent: false` rendered identically
+ * to `accent: true` and the option did nothing at all. It does now.
+ *
+ * No weight treatment: at --t-lg/700 this is large text sitting alone in its
+ * own column, and --ink on --surface is 15.43:1 dark / 17.45:1 light. The
+ * light-mode weight bump the jam green needed was for 15px body-weight text
+ * competing with the prose beside it; nothing here is comparable.
+ */
+.gap-num.plain {
+  color: var(--ink);
+}
+
+/* Jam chart entry count, on the Jams tab ONLY.
+ *
+ * .gap-num is shared by six call sites -- gap chart, Songs, Shows, song detail,
+ * the shared song row -- and is --yolk everywhere else, where the number means
+ * gap magnitude. A modifier rather than a change to .gap-num, because the
+ * colour is right for this one figure and wrong for the other five.
+ *
+ * NO WEIGHT TREATMENT, unlike setlist text in light mode. That exists because
+ * a 15px regular green could not separate from the body text beside it. This
+ * number is already --t-lg at weight 700 and sits alone in its own column with
+ * no body text to be confused with, so it needs nothing; applying
+ * --jam-weight (600) would in fact make it LIGHTER than it is now.
+ *
+ * At 19px/700 this is "large text" under WCAG, so the 3:1 threshold applies
+ * rather than 4.5:1. --jam on --surface measures 9.54:1 dark and 6.52:1 light
+ * (scripts/contrast.mjs), clearing either.
+ */
+.gap-num.jam-count {
+  color: var(--jam);
+}
+
 .gap-unit {
   font-size: 10px;
   text-transform: uppercase;

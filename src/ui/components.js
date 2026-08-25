@@ -268,7 +268,7 @@ function heatFor(gap, maxGap) {
  */
 export function songRow(
   song,
-  { figure = 'gap', maxGap = 1, onOpen, index, jamBadge = false } = {},
+  { figure = 'gap', maxGap = 1, onOpen, index, jamBadge = false, accent = true } = {},
 ) {
   const picked = isPicked(song.song_id);
 
@@ -346,10 +346,13 @@ export function songRow(
   // The gap figure is a SIBLING of the row button, not a child: a button
   // cannot legally nest inside another button, and the figure needs its own
   // tap target so it can explain how the number was counted.
+  // `accent` marks this figure as the one the list is SORTED BY. Turned off,
+  // the number stays fully readable but stops claiming the eye -- see
+  // .gap-num.plain, which until 0.1.58 was a class with no rule behind it.
   const figureNode = index
-    ? gapFigure(value, unit, index)
+    ? gapFigure(value, unit, index, { accent })
     : el('div.gap-figure', null, [
-        el('div.gap-num.num', { text: value === null ? '—' : String(value) }),
+        el(`div.gap-num${accent ? '' : '.plain'}.num`, { text: value === null ? '—' : String(value) }),
         el('div.gap-unit', { text: unit }),
       ]);
 

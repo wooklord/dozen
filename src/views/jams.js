@@ -149,7 +149,13 @@ export function renderJams(ctx) {
             ],
           ),
           el('div.gap-figure', null, [
-            el('div.gap-num.num', { text: String(s.jamcharts.length) }),
+            // The COUNT carries the green, not the title. Green means "this
+            // was a jam chart entry", a per-performance fact -- and on this
+            // row the count IS that fact, so the colour lands on the thing it
+            // describes. Colouring the title would claim "this song is green",
+            // a weaker and different claim than the one green makes in a
+            // setlist. The title stays plain.
+            el('div.gap-num.num.jam-count', { text: String(s.jamcharts.length) }),
             el('div.gap-unit', { text: s.jamcharts.length === 1 ? 'entry' : 'entries' }),
           ]),
         ]),
