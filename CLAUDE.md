@@ -547,6 +547,28 @@ reused the first build's parsed stylesheet (now two origins, with a self-check
 that fingerprints the stylesheets each side actually received and fails if git
 reports CSS changes but the fingerprints match).
 
+Two more were found in 0.1.60, both of the same shape — a check that reads
+real numbers about a smaller universe than its output implies:
+
+- **It could not see chip bars at all.** `.sortbar` and `.chip` were missing
+  from its selector list. A chip bar is fixed-height and scrolls horizontally,
+  so adding or resizing a chip moves nothing else it probed, and the route came
+  back "identical". Adding "All shows" to the Shows year bar reported
+  **0 routes changed** until the selectors were added; with them, `#/shows`
+  reports 15 changed boxes and nothing else moves. The `.chip` comment in
+  `app.css` had cited "layout-diff reports every route byte-identical" as
+  evidence the tap-target change was inert — a claim from a tool that had never
+  measured a chip. It was true and it was not evidence.
+- **The stylesheet self-check could never fire on Windows.** It compares the
+  byte length of the CSS each side received and fails when git reports a CSS
+  change but the lengths MATCH. `git worktree add` honours `core.autocrlf`
+  (true here), so the ref side is served CRLF and the working tree LF: the
+  lengths differed by exactly one byte per line — 1502 for `app.css`, 344 for
+  `tokens.css` — on every run, forever. A guard that fires on equality, given
+  inputs that can never be equal, is a guard that cannot report the false
+  negative it exists for. CR is stripped before measuring now; the two sides
+  fingerprint equal on unchanged CSS and still diverge on a one-line edit.
+
 **It also makes two full archive pulls per run** — roughly 38 API requests.
 Running it repeatedly trips The Carton's documented 60/minute limit, which
 surfaces as an error boundary and reads like a harness bug. Wait a minute

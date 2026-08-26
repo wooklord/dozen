@@ -781,8 +781,12 @@ button.gap-figure:active {
  *
  * Same technique as .btn.btn-small: an absolutely-positioned ::after centred on
  * the box, 5px of overhang top and bottom. Pointer events on a pseudo-element
- * land on its host, so no JS and no layout change -- layout-diff reports every
- * route byte-identical.
+ * land on its host, so no JS and no layout change.
+ *
+ * That last sentence used to end "-- layout-diff reports every route
+ * byte-identical." It did, and the claim was worthless: .chip was not in that
+ * tool's selector list until 0.1.60, so it had never measured a chip at all.
+ * The conclusion was right, the evidence was not. Chips are probed now.
  *
  * 44px is the floor for one-handed use in a dark venue and it applies to the
  * Change button and the sort/filter chips just as much as to a full button.

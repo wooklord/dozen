@@ -810,6 +810,194 @@ server.listen(PORT, async () => {
   await evaluate(`(() => { const s = document.querySelector('.search'); s.value = ''; s.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   await sleep(1000);
 
+  // --- A selected chip must LOOK selected, in both themes -------------------
+  //
+  // The check above proves a month chip returns the same rows as typing its
+  // query. It passed for several builds while the month chip rendered with no
+  // selected state at all: monthBar never set aria-pressed, which is the only
+  // thing .chip[aria-pressed="true"] in app.css keys off. Correct filtering,
+  // invisible control -- the results were right and the bar that produced them
+  // said nothing about having produced them.
+  //
+  // ASSERTED ON THE PAINTED FILL, NOT ON THE ATTRIBUTE. Reading aria-pressed
+  // would only re-state the line added to fix this; a renamed CSS selector or
+  // a dropped token would leave it green with nothing on screen. The chip's
+  // computed background is compared against --chip-sel-fill resolved through a
+  // probe element, so this fails unless the chip is wearing the selected paint.
+  //
+  // Asserted as an EXACT set of painted labels per bar, never "at least one is
+  // painted": that catches both directions -- a chip that should be lit and is
+  // not, AND a stale chip still lit after the filter moved on. A degenerate
+  // token where the selected fill equals --surface fails here too, because
+  // then every chip in the bar reports as painted.
+  //
+  // BOTH THEMES, SET EXPLICITLY. The two do not share a hex, and data-theme is
+  // never left off: with no attribute the tokens follow the headless browser's
+  // OS preference, which is how layout-diff once "verified" a light-only
+  // change in a dark-mode run. The two fills are compared at the end, so a run
+  // that rendered one theme twice cannot report both as covered.
+  console.log('\nselected chips carry the selected paint:');
+
+  // Every .sortbar on screen, its chips, and the resolved selected fill.
+  // .chip is also used for things that are not toggles -- the Back chips, and
+  // Home's "Change" -- and none of those live in a .sortbar, so scoping to the
+  // bars is what keeps this check about chosen state.
+  const CHIP_PROBE = `(() => {
+    const probe = document.createElement('span');
+    probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--chip-sel-fill').trim();
+    document.body.appendChild(probe);
+    const selFill = getComputedStyle(probe).color;
+    probe.remove();
+    return {
+      theme: document.documentElement.getAttribute('data-theme'),
+      selFill,
+      bars: [...document.querySelectorAll('.sortbar')].map((bar) =>
+        [...bar.querySelectorAll('.chip')].map((c) => ({
+          text: c.textContent.trim(),
+          bg: getComputedStyle(c).backgroundColor,
+        })),
+      ),
+    };
+  })()`;
+
+  // Labels in bar N whose background is the selected fill.
+  const painted = (snap, i) => (snap.bars[i] || []).filter((c) => c.bg === snap.selFill).map((c) => c.text);
+  const chipLabels = (snap, i) => (snap.bars[i] || []).map((c) => c.text);
+  const sameList = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+
+  const setShowsQuery = async (v) => {
+    await evaluate(`(() => { const s = document.querySelector('.search'); if (!s) return false;
+      s.value = ${JSON.stringify(v)}; s.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+    await sleep(1100);
+  };
+  // Click a chip by EXACT LABEL inside bar N, so nothing here depends on chip
+  // order, and an absent chip is reported rather than silently skipped.
+  const clickChipIn = async (bar, label) => {
+    const ok = await evaluate(`(() => {
+      const b = [...document.querySelectorAll('.sortbar')][${bar}];
+      if (!b) return false;
+      const c = [...b.querySelectorAll('.chip')].find((x) => x.textContent.trim() === ${JSON.stringify(label)});
+      if (!c) return false;
+      c.click();
+      return true;
+    })()`);
+    await sleep(1100);
+    return ok;
+  };
+
+  const selFills = {};
+  for (const theme of ['dark', 'light']) {
+    await evaluate(`document.documentElement.setAttribute('data-theme', ${JSON.stringify(theme)});`);
+    await evaluate(`location.hash = '#/shows';`);
+    await sleep(1400);
+    await setShowsQuery('');
+
+    // 1. Landing: nothing is filtered, and the bar says so.
+    let snap = await evaluate(CHIP_PROBE);
+    selFills[theme] = snap.selFill;
+    if (snap.theme !== theme) {
+      fail(`chip paint (${theme}): data-theme reads ${JSON.stringify(snap.theme)} — the theme never applied`);
+      continue;
+    }
+    if (!snap.bars.length) { fail(`chip paint (${theme}): no .sortbar on Shows`); continue; }
+    let got = painted(snap, 0);
+    if (!sameList(got, ['All shows'])) {
+      fail(`chip paint (${theme}): landing year bar paints ${JSON.stringify(got)}, expected ["All shows"] (chips: ${JSON.stringify(chipLabels(snap, 0))})`);
+    } else pass(`${theme}: landing shows "All shows" selected (${snap.selFill})`);
+
+    // 2. A year: that year lit, "All shows" released, no month claimed.
+    const Y1 = '2019';
+    if (!(await clickChipIn(0, Y1))) { fail(`chip paint (${theme}): no ${Y1} chip`); continue; }
+    snap = await evaluate(CHIP_PROBE);
+    got = painted(snap, 0);
+    if (!sameList(got, [Y1])) {
+      fail(`chip paint (${theme}): year bar paints ${JSON.stringify(got)}, expected ["${Y1}"]`);
+    } else pass(`${theme}: ${Y1} selected, "All shows" released`);
+    if (snap.bars.length < 2) { fail(`chip paint (${theme}): ${Y1} exposed no month bar`); continue; }
+    got = painted(snap, 1);
+    if (got.length) {
+      fail(`chip paint (${theme}): a whole year is selected but the month bar paints ${JSON.stringify(got)}`);
+    } else pass(`${theme}: a year selects no single month`);
+
+    // 3. A month: THE BUG. The month lights, and its year stays lit.
+    const M1 = chipLabels(snap, 1)[1] || chipLabels(snap, 1)[0];
+    if (!(await clickChipIn(1, M1))) { fail(`chip paint (${theme}): no ${M1} chip`); continue; }
+    snap = await evaluate(CHIP_PROBE);
+    got = painted(snap, 1);
+    if (!sameList(got, [M1])) {
+      fail(`chip paint (${theme}): "${M1}" is the applied filter but the month bar paints ${JSON.stringify(got)} (chips: ${JSON.stringify(chipLabels(snap, 1))})`);
+    } else pass(`${theme}: month "${M1}" selected`);
+    got = painted(snap, 0);
+    if (!sameList(got, [Y1])) {
+      fail(`chip paint (${theme}): inside "${M1}" the year bar paints ${JSON.stringify(got)}, expected ["${Y1}"]`);
+    } else pass(`${theme}: the year stays selected inside a month`);
+
+    // 4. Step sideways to another year WHILE a month is applied. The months
+    //    are rebuilt for the new year, and nothing in the new bar may stay
+    //    lit -- the filter is now the whole of that year, and a chip left on
+    //    would describe a filter that is not applied.
+    const Y2 = '2018';
+    if (!(await clickChipIn(0, Y2))) { fail(`chip paint (${theme}): no ${Y2} chip`); continue; }
+    snap = await evaluate(CHIP_PROBE);
+    got = painted(snap, 0);
+    if (!sameList(got, [Y2])) {
+      fail(`chip paint (${theme}): after switching years the year bar paints ${JSON.stringify(got)}, expected ["${Y2}"]`);
+    } else pass(`${theme}: switching years moves the selection to ${Y2}`);
+    got = painted(snap, 1);
+    if (got.length) {
+      fail(`chip paint (${theme}): the ${Y2} month bar still paints ${JSON.stringify(got)} — a month survived the year switch`);
+    } else pass(`${theme}: no month survives a year switch`);
+
+    // 5. A month inside the NEW year still lights -- so step 4 cannot be
+    //    satisfied by selection being broken altogether.
+    const M2 = chipLabels(snap, 1)[0];
+    if (M2) {
+      if (!(await clickChipIn(1, M2))) fail(`chip paint (${theme}): no "${M2}" chip in ${Y2}`);
+      else {
+        snap = await evaluate(CHIP_PROBE);
+        got = painted(snap, 1);
+        if (!sameList(got, [M2])) {
+          fail(`chip paint (${theme}): "${M2}" in ${Y2} paints ${JSON.stringify(got)}`);
+        } else pass(`${theme}: months still select after a year switch ("${M2}" in ${Y2})`);
+      }
+    }
+
+    // 6. The same property swept across every OTHER chip bar in the app.
+    //    Songs carries two (sort + filter) and Jams one, and each has a
+    //    default, so exactly one chip per bar is painted at rest. This is what
+    //    makes the check about the CLASS of bug rather than this one bar.
+    for (const [where, hash, wantBars] of [['Songs', '#/songs', 2], ['Jams', '#/jams', 1]]) {
+      await evaluate(`location.hash = ${JSON.stringify(hash)};`);
+      await sleep(1400);
+      const s2 = await evaluate(CHIP_PROBE);
+      if (s2.bars.length < wantBars) {
+        fail(`chip paint (${theme}): ${where} rendered ${s2.bars.length} chip bar(s), expected ${wantBars}`);
+        continue;
+      }
+      const bad = s2.bars.map((_, i) => [i, painted(s2, i)]).filter(([, p]) => p.length !== 1);
+      if (bad.length) {
+        fail(`chip paint (${theme}): ${where} ${bad.map(([i, p]) => `bar #${i} paints ${JSON.stringify(p)}`).join(', ')} — expected exactly one selected chip`);
+      } else {
+        pass(`${theme}: ${where} — ${s2.bars.map((_, i) => JSON.stringify(painted(s2, i)[0])).join(' + ')} selected`);
+      }
+    }
+  }
+
+  // The two themes must not have rendered the same paint. If they did, one of
+  // them never applied and half of this section verified nothing -- the exact
+  // way a light-only regression stays invisible.
+  if (!selFills.dark || !selFills.light) {
+    fail(`chip paint: only ${Object.keys(selFills).join(', ') || 'no'} theme(s) produced a fill`);
+  } else if (selFills.dark === selFills.light) {
+    fail(`chip paint: dark and light both resolve --chip-sel-fill to ${selFills.dark} — one theme did not apply`);
+  } else pass(`selected fill differs by theme (dark ${selFills.dark}, light ${selFills.light})`);
+
+  // Leave the screen as this section found it: no forced theme, no query.
+  await evaluate(`document.documentElement.removeAttribute('data-theme');`);
+  await evaluate(`location.hash = '#/shows';`);
+  await sleep(1200);
+  await setShowsQuery('');
+
   // --- The accented figure follows the ACTIVE SORT --------------------------
   //
   // Asserted as a correspondence, never as "some figure is yolk". A fixed

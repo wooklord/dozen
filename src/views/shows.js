@@ -148,10 +148,21 @@ export function renderShows(ctx) {
   function yearBar(activeYear = null) {
     let activeChip = null;
     const bar = el('div.sortbar.sortbar-secondary', null, [
-      // Back out of a drill-down without having to clear the field by hand.
-      activeYear
-        ? el('button.chip', { type: 'button', onclick: () => browseTo('') }, 'All shows')
-        : null,
+      // Backs out of a drill-down without clearing the field by hand, AND
+      // carries the unfiltered state. It used to render only during a
+      // drill-down, so the landing bar had no pressed chip at all and the
+      // control said nothing about what it was showing. Rendering it always,
+      // pressed when no year is active, gives this bar the same property every
+      // other chip bar in the app has: the current state is visible in the bar.
+      el(
+        'button.chip',
+        {
+          type: 'button',
+          'aria-pressed': String(!activeYear),
+          onclick: () => browseTo(''),
+        },
+        'All shows',
+      ),
       ...archiveYears().map((y) => {
         const chip = el(
           'button.chip',
@@ -177,21 +188,47 @@ export function renderShows(ctx) {
     return bar;
   }
 
-  /** Months that have shows in this year, in calendar order. */
-  function monthBar(year) {
+  /**
+   * Months that have shows in this year, in calendar order.
+   *
+   * `aria-pressed` is what DRAWS the selection -- `.chip[aria-pressed="true"]`
+   * in app.css is the only rule that paints a chip as chosen. This bar shipped
+   * without the attribute: the filter applied correctly and the chip that
+   * applied it looked untouched, so the control disagreed with the screen it
+   * had just changed. Every other chip bar in the app -- Songs sort, Songs
+   * filter, Jams sort, the year bar above -- sets it; this one was the only
+   * omission, which is why nothing else looked wrong.
+   */
+  function monthBar(year, activeMonth = null) {
     const months = [...new Set(
       index.shows
         .filter((s) => Number(String(s.showdate).slice(0, 4)) === year)
         .map((s) => Number(String(s.showdate).slice(5, 7))),
     )].sort((a, b) => a - b);
     if (!months.length) return null;
-    return el('div.sortbar.sortbar-secondary', null, months.map((m) =>
-      el(
+
+    let activeChip = null;
+    const bar = el('div.sortbar.sortbar-secondary', null, months.map((m) => {
+      const chip = el(
         'button.chip',
-        { type: 'button', onclick: () => browseTo(`${MONTH_NAMES[m - 1]} ${year}`) },
+        {
+          type: 'button',
+          'aria-pressed': String(activeMonth === m),
+          onclick: () => browseTo(`${MONTH_NAMES[m - 1]} ${year}`),
+        },
         MONTH_NAMES[m - 1].slice(0, 3),
-      ),
-    ));
+      );
+      if (activeMonth === m) activeChip = chip;
+      return chip;
+    }));
+
+    // Twelve chips overflow a 390px bar, so the selected month can repaint
+    // off-screen exactly as the selected year could. Same treatment, same
+    // reason -- see yearBar.
+    if (activeChip) {
+      queueMicrotask(() => activeChip.scrollIntoView({ inline: 'center', block: 'nearest' }));
+    }
+    return bar;
   }
 
   function paint() {
@@ -212,7 +249,7 @@ export function renderShows(ctx) {
     if (parsed?.kind === 'year' || parsed?.kind === 'month') {
       append(results, el('h2.section-title', { text: 'Browse by year' }));
       append(results, yearBar(parsed.year));
-      const months = monthBar(parsed.year);
+      const months = monthBar(parsed.year, parsed.kind === 'month' ? parsed.month : null);
       if (months) append(results, months);
     }
     const dateHits = parsed ? matchShowsByDate(index.shows, parsed, index.today) : [];

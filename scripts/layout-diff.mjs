@@ -99,6 +99,15 @@ function serve(root, port) {
 
 // Every element class that carries visible layout. Position AND size, so a box
 // that changed height without moving still shows up.
+//
+// `.sortbar` and `.chip` were MISSING until 0.1.60, and their absence was
+// invisible in the output: a chip bar is fixed-height and scrolls its contents
+// horizontally, so adding, removing or resizing a chip moves nothing this
+// probe was looking at, and the route still reported "identical". Two claims
+// in the repo rested on that blind spot -- the chip tap-target change was
+// recorded as "layout-diff reports every route byte-identical" when layout-diff
+// had never once measured a chip. It happened to be true; it was not evidence.
+// A selector list is only as good as the things it names.
 const PROBE = `(() => {
   const round = (n) => Math.round(n * 10) / 10;
   const out = [];
@@ -106,6 +115,7 @@ const PROBE = `(() => {
     '.screen-title', '.section-title', '.card', '.btn', '.btn-small',
     '.setlist-song', '.setlist-label', '.fn-list li', '.venue-line',
     '.carton-link', '.info-link', '.stat', '.row-shell', '.tab', '.jam-card-song',
+    '.sortbar', '.chip',
   ]) {
     document.querySelectorAll(sel).forEach((n, i) => {
       const r = n.getBoundingClientRect();
@@ -183,9 +193,18 @@ const main = async () => {
     // sheet, and reported every route identical -- a false negative for any
     // change at all. Comparing fingerprints catches that directly, rather than
     // trusting that a different server implies different styles.
+    // CR IS STRIPPED BEFORE MEASURING, and that is the whole check working.
+    // `git worktree add` honours core.autocrlf, which is true on the machine
+    // this runs on, so the ref side is served CRLF and the working tree LF.
+    // The raw lengths therefore differed by exactly one byte per line -- 1502
+    // for app.css, 344 for tokens.css -- on every run, CSS change or not. The
+    // guard below fires only when the fingerprints MATCH, so a difference that
+    // can never go away is a guard that can never fire: it had no way to
+    // report the false negative it exists for. Normalising line endings is
+    // what makes equal mean equal.
     fingerprints[label] = await ev(
       `Promise.all(['/src/styles/tokens.css', '/src/styles/app.css'].map((u) =>
-         fetch(u, { cache: 'no-store' }).then((r) => r.text()).then((t) => t.length)
+         fetch(u, { cache: 'no-store' }).then((r) => r.text()).then((t) => t.replace(/\\r/g, '').length)
        )).then((n) => n.join('/'))`,
       true,
     );
