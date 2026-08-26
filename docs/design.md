@@ -177,6 +177,88 @@ entries so a green word does not flash an orange underline.
 song on a show page has a matching card in the "Jam chart entries" section directly below, in the
 same order, so the fact is never carried by hue alone.
 
+### The selected chip: a FILL is a channel that inline text does not have (0.1.59)
+
+Light mode failed the yolk accent on sort/filter chips the same way it failed the jam green. That
+made it structural rather than incidental, so it was measured rather than diagnosed by eye.
+
+**The obvious diagnosis was wrong again, in exactly the same way.** "A dark warm brown sits close
+in lightness to near-black body text" is measurably false:
+
+```
+                      dark            light
+ΔL*  yolk vs --ink    20.6            34.3     light has MORE
+ΔC*                   69.4            48.7     dark has more
+ΔE00                  28.49           33.04    light "better"
+```
+
+Light mode has **1.7× the lightness separation** and the larger ΔE00. This is the second time that
+prediction has come back inverted — see the jam-green section above — and the second time **chroma
+is the only axis that moves the way the screen does**. Do not go looking for a metric that says
+otherwise; that search has now been run twice and come back empty both times.
+
+**What IS structurally different: the fill changed sign between themes.** One shared `--yolk-wash`
+alpha, opposite meanings:
+
+```
+                                     dark    light
+unselected fill, signed ΔL* vs bar   +3.4    +3.0
+SELECTED fill,   signed ΔL* vs bar   +9.4    -5.3
+selected vs unselected, signed ΔL*   +6.1    -8.3
+```
+
+In dark the selected chip is the brightest thing in the sortbar. In light the identical token sent
+it *toward* the bar ground while the unselected white chip lifted away from it — so the selected
+state read as **less** of a control than its unselected neighbour. That is the "monotone" reading,
+and it is a fill problem, not a text-colour problem.
+
+**The lever chips have and inline text does not.** A fill clears no text threshold, so it is not
+bound by `--lt-yolk`'s 5.69:1 requirement and can use the *vivid* `#f5a623` pigment. Dark ink on a
+light saturated amber measures **13.71:1 at C\* 22.2**, and still 12.5:1 at C\* 32.8. The sRGB
+gamut ceiling that trapped the green — vivid *and* dark enough, pick one — simply does not apply
+when the colour is allowed to be light. **This is the general lesson: before accepting a gamut
+limit, check whether the element has a channel the failing one lacked.**
+
+**What the fill cannot do is carry the boundary.** Selected-vs-unselected fill tops out at 1.48:1
+even at α .50, because both are light. So the border had to go opaque — which is also the fix for
+the `.chip[aria-pressed="true"]` entry that sat in `KNOWN_GAPS` at 2.14:1 dark / 1.53:1 light. Same
+region, same root cause, one change. Fixing either alone would have moved the problem.
+
+**Shipped:** opaque fill (`#3d2c12` dark, `#f9e1ba` light), opaque `--yolk-deep` border, label
+`--yolk` in dark and `--ink` in light. Three dedicated `--*-chip-sel-*` tokens rather than reusing
+`--yolk-wash` / `--yolk-line`, which are also worn by `.row-shell[data-picked]` and `.badge-jam`.
+
+**The fill is opaque on purpose.** `.sortbar` is sticky with `backdrop-filter: blur(12px)`, so a
+translucent fill composites whatever is scrolling underneath and any audited figure would be true
+only at scroll position zero. The unselected chip has always been opaque, so this is also the
+symmetric choice.
+
+**Light diverges in structure, not just in hex.** Yolk on the new light fill measures **4.47:1** —
+it fails 4.5 by 0.03, at the ceiling, not by mistuning. Dark is at 6.61:1 and keeps its yolk label.
+This is the same per-theme divergence the jam weight token established.
+
+**WEIGHT was rendered and rejected here**, unlike for the green. It widened the tapped chip by up
+to 6.2px inside a horizontally-scrolling bar — the reflow happens *under the thumb, in response to
+the tap* — and `.chip-quiet`'s 500 made the jump larger on the filter row than the sort row. A
+solid-fill variant was also rendered and rejected as too loud: `#945906` at full strength reads
+chocolate rather than yolk and outweighs the content below it.
+
+**Now asserted, not merely measured.** Four pairs entered `PAIRS` (label on fill, border vs fill,
+border vs bar ground, border vs neighbouring chip fill) and the `KNOWN_GAPS` entry was deleted. The
+old design failed on exactly the pair nobody had asserted while every asserted pair stayed green —
+so the fix is worth nothing unless the pair that failed is the one now checked. All four were
+proved red before being trusted green, including the 4.47:1 near-miss.
+
+`readPalette()` now resolves `var(--dk-*)` aliases, so a token declared as `var(--dk-yolk-deep)`
+stays auditable instead of silently reporting MISSING and dropping out of the audit.
+
+**Found in passing, not fixed:** `.badge-jam` uses the same `--yolk-line` against `--surface` and
+measures **2.17:1 dark / 1.60:1 light**. It has been failing unrecorded and is now a `KNOWN_GAPS`
+entry. `.row-shell[data-picked="true"]` has the same disappearing-wash weakness (1.15:1 light), but
+its state is also carried by the `--yolk` pick button, so it is not a threshold failure. Both were
+left alone deliberately: `--yolk-line` and `--yolk-wash` are shared, and moving them would have
+changed the picked row along with the badge.
+
 ### Themes: Auto / Light / Dark
 
 Dark is the default and the design target. Light is a **supported theme**, not a courtesy — it was

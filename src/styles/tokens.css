@@ -56,6 +56,35 @@
   --dk-yolk-wash: rgba(245, 166, 35, 0.12);
   --dk-yolk-line: rgba(245, 166, 35, 0.35);
   --dk-yolk-ink: #1a1206;
+  /* Selected sort/filter chip. THREE DEDICATED TOKENS, not --yolk-wash and
+     --yolk-line, because those two are also worn by .row-shell[data-picked]
+     and .badge-jam and this change is scoped to chips.
+
+     WHY THE FILL IS OPAQUE. --yolk-wash was translucent, and a translucent
+     fill inside .sortbar cannot be measured: the bar is sticky with
+     `backdrop-filter: blur(12px)` over --shell-alpha, so whatever is
+     scrolling underneath composites into the chip. The number you audit is
+     then true only while the page is at the top. The UNSELECTED chip has
+     always been opaque (--surface), so an opaque selected chip is also the
+     symmetric choice, and the audited hex is the rendered hex on every
+     scroll position.
+
+     The fill is the vivid #f5a623 pigment composited onto the bar ground at
+     alpha .18 dark / .26 light. NOTE THE LIGHT WASH USES THE DARK THEME'S
+     YOLK: a fill clears no text threshold, so it is not bound by --lt-yolk's
+     5.69:1 requirement, and that is the whole reason this works where the
+     jam green's colour-only approach could not. See docs/design.md.
+
+     Measured, every threshold, both themes:
+       label on fill    dark 6.61:1   light 13.71:1   (min 4.5)
+       line vs fill     dark 4.13:1   light  5.62:1   (min 3)
+       line vs shell    dark  5.8:1   light  6.64:1   (min 3)
+       line vs surface  dark 5.44:1   light  7.15:1   (min 3)
+     All four are asserted in PAIRS -- this replaces the KNOWN_GAPS entry that
+     recorded the old translucent border at 2.14:1 dark / 1.53:1 light. */
+  --dk-chip-sel-fill: #3d2c12;
+  --dk-chip-sel-line: var(--dk-yolk-deep);
+  --dk-chip-sel-ink: var(--dk-yolk);
   /* Jam chart highlight. Green because The Carton itself marks jam chart
      entries green -- `.setlist-songbox .jamchart{color:#75eb00}` in its
      songfish-eggy.css -- so this is their signal retuned, not one invented
@@ -155,6 +184,19 @@
   --lt-yolk-wash: rgba(148, 89, 6, 0.1);
   --lt-yolk-line: rgba(148, 89, 6, 0.32);
   --lt-yolk-ink: #fffaf1;
+  /* See the --dk-chip-sel-* block for the full reasoning and the measured
+     figures. The one place the two themes diverge in STRUCTURE, not just in
+     hex: the light label is --lt-ink, not --lt-yolk.
+
+     Light cannot carry this in the text channel. Yolk on this fill measures
+     4.47:1 -- it fails 4.5 by 0.03 -- and that is the sRGB ceiling, not a
+     tuning miss: the label has to be dark to clear the threshold, and a dark
+     warm brown on a warm fill is the monotone reading being fixed. Dark has
+     no such problem (6.61:1) and keeps the yolk label. Rendered side by side
+     before choosing; the renders and the numbers agreed for once. */
+  --lt-chip-sel-fill: #f9e1ba;
+  --lt-chip-sel-line: var(--lt-yolk-deep);
+  --lt-chip-sel-ink: var(--lt-ink);
   --lt-jam: #376841;
   --lt-btn-line: #94836b;
   --lt-jam-weight: 600;
@@ -183,6 +225,9 @@
   --yolk-wash: var(--dk-yolk-wash);
   --yolk-line: var(--dk-yolk-line);
   --yolk-ink: var(--dk-yolk-ink);
+  --chip-sel-fill: var(--dk-chip-sel-fill);
+  --chip-sel-line: var(--dk-chip-sel-line);
+  --chip-sel-ink: var(--dk-chip-sel-ink);
   --jam: var(--dk-jam);
   --jam-weight: var(--dk-jam-weight);
   --btn-line: var(--dk-btn-line);
@@ -247,6 +292,9 @@
     --yolk-wash: var(--lt-yolk-wash);
     --yolk-line: var(--lt-yolk-line);
     --yolk-ink: var(--lt-yolk-ink);
+  --chip-sel-fill: var(--lt-chip-sel-fill);
+  --chip-sel-line: var(--lt-chip-sel-line);
+  --chip-sel-ink: var(--lt-chip-sel-ink);
     --jam: var(--lt-jam);
     --jam-weight: var(--lt-jam-weight);
     --btn-line: var(--lt-btn-line);
@@ -278,6 +326,9 @@
   --yolk-wash: var(--lt-yolk-wash);
   --yolk-line: var(--lt-yolk-line);
   --yolk-ink: var(--lt-yolk-ink);
+  --chip-sel-fill: var(--lt-chip-sel-fill);
+  --chip-sel-line: var(--lt-chip-sel-line);
+  --chip-sel-ink: var(--lt-chip-sel-ink);
   --jam: var(--lt-jam);
   --jam-weight: var(--lt-jam-weight);
   --btn-line: var(--lt-btn-line);

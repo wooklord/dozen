@@ -801,10 +801,27 @@ button.gap-figure:active {
   height: var(--tap);
 }
 
+/* SELECTED. Three dedicated tokens -- see the --dk-chip-sel-* block in
+ * tokens.css for the measurements and the reasoning.
+ *
+ * This used to be --yolk / --yolk-line / --yolk-wash and read as monotone in
+ * light: the translucent border measured 1.53:1 against its own fill (the
+ * KNOWN_GAPS entry, now closed) and the wash moved the chip TOWARD the bar
+ * ground while the unselected chip moved away from it -- so the selected state
+ * read as less of a control than the unselected one. Signed dL* vs the bar was
+ * +9.4 dark but -5.3 light, from one shared alpha.
+ *
+ * The fill is the channel inline text does not have: a saturated warm colour
+ * can be LIGHT and still take dark text, so light mode is not stuck against
+ * the sRGB ceiling that forced the jam green onto a weight channel. Weight was
+ * rendered here too and rejected -- it widened the tapped chip by up to 6.2px
+ * inside a horizontally-scrolling bar, and .chip-quiet's 500 made the jump
+ * bigger on the filter row than the sort row.
+ */
 .chip[aria-pressed="true"] {
-  color: var(--yolk);
-  border-color: var(--yolk-line);
-  background: var(--yolk-wash);
+  color: var(--chip-sel-ink);
+  border-color: var(--chip-sel-line);
+  background: var(--chip-sel-fill);
 }
 
 .search {

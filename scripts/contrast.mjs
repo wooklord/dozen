@@ -203,15 +203,40 @@ export function composite(fg, over) {
 /**
  * Every `--dk-*` / `--lt-*` hex declared in tokens.css, as { dk: {...}, lt: {...} }.
  *
- * Parsed rather than restated. rgba() values are skipped: the washes and line
- * tints are translucent, and a contrast figure for them would need the ground
- * composited in, which is a different calculation and not what this reports.
+ * Parsed rather than restated. rgba() values are kept as written: the washes
+ * and line tints are translucent, and a contrast figure for them is meaningless
+ * until composite() flattens them onto a ground.
+ *
+ * ALIASES ARE RESOLVED. A raw token may be declared as `var(--dk-yolk-deep)`
+ * rather than a hex, which is how a colour used in two roles stays edited in
+ * one place -- tokens.css's own rule. An unresolved alias would leave the token
+ * absent from this map, PAIRS would report it MISSING, and the pair would stop
+ * being audited: a check dying quietly, which is the failure mode this whole
+ * file exists to prevent. Chains resolve; a cycle throws rather than hanging.
  */
 export function readPalette(cssPath = path.join(ROOT, 'src/styles/tokens.css')) {
   const css = fs.readFileSync(cssPath, 'utf8');
   const out = { dk: {}, lt: {} };
-  for (const m of css.matchAll(/--(dk|lt)-([a-z0-9-]+):\s*(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\))\s*;/g)) {
+  for (const m of css.matchAll(
+    /--(dk|lt)-([a-z0-9-]+):\s*(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\)|var\(\s*--(?:dk|lt)-[a-z0-9-]+\s*\))\s*;/g,
+  )) {
     out[m[1]][m[2]] = m[3].toLowerCase();
+  }
+  for (const theme of ['dk', 'lt']) {
+    for (const key of Object.keys(out[theme])) {
+      const seen = new Set([key]);
+      let hops = 0;
+      let ref;
+      while ((ref = /^var\(\s*--(dk|lt)-([a-z0-9-]+)\s*\)$/.exec(out[theme][key]))) {
+        if (++hops > 10 || seen.has(ref[2])) {
+          throw new Error(`--${theme}-${key} resolves in a cycle via --${ref[1]}-${ref[2]}`);
+        }
+        seen.add(ref[2]);
+        const target = out[ref[1]][ref[2]];
+        if (!target) throw new Error(`--${theme}-${key} points at --${ref[1]}-${ref[2]}, which is not declared`);
+        out[theme][key] = target;
+      }
+    }
   }
   if (!Object.keys(out.dk).length || !Object.keys(out.lt).length) {
     throw new Error(`no --dk-*/--lt-* hex tokens found in ${cssPath}`);
@@ -269,6 +294,21 @@ export const PAIRS = [
   { fg: 'btn-line', bg: 'shell', min: 3, where: 'status chip and settings gear in the header; search on the page' },
   { fg: 'btn-line', bg: 'surface-up', min: 3, where: 'pressed button, and the segmented theme control fill' },
 
+  // The SELECTED sort/filter chip. Four pairs, because the old one-token
+  // version failed on exactly the pair nobody asserted (the border against its
+  // own fill, at 1.53:1 light) while the pairs that were asserted stayed green.
+  //
+  // `chip-sel-fill` is opaque on purpose -- a translucent fill under .sortbar's
+  // backdrop-filter composites whatever is scrolling underneath, so any figure
+  // measured for it would be true only at scroll position zero. See tokens.css.
+  //
+  // `bg: shell` is the sortbar ground: the bar paints --shell-alpha over the
+  // shell, and that composites back to exactly --shell.
+  { fg: 'chip-sel-ink', bg: 'chip-sel-fill', min: 4.5, where: 'selected sort/filter chip label' },
+  { fg: 'chip-sel-line', bg: 'chip-sel-fill', min: 3, where: 'selected chip border against its own fill' },
+  { fg: 'chip-sel-line', bg: 'shell', min: 3, where: 'selected chip border against the sortbar ground' },
+  { fg: 'chip-sel-line', bg: 'surface', min: 3, where: 'selected chip border beside an unselected chip fill' },
+
   { fg: 'danger', bg: 'shell', min: 4.5, where: 'error text, the NO SW chip' },
 ];
 
@@ -283,19 +323,24 @@ export const PAIRS = [
  * KEEP THIS LIST EMPTY IF YOU CAN. Every entry is a decision someone deferred.
  */
 export const KNOWN_GAPS = [
+  // The .chip[aria-pressed="true"] border that lived here (dark 2.14:1, light
+  // 1.53:1) is FIXED as of 0.1.59 and has moved into PAIRS as four asserted
+  // pairs. Do not re-add it; if it regresses, `node --test` goes red.
   {
-    what: '.chip[aria-pressed="true"] border (--yolk-line)',
-    measured: 'dark 2.14:1 against its own fill, light 1.53:1 — needs 3:1',
+    what: '.badge-jam border (--yolk-line over --surface)',
+    measured: 'dark 2.17:1, light 1.60:1 — needs 3:1',
     why:
-      'Translucent --yolk-line over translucent --yolk-wash over the shell. ' +
-      'Composited properly with composite(), not estimated. The SELECTED state ' +
-      'of a sort/filter chip therefore has a weaker boundary than its ' +
-      'unselected state, which now uses --btn-line at 3.4:1.',
+      'Found while measuring the chip accent, because it is the same ' +
+      '--yolk-line token with the same root cause: a translucent warm tint on ' +
+      'a warm ground has very little to work with. The badge sits on --surface ' +
+      'rather than the sortbar, so it was never covered by the chip pairs and ' +
+      'has been failing unrecorded.',
     note:
-      'Not a total loss of affordance: the pressed state also recolours the ' +
-      'label to --yolk and fills with --yolk-wash. Fixing it means raising ' +
-      "--yolk-line's alpha or giving the pressed chip an opaque border, and " +
-      'both change how selection looks. Left for an explicit decision.',
+      'The badge also carries --yolk label text, so the border is not the only ' +
+      'signal and this is a weaker failure than the chip one was. The chip fix ' +
+      'deliberately did NOT touch --yolk-line: that token is shared with ' +
+      '.row-shell[data-picked="true"], and changing it would move the picked-row ' +
+      'highlight too. Scoped out on purpose, pending an explicit decision.',
   },
 ];
 
