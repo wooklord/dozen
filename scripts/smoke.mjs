@@ -1235,6 +1235,138 @@ server.listen(PORT, async () => {
   else if (noNotes.block || noNotes.label) fail('show notes: empty notes block rendered on a show with none');
   else pass('a show with 28 songs and no notes renders no block and no header');
 
+  // --- Footnote markers are actually hittable -------------------------------
+  //
+  // docs/design.md and the CSS comment both said "footnotes are tappable, not
+  // tooltips" while the marker's hit region was 9.6 x 0. It is a <button> with
+  // line-height: 0, which gives an inline-block a zero-height line box -- the
+  // digit paints through overflow, so it looks completely normal and there is
+  // nothing to press. Markup can be tappable while the screen is not.
+  //
+  // MEASURED BY HIT-TESTING, NOT BY RECT ARITHMETIC. document.elementFromPoint
+  // is the browser's own answer to "what does a thumb here actually hit",
+  // which is the question. Comparing rectangles would re-implement hit testing
+  // and could agree with itself while disagreeing with the browser.
+  //
+  // Both directions are asserted, because this control cannot have both: the
+  // marker must be hittable across its region, AND the song titles around it
+  // must still hit themselves. A 44px region would pass the first and fail the
+  // second -- it would cover most of the lines above and below, which is why
+  // --fn-tap is deliberately below the 44px floor. The floor is compared
+  // against the TOKEN read from the page, so retuning --fn-tap moves the check
+  // with it instead of leaving a stale literal here.
+  console.log('\nfootnote markers:');
+  await evaluate(`location.hash = '#/show/1728657865';`);
+  await sleep(1400);
+  const fn = await evaluate(`(() => {
+    const btn = document.querySelector('button.fn-marker');
+    if (!btn) return { found: false };
+    const r = btn.getBoundingClientRect();
+    const token = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fn-tap')) || 0;
+    const hitH = parseFloat(getComputedStyle(btn, '::after').height) || 0;
+    const cx = r.x + r.width / 2;
+    const cy = r.y + r.height / 2;
+    const idOf = (n) => (n ? (n.tagName.toLowerCase() + '.' + (n.className || '')).trim() : 'nothing');
+    // Probe just inside the region the TOKEN claims, never the region that was
+    // measured. Derived from hitH these three points collapse onto one when
+    // the region is missing, and all three then "hit the marker" -- verified:
+    // with the ::after deleted that version still passed while the control had
+    // nothing to press. The token is the claim; this tests the claim.
+    const edge = Math.max(0, token / 2 - 1);
+    const hits = {
+      middle: idOf(document.elementFromPoint(cx, cy)),
+      top: idOf(document.elementFromPoint(cx, cy - edge)),
+      bottom: idOf(document.elementFromPoint(cx, cy + edge)),
+    };
+    // How far the region reaches INTO other tappable things.
+    //
+    // Hit-testing song-title CENTRES is not enough and was measured to prove
+    // it: at --fn-tap 44px no centre was stolen, because the line rhythm is
+    // 25.5px and a centre sits 25.5px away while the region reaches 22px. The
+    // region still covered a third of the neighbouring lines. Centres would
+    // have reported that as clean and licensed a 44px claim the geometry does
+    // not support. Overlap is measured as area, per marker, against every
+    // song title's real rect.
+    let worstDepth = 0;
+    const overlapped = [];
+    for (const m of document.querySelectorAll('button.fn-marker')) {
+      const mr = m.getBoundingClientRect();
+      const region = {
+        top: mr.y + mr.height / 2 - hitH / 2,
+        bottom: mr.y + mr.height / 2 + hitH / 2,
+        left: mr.x,
+        right: mr.x + mr.width,
+      };
+      for (const s of document.querySelectorAll('.setlist-song')) {
+        // getClientRects(), NOT getBoundingClientRect(). These are inline
+        // elements in wrapping text: a song title broken across two lines has
+        // a BOUNDING box spanning both lines at full column width, covering
+        // large areas the element does not occupy. Measured against that, a
+        // 24px region "overlapped" six titles including one it is nowhere
+        // near. Per-line boxes are where the text actually is.
+        for (const b of s.getClientRects()) {
+          if (b.width < 4 || b.height < 4) continue;
+          const dy = Math.min(region.bottom, b.y + b.height) - Math.max(region.top, b.y);
+          const dx = Math.min(region.right, b.x + b.width) - Math.max(region.left, b.x);
+          if (dy > 0.5 && dx > 0.5) {
+            // DEPTH, not area. Area confounds "reaches 1px into a wide title"
+            // with "reaches 11px into a narrow one", and it is the depth that
+            // decides whether a thumb aimed at that title lands on it.
+            const depth = Math.round(dy * 10) / 10;
+            if (depth > worstDepth) worstDepth = depth;
+            // Concatenation, not a nested template: this whole block is itself
+            // a template literal being sent to the browser, and a backtick
+            // inside it would end the string early.
+            overlapped.push(s.textContent.trim().slice(0, 18) + ' (' + depth + 'px)');
+          }
+        }
+      }
+    }
+    return {
+      found: true,
+      boxH: Math.round(r.height * 10) / 10,
+      boxW: Math.round(r.width * 10) / 10,
+      hitH, token, hits, worstDepth, overlapped: [...new Set(overlapped)],
+      markers: document.querySelectorAll('button.fn-marker').length,
+    };
+  })()`);
+
+  if (!fn.found) fail('footnotes: no button.fn-marker on the show — nothing measured, so nothing proved');
+  else {
+    if (!fn.token) fail('footnotes: --fn-tap is not defined, so the floor is unknown');
+    else if (fn.hitH < fn.token) {
+      fail(`footnotes: hit region is ${fn.hitH}px, below the --fn-tap floor of ${fn.token}px`);
+    } else pass(`hit region ${fn.hitH}px meets --fn-tap (${fn.token}px), from a ${fn.boxW} x ${fn.boxH}px box`);
+
+    // The box itself is zero-height by design; if the region were not doing
+    // the work this would read as a pass on a control with nothing to press.
+    if (fn.hitH <= fn.boxH) {
+      fail(`footnotes: the ::after region (${fn.hitH}px) adds nothing over the box (${fn.boxH}px)`);
+    } else pass(`the region is what makes it hittable (box ${fn.boxH}px -> ${fn.hitH}px)`);
+
+    const wrong = Object.entries(fn.hits).filter(([, v]) => !v.includes('fn-marker'));
+    if (wrong.length) {
+      fail(`footnotes: pressing the marker hits ${wrong.map(([k, v]) => `${k}=${v}`).join(', ')}`);
+    } else pass(`all three probe points hit the marker (${fn.markers} markers on screen)`);
+
+    // EDGE CONTACT IS UNAVOIDABLE; ENCROACHMENT IS NOT. The marker sits inside
+    // the line, so its region always touches the line box of the title beside
+    // it by a pixel or so. What must not happen is reaching far enough into a
+    // title that a thumb aimed there lands on the footnote instead.
+    //
+    // Both ends measured on this show, so the ceiling is not a guess:
+    //   --fn-tap 24px  ->  1.5px deep   (edge contact)
+    //   --fn-tap 44px  -> 11.5px deep   (over half a line's text height)
+    // 3px is set between them, nearer the floor: it leaves room for rounding
+    // and the marker's 1px padding while failing any real encroachment.
+    const FN_MAX_DEPTH = 3;
+    if (fn.worstDepth > FN_MAX_DEPTH) {
+      fail(`footnotes: the region reaches ${fn.worstDepth}px into a song title (max ${FN_MAX_DEPTH}px) — ${fn.overlapped.slice(0, 3).join(', ')}`);
+    } else {
+      pass(`reaches at most ${fn.worstDepth}px into a neighbouring title (max ${FN_MAX_DEPTH}px)`);
+    }
+  }
+
   // --- Show detail action row: one set, not two visual weights --------------
   //
   // Venue info was a link floating above this row and is now a third control

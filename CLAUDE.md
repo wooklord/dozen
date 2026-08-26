@@ -98,9 +98,17 @@ IndexedDB.
 | `shows` | 52 KB | 445 KB | 8.6× |
 | `venues` | 13 KB | 70 KB | 5.2× |
 | `songs` | 13 KB | 62 KB | 4.8× |
-| **Cold pull (5 requests)** | **0.60 MB** | **6.39 MB** | 10.7× |
+| `albums` | not measured | not measured | — |
+| **Cold pull (6 requests)** | **0.60 MB** | **6.39 MB** | 10.7× |
 | Verification pass (14 requests) | 0.40 MB | 5.22 MB | — |
 | **Total cold start** | **1.00 MB** | 11.61 MB | — |
+
+**`albums` shipped after this measurement and the totals were never re-taken.** It is a tiny table
+(13 track rows across 5 albums) so the 0.60 MB figure is still the right order of magnitude, but
+the row says "not measured" rather than carrying a guess — the point of this table is that its
+numbers were measured, and one invented entry would make the whole thing untrustworthy. The
+request COUNT is corrected because that one is verifiable from the code, and is now exported as
+`COLD_PULL_STEPS` from `src/data/source.js` so it cannot drift again.
 
 Brotli is available and better: `Accept-Encoding: br` alone returns **319 KB** for setlists vs
 403 KB for gzip. With a browser-typical `gzip, deflate, br` the server chose gzip, so 403 KB is
@@ -479,6 +487,44 @@ Two other bypasses were considered and rejected:
   hostname above: it would mean the offline path is never exercised outside
   production.
 
+### A stale record is worse than a missing one
+
+**When a change makes an existing doc entry or code comment false, correcting it is part of that
+change.** Not cleanup, not a follow-up, not something a later audit will catch. If the edit is not
+in the same commit as the thing that invalidated the record, it does not happen.
+
+Writing things down is working here. *Reconciling* them is not, and the gap is measurable: one
+audit pass found a design document quoting two palette hexes the stylesheet had moved off (the
+documented `--ink-faint` measured **3.29:1**, below the 4.5:1 floor the same document declares that
+token is sitting on), a README describing a BUILD marker that left the header at 0.1.33, this file
+arguing against the very `<meta>` check `verify-deploy.mjs` is built on, and `app.css` carrying
+three stacked comment blocks above `.jam-key` where only the third described the rule.
+
+**A stale entry reads with exactly the same authority as a current one.** That is the whole
+problem — nothing about it looks wrong, and it is trusted precisely because someone bothered to
+write it down. It is the documentation form of the proxy failure described above: the reader
+checks the record instead of the thing, and the record has more than one possible cause.
+
+`.chip-quiet` is the case that settles it. A dead CSS rule produced a false line in `design.md`
+("`.chip-quiet`'s 500 made the jump larger on the filter row than the sort row"), and that line was
+then cited as measured evidence in a **real design decision** — rejecting a weight treatment for
+selected chips. The comparison was between two rows rendering at the same weight. A record that
+never got reconciled did not just sit there being wrong; it changed the product.
+
+Concretely:
+
+- **Delete superseded comment blocks. Never stack a new one above them.** Two comments that
+  disagree do not average out to the truth; the reader believes whichever one they read first. If
+  the old block still holds something true, move that sentence into the new one and delete the
+  rest.
+- **Record a withdrawal as a withdrawal**, not as a quiet rewording. If a stated measurement turns
+  out to be wrong, say it was wrong and say what still stands without it. Silently editing it to
+  something true destroys the evidence that the reasoning was ever unsound.
+- **Where a doc copies a value from code, make a test compare them.** `tests/design-doc.test.mjs`
+  now pins `design.md`'s palette block to `tokens.css`, and `tests/coldpull.test.mjs` pins every
+  "N requests" claim in the docs to `COLD_PULL_STEPS`. A copy nothing checks will drift, and the
+  copy that drifts is the one being quoted.
+
 ### A check written in scratch is written once and trusted forever
 
 **If a check is worth writing twice, it is worth committing.**
@@ -666,21 +712,33 @@ first one is evidence.
 
 #### How to read the live BUILD number
 
-**The marker is not in the served HTML.** `index.html` ships an empty `<div id="header-status">`
-and `src/app.js` injects the marker at runtime. Fetching the page and grepping for "BUILD" finds
-nothing *even on a perfectly good deploy*, so that check would be worse than useless — it would
-report failure forever.
+**Run `node scripts/verify-deploy.mjs`.** It checks the number in three independent places and a
+deploy is verified only when all three agree with `src/version.js`:
 
-Two checks that do work, in order:
+1. **`<meta name="dozen-build">` in the served HTML**, matched anywhere in the document in any
+   attribute order. This is a plain `fetch` and needs no browser.
+2. **`https://dozen.wooklord.net/src/version.js`**, read for `BUILD = n`. The deployed source of
+   truth the app itself imports.
+3. **The Settings & data sheet, in a real browser on a clean profile** — the header's cache
+   button, then the `BUILD` entry. This is what a person actually gets, and it is the only one of
+   the three that exercises the service worker and the CDN in the combination a real load uses.
 
-1. **Fetch `https://dozen.wooklord.net/src/version.js`** and read `BUILD = n`. This is the
-   deployed source of truth and needs no browser.
-2. **Render `https://dozen.wooklord.net` in a clean browser profile** and read the text of
-   `.build-marker`. This is what the user actually sees, and it additionally catches
-   service-worker and caching problems that a raw file fetch would miss. Use a fresh profile so no
-   previously-registered service worker serves a stale shell.
+Cache-bust every request (`?t=<timestamp>`), navigation included, so a CDN copy is not mistaken
+for the new build.
 
-Cache-bust the fetch (`?t=<timestamp>`) so a CDN copy is not mistaken for the new build.
+> **This section used to say the opposite, and was wrong for eighteen builds.** It argued that
+> "the marker is not in the served HTML… grepping for BUILD would be worse than useless — it would
+> report failure forever," and told you to read a `.build-marker` element in the header. Both
+> statements described a version of this app that no longer exists. `index.html` has carried the
+> `<meta>` tag since 0.1.42, `tests/build.test.mjs` pins it to `src/version.js`, and
+> `verify-deploy.mjs` is *built on the check this paragraph told you not to write*. The
+> `.build-marker` class was deliberately renamed to `.status-chip` — it is the cache-age chip, and
+> reading it for a BUILD number is the exact trap recorded in the table above. The marker itself
+> moved into the Settings & data sheet in 0.1.33.
+>
+> Nothing here failed because of it: the tooling was correct and only the instructions rotted. But
+> anyone following the written procedure would have hand-rolled a check against a class that does
+> not exist, got `undefined`, and had no way to tell that from a failed deploy.
 
 #### The browser path and the fetch path can disagree (seen 2026-08-21)
 

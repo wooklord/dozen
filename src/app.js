@@ -2,7 +2,7 @@
 
 import { BUILD_LABEL } from './version.js';
 import { el, append, clear, icon, ICONS, openSheet } from './ui/dom.js';
-import { fetchFullArchive, fetchCurrentYear, DataSourceError } from './data/source.js';
+import { fetchFullArchive, fetchCurrentYear, DataSourceError, COLD_PULL_STEPS } from './data/source.js';
 import { readArchive, writeArchive, isStale, cacheAge, mergeYear } from './data/cache.js';
 import { buildIndex } from './data/index.js';
 import { formatAge, localYear } from './util/dates.js';
@@ -46,7 +46,16 @@ const statusSlot = document.getElementById('header-status');
 
 // --------------------------------------------------------------------- boot --
 
-/** The 12-cell carton, filling as the pulls complete. */
+/**
+ * The 12-cell carton, filling as the pulls complete.
+ *
+ * The twelve cells are split between the two phases FROM COLD_PULL_STEPS, not
+ * from a literal. With a hardcoded 5 against six actual pulls, the sixth cell
+ * filled and then verification's first progress event (done = 0) called
+ * fill(5) and took it back -- a visible un-fill on every cold start.
+ */
+const VERIFY_CELLS = 12 - COLD_PULL_STEPS;
+
 function loadingScreen() {
   const cells = [];
   const grid = el('div.carton');
@@ -99,9 +108,13 @@ async function coldStart() {
           filled += 1;
           loader.fill(filled, `Loading ${p.label}…`);
         } else if (p.phase === 'verify') {
-          // Verification occupies the last 7 cells.
+          // Verification occupies whatever the pulls did not.
           const frac = p.total ? p.done / p.total : 0;
-          loader.fill(5 + frac * 7, 'Verifying the archive…', `${p.done ?? 0} of ${p.total ?? 14} years checked`);
+          loader.fill(
+            COLD_PULL_STEPS + frac * VERIFY_CELLS,
+            'Verifying the archive…',
+            `${p.done ?? 0} of ${p.total ?? 14} years checked`,
+          );
         }
       },
     });
@@ -396,7 +409,12 @@ function confirmFullRebuild() {
     el('div', { style: { display: 'grid', gap: '10px' } }, [
       el('p.note', {
         text:
-          'This re-downloads the entire archive (about 5 MB) and re-verifies it year by year. ' +
+          // ABOUT 1 MB, NOT 5. The 5 MB figure was the PARSED size and it sat
+          // in a dialog whose whole job is to help someone decide whether to
+          // do this on venue wifi. Measured over the wire: 0.60 MB for the
+          // pulls plus 0.40 MB for the verification pass, because the API
+          // serves compressed. See CLAUDE.md for the per-table numbers.
+          'This re-downloads the entire archive (about 1 MB) and re-verifies it year by year. ' +
           'Worth doing on wifi. Your picks are not affected.',
       }),
       el(

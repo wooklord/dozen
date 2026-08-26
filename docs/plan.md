@@ -60,8 +60,10 @@ docs/
 
 ### Data layer rules
 
-- **One batched cold pull**, 5 requests total, all with explicit oversized `limit`:
-  `setlists?limit=20000`, `songs`, `shows`, `venues`, `jamcharts`. ~5.4 MB, dominated by setlists.
+- **One batched cold pull**, 6 requests total, all with explicit oversized `limit`:
+  `setlists?limit=20000`, `songs`, `shows`, `venues`, `jamcharts`, `albums`. ~0.6 MB over the wire,
+  dominated by setlists (5.4 MB is the parsed size, not the download). The count is exported as
+  `COLD_PULL_STEPS` from `src/data/source.js` — the loader splits its twelve cells by it.
 - **Simple requests only.** `fetch(url)` with no `headers` option, ever.
 - **Check `content-type` before parsing.** A bad method or column returns an HTML error page with
   HTTP 200, so a bare `res.json()` throws a confusing `SyntaxError`. Report the offending URL.
@@ -94,7 +96,7 @@ on the incremental fast path. That's the trade — the expensive pull is the one
 
 | Path | When | Cost |
 |---|---|---|
-| **Cold / full** | first run, or manual rebuild | 5 requests + 14 verification requests, ~5.4 MB |
+| **Cold / full** | first run, or manual rebuild | 6 requests + 14 verification requests, ~1.0 MB wire / 11.6 MB parsed |
 | **Fast** | TTL expiry, or pull-to-refresh | current year only (`setlists/showyear/2026` ≈ 948 rows, ~800 KB) merged into the stored index |
 | **Manual full rebuild** | user-initiated, **behind a confirm dialog** | same as cold |
 

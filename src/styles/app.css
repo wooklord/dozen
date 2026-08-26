@@ -520,15 +520,46 @@ button.gap-figure:active {
 }
 
 /* Filter row sits under the sort row and reads quieter -- sort is the
-   primary control on the Songs screen. */
-.sortbar-secondary {
+   primary control on the Songs screen.
+ *
+ * SELECTOR IS `.sortbar.sortbar-secondary`, AND THE DOUBLED CLASS IS THE
+ * WHOLE POINT. As plain `.sortbar-secondary` this rule was inert for its
+ * entire life: `.sortbar` below declares all four of these properties at
+ * EQUAL specificity and later in the file, and its `padding` and `margin`
+ * shorthands reset the longhands here too. Every secondary bar computed
+ * position:sticky, top:52px, padding-top:8px, margin-bottom:12px -- the
+ * defaults this rule exists to override.
+ *
+ * What that cost: on Songs the sort row and the filter row BOTH pinned to
+ * top:52px and overlapped on scroll, and on Shows the year and month bars did
+ * the same. "They do not compete as sticky headers because of
+ * .sortbar-secondary" was an argument about a rule that never applied.
+ *
+ * Order would fix it too and would be the fragile fix -- someone moves a block
+ * and it silently dies again. Specificity survives reordering.
+ *
+ * NOTE WHAT THIS MEANS FOR SHOWS, because it is a real consequence and not
+ * obviously the final answer: both bars there are secondary, so with the rule
+ * live NEITHER sticks and the year switcher scrolls away inside a long year.
+ * That is coherent -- the class means "not the pinned control" and now says so
+ * -- and it is strictly better than two bars pinned to the same 52px. Whether
+ * Shows should instead promote its YEAR bar to a plain .sortbar and keep only
+ * the month bar secondary is a design question this fix deliberately does not
+ * decide. */
+.sortbar.sortbar-secondary {
   top: auto;
   position: static;
   padding-top: 0;
   margin-bottom: var(--s-2);
 }
 
-.chip-quiet {
+/* Same trap, same fix: `.chip` sets font-weight 600 later at equal
+ * specificity, so plain `.chip-quiet` never applied a single declaration. The
+ * only call site (songs.js, the filter row) always carries both classes, so
+ * the filter chips have always rendered at 600 alongside the sort chips.
+ * See the note above .chip[aria-pressed="true"] for the design decision this
+ * silently invalidated. */
+.chip.chip-quiet {
   font-weight: 500;
 }
 .stat-tappable:active {
@@ -819,8 +850,15 @@ button.gap-figure:active {
  * can be LIGHT and still take dark text, so light mode is not stuck against
  * the sRGB ceiling that forced the jam green onto a weight channel. Weight was
  * rendered here too and rejected -- it widened the tapped chip by up to 6.2px
- * inside a horizontally-scrolling bar, and .chip-quiet's 500 made the jump
- * bigger on the filter row than the sort row.
+ * inside a horizontally-scrolling bar.
+ *
+ * THE SECOND HALF OF THAT REASON WAS NEVER REAL, and the decision now stands
+ * on the first half alone. It used to continue "and .chip-quiet's 500 made the
+ * jump bigger on the filter row than the sort row." `.chip-quiet` was dead at
+ * the time (see its rule above), so both rows were rendering at 600 and that
+ * observation compared two identical weights. It is recorded as withdrawn
+ * rather than quietly reworded: it was cited as measurement, it was wrong, and
+ * the 6.2px widening is the part that stands without it.
  */
 .chip[aria-pressed="true"] {
   color: var(--chip-sel-ink);
@@ -939,26 +977,24 @@ button.gap-figure:active {
  * explained, so the colour key belongs there and not at the top of the card
  * competing with the setlist.
  *
- * The words are the sample: no swatch, no separate label, no sentence.
+ * The words are the sample: no swatch, no separate label, no sentence. It is
+ * an <li> inside .fn-list, so the list's flex row does the aligning and there
+ * is nothing to position here; it inherits the list's size and top margin and
+ * reads as a peer of the footnotes rather than as a new block. Rendered only
+ * when the show HAS jam entries, on the same condition as the entries section
+ * below the card.
+ *
+ * ONE colour declaration for the whole row, so the bullet and the words cannot
+ * disagree. The words are green because the key shows you the thing it names --
+ * a green bullet beside grey text explains the bullet, not the song titles.
+ * The row overrides .fn-list's --ink-dim; it is the only item in that list
+ * that is not quoting The Carton.
  *
  * `var(--jam)` and nothing else. The literal hex belongs in exactly one place
  * (tokens.css) -- a copy here would keep confidently naming a colour the
  * setlist has stopped using, and nothing on screen would look wrong. That
  * value has already been retuned four times.
- *
- * Matches .fn-list's size and top margin so it reads as a peer of the
- * footnotes rather than as a new block. Rendered only when the show HAS jam
- * entries, on the same condition as the entries section below the card.
  */
-/* It is an <li> inside .fn-list, so the list's own flex row does the aligning
-   and there is nothing to position here. Colour is on the BULLET only -- the
-   words take the list's --ink-dim like every other footnote, because the point
-   is that this reads as one more item, not as a coloured note. */
-/* ONE colour declaration for the whole row, so the bullet and the words cannot
-   disagree. The words are green because the key shows you the thing it names --
-   a green bullet beside grey text explains the bullet, not the song titles.
-   The row overrides .fn-list's --ink-dim; it is the only item in that list
-   that is not quoting The Carton. */
 .jam-key {
   color: var(--jam);
 }
@@ -1137,7 +1173,33 @@ button.gap-figure:active {
   color: var(--ink-dim);
 }
 
-/* Footnotes are tappable, not tooltips -- hover does not exist on a phone. */
+/* Footnotes are tappable, not tooltips -- hover does not exist on a phone.
+ *
+ * `line-height: 0` STAYS, and it is why this needs a hit region at all. The
+ * marker is a <button> raised by vertical-align: super; without the zero line
+ * height its inline box would grow the setlist's 1.7 rhythm and reflow every
+ * card. The cost is that the button's own border box is literally 0px tall --
+ * the digit paints through overflow -- so for three releases "footnotes are
+ * tappable" described a control with no hit region at all. It was 9.6 x 0.
+ *
+ * ::after gives it one, the same technique as .chip and .btn.btn-small: an
+ * absolutely-positioned overlay centred on the box, pointer events landing on
+ * the host, no JS and nothing added to the flow.
+ *
+ * IT IS DELIBERATELY NOT 44px, AND THAT IS NOT AN OVERSIGHT. This control
+ * lives INSIDE flowing text on a 25.5px line rhythm (--t-md at 1.7), so a
+ * region tall enough to meet the floor reaches into the song titles around it
+ * and starts opening footnotes when someone meant to tap a song. Measured on
+ * show 1728657865, as the deepest reach into any title's line box:
+ *     --fn-tap 24px   ->   1.5px   (edge contact, unavoidable)
+ *     --fn-tap 44px   ->  11.5px   (over half a line's text height)
+ * The smoke test measures this on every run rather than trusting the numbers
+ * in this comment. Horizontal expansion is not available either: the immediate
+ * neighbours are .setlist-song buttons with no gap between them.
+ *
+ * So the 44px floor holds for standalone controls and is explicitly not met
+ * here. See docs/design.md -- recorded as a known limit, not a passed check.
+ */
 .fn-marker {
   color: var(--yolk);
   font-size: var(--t-xs);
@@ -1145,6 +1207,21 @@ button.gap-figure:active {
   vertical-align: super;
   line-height: 0;
   padding: 0 1px;
+}
+/* Scoped to the BUTTON. The same class renders as a <span> in the footnote
+   list below the card, where it is a label and not a control -- an overlay
+   there would sit on top of the footnote text for no reason. */
+button.fn-marker {
+  position: relative;
+}
+button.fn-marker::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: var(--fn-tap);
 }
 
 .fn-list {
@@ -1239,21 +1316,22 @@ button.gap-figure:active {
 }
 
 /* Outbound link back to The Carton, on every show, song and venue surface.
-   These sit beside the content they point at, on almost every screen, and at
-   13px/600 they were pulling the eye off it. Held small and quiet: --t-xs at
-   weight 500 in --ink-faint. The 44px tap target is unchanged -- this is a
-   type change, not a target change, and the link is still reachable one-handed.
-   Measured: 4.86:1 dark, 5.65:1 on white, 4.81:1 on the light pressed surface.
-   AA for normal text, so it clears the bar at any size.
-
-   The attribution footer is deliberately NOT included -- .attrib a is its own
-   rule and that credit stays at full strength. Toning these down is a density
-   decision about repeated inline links; the disclaimer is the actual credit
-   and it is not being quieted. */
-/* Receded again in 0.1.45. The screen has gained jam highlights, a jam key, a
- * jam entries section and show notes inside the card since these links were
- * last tuned, and they were taking more attention than attribution needs.
- * Attribution must be present and findable, not prominent.
+ * These sit beside the content they point at, on almost every screen, and at
+ * 13px/600 they were pulling the eye off it. Held small and quiet: --t-2xs at
+ * weight 400 in --ink-faint. The 44px tap target is unchanged throughout --
+ * these are type changes, not target changes, and the link stays reachable
+ * one-handed.
+ *
+ * The attribution footer is deliberately NOT included -- .attrib a is its own
+ * rule and that credit stays at full strength. Toning these down is a density
+ * decision about repeated inline links; the disclaimer is the actual credit
+ * and it is not being quieted.
+ *
+ * Receded again in 0.1.45, from --t-xs/500 to the current --t-2xs/400. The
+ * screen has gained jam highlights, a jam key, a jam entries section and show
+ * notes inside the card since these links were last tuned, and they were
+ * taking more attention than attribution needs. Attribution must be present
+ * and findable, not prominent.
  *
  * THE OLD "Carton stays visibly primary over Venue info" RULE IS RETIRED.
  * It was set when Venue info shipped and the screen was simpler. Carton links

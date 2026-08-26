@@ -249,7 +249,19 @@ export async function verifyArchive(fullRows, fullUrl, years, onProgress) {
 }
 
 /**
- * One batched cold pull: 5 requests, then verification.
+ * How many fetch-phase steps `fetchFullArchive` emits before verification.
+ *
+ * EXPORTED BECAUSE THE LOADER HAS TO SPLIT ITS TWELVE CELLS BY IT, and the
+ * number was wrong for as long as albums existed: six pulls ran, six cells
+ * filled, and then verification called fill(5 + 0) on its first progress
+ * event and visibly UN-filled one. Six places in the repo said five. One
+ * exported constant, and `tests/coldpull.test.mjs` counts the actual
+ * onProgress events against it so a seventh pull cannot be added quietly.
+ */
+export const COLD_PULL_STEPS = 6;
+
+/**
+ * One batched cold pull: COLD_PULL_STEPS requests, then verification.
  *
  * On verification failure this THROWS rather than returning partial data, so
  * the caller keeps whatever was previously cached instead of replacing it with

@@ -24,12 +24,18 @@ the work that an illustration would otherwise do.
 --surface-up   #262019   raised / pressed
 --line         #332C25   hairlines
 --ink          #F5EFE6   primary text, warm white
---ink-dim      #A99F92   secondary text
---ink-faint    #6E655B   tertiary, timestamps
+--ink-dim      #bcb2a3   secondary text
+--ink-faint    #8d8375   tertiary, timestamps
 --yolk         #F5A623   THE accent
 --yolk-deep    #C77F14   pressed
 --yolk-wash    rgba(245,166,35,.12)   selected row fill
 ```
+
+`src/styles/tokens.css` is the source of truth and this block is a copy of it, so
+`tests/design-doc.test.mjs` fails if the two disagree. It caught this block quoting `--ink-dim`
+as `#A99F92` and `--ink-faint` as `#6E655B` long after the tokens moved: the documented
+`--ink-faint` measured **3.29:1**, below the 4.5:1 floor that *this same document* declares that
+token is sitting on. A stale palette reads exactly like a current one.
 
 **One accent, and it is load-bearing.** Yolk marks only:
 
@@ -239,9 +245,19 @@ This is the same per-theme divergence the jam weight token established.
 
 **WEIGHT was rendered and rejected here**, unlike for the green. It widened the tapped chip by up
 to 6.2px inside a horizontally-scrolling bar — the reflow happens *under the thumb, in response to
-the tap* — and `.chip-quiet`'s 500 made the jump larger on the filter row than the sort row. A
-solid-fill variant was also rendered and rejected as too loud: `#945906` at full strength reads
-chocolate rather than yolk and outweighs the content below it.
+the tap*. A solid-fill variant was also rendered and rejected as too loud: `#945906` at full
+strength reads chocolate rather than yolk and outweighs the content below it.
+
+> **One half of that reason has been withdrawn (0.1.61).** This passage used to continue "and
+> `.chip-quiet`'s 500 made the jump larger on the filter row than the sort row." That never
+> happened. `.chip-quiet` was a dead rule — `.chip` re-declared `font-weight` later at equal
+> specificity — so both rows were rendering at 600 and the comparison was between two identical
+> weights. It is recorded as withdrawn rather than silently reworded, because it was offered as
+> measurement. The 6.2px widening was real and the decision stands on it alone.
+>
+> This is the clearest case in the repo for why a stale record is worse than a missing one: a
+> false line in a design document produced a real design decision, and read with exactly the same
+> authority as the true line beside it.
 
 **Now asserted, not merely measured.** Four pairs entered `PAIRS` (label on fill, border vs fill,
 border vs bar ground, border vs neighbouring chip fill) and the `KNOWN_GAPS` entry was deleted. The
@@ -322,8 +338,25 @@ down. Weight carries hierarchy more than size does, because size costs rows-per-
 ## Layout and touch
 
 - **Bottom tab bar.** Primary navigation sits within thumb reach; nothing critical lives in the top
-  corners. The header is for identity and status only (name, BUILD, cache age).
+  corners. The header is for identity and status only (name, cache age; BUILD moved into the
+  Settings & data sheet in 0.1.33).
 - **44 px minimum touch targets**, enforced on rows and controls.
+
+  **One documented exception: the footnote marker, at 24px** (`--fn-tap`). It is a control inside
+  flowing text on a 25.5px line rhythm, so a region tall enough to meet the floor reaches into the
+  song titles beside it and starts opening footnotes when someone meant to tap a song. Measured as
+  the deepest reach into any title's line box: **24px reaches 1.5px** (edge contact, unavoidable
+  for a marker that sits inside the line) and **44px reaches 11.5px**, over half a line's text
+  height. Horizontal expansion is unavailable because its immediate neighbours are song buttons
+  with no gap. The smoke test measures this on every run rather than trusting the numbers here —
+  and the first version of that measurement was wrong in a way worth recording: it used
+  `getBoundingClientRect()` on inline elements, and a song title wrapped across two lines has a
+  bounding box spanning both at full column width, so it reported 24px as overlapping six titles
+  it was nowhere near. Per-line `getClientRects()` is where the text actually is. Recorded as a
+  **known limit, not a passed check** — until 0.1.61 this control had a hit region of 9.6 × **0**
+  px, because `line-height: 0` gives an inline-block button a zero-height line box while the digit
+  still paints through overflow. "Footnotes are tappable" was true of the markup and false of the
+  screen for three releases.
 - **Sort and filter open as bottom sheets**, not dropdowns — reachable, and they don't require
   precise aiming.
 - **No hover-dependent affordances.** Anything discoverable only on hover does not exist on a
@@ -342,9 +375,11 @@ down. Weight carries hierarchy more than size does, because size costs rows-per-
 ## The carton motif, used once
 
 The dozen is twelve. The **cold-start loading state is a 12-cell carton grid that fills** as the
-five pulls and the verification pass complete. It is the only literal carton reference in the app,
-it appears exactly when the user has nothing to do but wait, and it doubles as real progress
-feedback for a 5 MB download.
+six pulls and the verification pass complete — six cells each, split from `COLD_PULL_STEPS` rather
+than a literal, because a hardcoded five against six pulls made the sixth cell fill and then
+un-fill on every cold start. It is the only literal carton reference in the app, it appears exactly
+when the user has nothing to do but wait, and it doubles as real progress feedback for a ~1 MB
+download (the archive is 11.6 MB parsed; it arrives compressed).
 
 Rounded-oval cell shapes echo through row corner radii (`--r-cell: 10px`) without ever being
 drawn as eggs.

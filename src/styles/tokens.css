@@ -266,6 +266,15 @@
 
   --tap: 44px; /* minimum touch target, enforced */
 
+  /* Footnote markers only, and deliberately BELOW --tap. They sit inline in
+     the setlist's 25.5px line rhythm (--t-md at 1.7), so a 44px hit region
+     would cover the lines above and below and steal taps from those song
+     titles. 24px is the tallest that stays clear of both; the smoke test
+     measures the real overlap rather than trusting this number. A separate
+     token so it can never be mistaken for the enforced floor, and so nobody
+     "fixes" --tap to match it. */
+  --fn-tap: 24px;
+
   --header-h: 52px;
   --tabs-h: 58px;
 }

@@ -142,10 +142,12 @@ docs/                 plan, schema, design, parked ideas
 
 ### Data flow
 
-Cold start is **one batched pull** (5 requests, ~5.4 MB) into IndexedDB, then an **independent
+Cold start is **one batched pull** (6 requests, ~0.6 MB over the wire) into IndexedDB, then an **independent
 verification**: per-year setlist counts are summed and compared against the full pull on both row
 count and newest date. On mismatch it hard-fails and keeps the previously cached data rather than
-replacing it with something subtly wrong.
+replacing it with something subtly wrong. Total cold start is ~1.0 MB on the wire; the 5.4 MB
+figure this used to quote is the **parsed** size, which is what has to fit in memory, not what a
+phone downloads.
 
 Afterwards, refresh pulls **the current year only** and merges it. Because Carton editors amend old
 setlists retroactively, a **full rebuild** is available behind a confirm dialog in the header's
@@ -156,9 +158,14 @@ index is diagnosable without dev tools.
 
 ### The BUILD marker
 
-`BUILD 0.1.x` renders in the page header at all times and is bumped on every change that ships to
-the browser. It is how a deploy gets confirmed. It lives in `src/version.js`; the service worker
-cache name in `sw.js` is bumped to match.
+`BUILD 0.1.x` is bumped on every change that ships to the browser and is how a deploy gets
+confirmed. It lives in `src/version.js`; `index.html` carries the same number in a
+`<meta name="dozen-build">` tag, and the service worker cache name in `sw.js` is bumped to match.
+`tests/build.test.mjs` fails if those three drift apart.
+
+It is reachable **in two taps** — the header's cache button opens the Settings & data sheet, where
+it renders as a labelled entry. It was a permanent header chip until 0.1.33; the header now shows
+cache age instead.
 
 ## Gotchas worth knowing
 
@@ -199,9 +206,11 @@ That single record is all that is needed for a subdomain. Do **not** add A recor
 for apex domains. Propagation is usually minutes; GitHub will show "DNS check successful" on the
 Pages settings screen when it is ready.
 
-**Confirming a deploy landed:** load the site and read the `BUILD` marker in the header. If it
-hasn't changed, the deploy hasn't landed (or the service worker is serving a cached shell — pull
-to refresh, or use the cache panel's full rebuild).
+**Confirming a deploy landed:** run `node scripts/verify-deploy.mjs`, which checks the number in
+three independent places against `src/version.js`. By hand: open the site, tap the cache button in
+the header and read `BUILD` in the Settings & data sheet. If it hasn't changed, the deploy hasn't
+landed (or the service worker is serving a cached shell — pull to refresh, or use the sheet's full
+rebuild).
 
 ## Credits
 
