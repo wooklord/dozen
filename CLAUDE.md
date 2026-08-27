@@ -731,6 +731,21 @@ was found in 0.1.63 and is the third fault in a row in this one guard:
   arbitrate. The CRLF version of this same mistake was the 0.1.60 fix; hashing
   is what actually fixes it.
 
+**And the CR fix had to be made a second time (0.1.65).** Moving the probe from
+file lengths to the CSSOM quietly reintroduced the fault the 0.1.60 fix had
+closed, in a new place. **The CSSOM preserves custom property values verbatim**
+— unlike standard declarations, which it re-serialises canonically — so a
+multi-line one keeps its line endings. `--font` in `tokens.css` spans two lines,
+`git worktree add` honours `core.autocrlf`, and the ref side is CRLF while the
+working tree is LF. Byte-identical stylesheets hashed differently on every run.
+
+It was caught by noticing the fingerprints disagreed on a commit that **changed
+no CSS at all** — the numbers looked plausible and nothing else about the output
+was wrong. Worth generalising: **a fix recorded in this file is not a fix that
+survives a rewrite of the thing it fixed.** When a check is reimplemented, its
+past bugs are candidates again, and the place to look is the list of them that
+already exists.
+
 Fixing the first created a third problem worth recording, because it is the
 house pattern again: **the CSSOM drops comments**, so a comment-only CSS edit
 produces identical fingerprints while `git diff --name-only` reports a change —

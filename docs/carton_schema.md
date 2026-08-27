@@ -132,7 +132,7 @@ The core table. One row per song performance. `/v2/setlists/showyear/2013.json?o
 | `tour_id` / `tourname` | number / string | `"Not Part of a Tour"` is the common value |
 | `soundcheck` | string | |
 | `isverified` | number | 0 \| 1 |
-| `slug` | string | song slug, e.g. `"yuck"` |
+| `slug` | string | song slug, e.g. `"yuck"` — **or the sentinel `"_custom_"`, see below** |
 | `isoriginal` | number | **1 = Eggy original, 0 = cover** |
 | `original_artist` | string | `""` when `isoriginal = 1`; the covered artist when `0` |
 | `venuename` | string | **raw here** (`"Toad's Place"`), entity-encoded in `shows` |
@@ -162,18 +162,49 @@ One Set / e      136      Set / 3       25
                           Set / e2       1
 ```
 
-Show structures across the archive:
+Show structures across the archive — **nine distinct shapes across all 610
+shows with setlists**, measured 2026-08-27. Listed as the app renders them,
+which splits the one-set shows that have an encore from the ones that do not;
+an earlier version of this table lumped both into a single `ONESET 174` row.
 
 ```
-S1              192 shows     (single set recorded)
-ONESET          174 shows
-S1+S2+Se        174 shows     (the standard two-set-plus-encore show)
-S1+Se            47 shows
-S1+S2            17 shows
-S1+S2+S3          4 shows
-S1+Se+Se2         1 show
-S1+S2+S3+Se       1 show
+Set 1                             192 shows   (single numbered set recorded)
+Set 1 + Set 2 + Encore            174 shows   (the standard two-set-plus-encore show)
+One Set                           100 shows
+One Set + Encore                   74 shows
+Set 1 + Encore                     47 shows
+Set 1 + Set 2                      17 shows   (two sets, no encore)
+Set 1 + Set 2 + Set 3               4 shows
+Set 1 + Encore + Encore 2           1 show
+Set 1 + Set 2 + Set 3 + Encore      1 show
 ```
+
+**Set 3 and Encore 2 both exist**, in 25 rows and 1 row respectively. Anything
+mapping set structures has to handle them, and the four shapes below the fold
+here are the ones easily missed by reasoning from the common cases.
+
+### `slug == "_custom_"` marks a row that is NOT a song
+
+Three rows in the archive carry `slug = "_custom_"` — how The Carton records
+banter, announcements and other free-text setlist items:
+
+| showdate | `songname` | venue |
+|---|---|---|
+| 2022-03-17 | `Why Should I Worry` | Mercury Lounge |
+| 2022-11-05 | `NYE Announcement` | The Foundry |
+| 2023-12-07 | `Hanukkah Banter` | Rockefellers |
+
+**All three carry `song_id = 1`, which does not exist in `songs`.** They are the
+only rows in the 6361-row archive whose `song_id` is absent from the songs
+table. Anything joining on `song_id` merges all three into one entity — which
+is where a catalogue count of 367 comes from against a `songs` endpoint that
+returns 366.
+
+**Filter on the slug, not the id.** The slug is the field that says what the row
+is; the id is only where those rows happen to point. Verified against live data
+that the two predicates select exactly the same three rows, so the semantic one
+is the one that survives Carton renumbering anything. See `isCustomEntry()` in
+`src/data/index.js`.
 
 ### Transitions — preserve these exactly
 

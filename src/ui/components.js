@@ -1,7 +1,7 @@
 // Shared UI pieces used across screens.
 
 import { el, icon, ICONS, append, openSheet } from './dom.js';
-import { parseFootnotes, setLabel } from '../data/index.js';
+import { parseFootnotes, setLabel, isCustomEntry } from '../data/index.js';
 import { formatShowDateShort } from '../util/dates.js';
 import { isPicked, togglePick } from '../scratchpad.js';
 
@@ -473,18 +473,34 @@ export function setlistBlock(rows, { onSong, index } = {}) {
       // highlight costs no join. `data-jam` is what the smoke test asserts,
       // because a class is also what a stylesheet could set by accident.
       const isJam = Number(r.isjamchart) === 1;
+
+      // A FREE-TEXT ENTRY RENDERS AS TEXT, not as a control.
+      //
+      // "NYE Announcement" and the two rows like it are not songs and have no
+      // song page to open -- they are excluded from the catalogue by
+      // isCustomEntry. Rendering them tappable would offer a door to nothing.
+      // Before this they DID lead somewhere, which was worse: all three shared
+      // song_id 1, so tapping "NYE Announcement" opened a merged entry titled
+      // "Why Should I Worry" claiming three performances.
+      //
+      // The text itself is unchanged and still appears exactly where The
+      // Carton puts it in the setlist.
+      const custom = isCustomEntry(r);
       const song = el(`span.setlist-song${isJam ? '.jam' : ''}`, {
-        role: 'button',
-        tabindex: '0',
+        role: custom ? null : 'button',
+        tabindex: custom ? null : '0',
         'data-jam': isJam ? 'true' : null,
+        'data-custom': custom ? 'true' : null,
         text: r.songname,
-        onclick: () => onSong?.(Number(r.song_id)),
-        onkeydown: (e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onSong?.(Number(r.song_id));
-          }
-        },
+        onclick: custom ? null : () => onSong?.(Number(r.song_id)),
+        onkeydown: custom
+          ? null
+          : (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onSong?.(Number(r.song_id));
+              }
+            },
       });
       append(flow, song);
 

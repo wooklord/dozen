@@ -91,6 +91,42 @@ export function jamKey(showId, songId, setnumber, position) {
   return `${Number(showId)}|${Number(songId)}|${String(setnumber).toLowerCase()}|${Number(position)}`;
 }
 
+/**
+ * Is this setlist row a free-text entry rather than a song?
+ *
+ * The Carton records banter, announcements and other non-song items as setlist
+ * rows carrying `slug === '_custom_'`. Measured 2026-08-27, there are three in
+ * the whole 6361-row archive:
+ *
+ *   2022-03-17  Mercury Lounge  "Why Should I Worry"
+ *   2022-11-05  The Foundry     "NYE Announcement"
+ *   2023-12-07  Rockefellers    "Hanukkah Banter"
+ *
+ * ALL THREE SHARE `song_id = 1`, WHICH DOES NOT EXIST IN THE `songs` TABLE --
+ * they are the only rows in the archive pointing at an absent song id. Keyed
+ * on song_id, as this index is, the three collapsed into one browsable "song"
+ * called "Why Should I Worry" with three performances that have nothing to do
+ * with each other, and it was the 367th entry in a catalogue of 366.
+ *
+ * MATCHED ON THE SLUG, NOT THE ID. The slug is the part that says what the row
+ * IS; `song_id = 1` is just where those rows happen to point. Verified against
+ * live data that the two predicates select exactly the same three rows -- no
+ * `_custom_` row carries a different song_id, and no row with song_id 1
+ * carries a different slug -- so this is a choice about which fact to depend
+ * on, and the semantic one survives Carton renumbering something.
+ *
+ * THE ROWS ARE NOT DROPPED FROM THE SETLIST. They are excluded from SONG
+ * IDENTITY -- the catalogue, gap, and everything keyed on a song -- while
+ * still rendering in the setlist where The Carton renders them. Dropping them
+ * outright was measured and would not have changed any show's structure (each
+ * sits in a set with other entries), but it would have made this app's setlist
+ * for those three shows disagree with the page it links to, which is a worse
+ * failure than a count being one too high.
+ */
+export function isCustomEntry(row) {
+  return String(row?.slug) === '_custom_';
+}
+
 /** Human label for a set. */
 export function setLabel(settype, setnumber) {
   const n = String(setnumber).toLowerCase();
@@ -352,6 +388,9 @@ export function buildIndex(raw) {
 
   const bySong = new Map();
   for (const row of setlists) {
+    // Free-text entries are not songs and do not enter the catalogue. See
+    // isCustomEntry -- the row stays in setlistByShow and still renders.
+    if (isCustomEntry(row)) continue;
     const id = Number(row.song_id);
     let entry = bySong.get(id);
     if (!entry) {
@@ -626,6 +665,10 @@ export function gapChartForShow(index, showId) {
   // first occurrence sets the position; repeats are counted instead.
   const seen = new Map();
   for (const r of rows) {
+    // A gap is a property of a song entering a show. A free-text entry has no
+    // gap to report, and keyed on its shared song_id it would report one
+    // computed across three unrelated announcements.
+    if (isCustomEntry(r)) continue;
     const id = Number(r.song_id);
     const existing = seen.get(id);
     if (existing) {

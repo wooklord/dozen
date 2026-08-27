@@ -1293,6 +1293,73 @@ server.listen(PORT, async () => {
   else if (noNotes.block || noNotes.label) fail('show notes: empty notes block rendered on a show with none');
   else pass('a show with 28 songs and no notes renders no block and no header');
 
+  // --- Free-text setlist entries are not songs ------------------------------
+  //
+  // Three rows in the archive carry slug "_custom_" -- banter and
+  // announcements -- and all three share song_id 1, which is absent from the
+  // songs table. Keyed on song_id they collapsed into one browsable song
+  // called "Why Should I Worry" claiming three performances, and made the
+  // catalogue read 367 against an endpoint reporting 366.
+  //
+  // THE COUNT IS COMPARED AGAINST THE ENDPOINT, NOT AGAINST 366. A literal
+  // would go stale the day Carton adds a song and would then be failing for a
+  // reason that has nothing to do with this. The invariant is the real one:
+  // every song in the catalogue comes from the songs table, so the rendered
+  // count must equal the number of rows that table returns. If it drifts
+  // again, another orphan song_id has appeared -- which is exactly what should
+  // be reported.
+  console.log('\nfree-text entries are not songs:');
+  await evaluate(`location.hash = '#/songs';`);
+  await sleep(1500);
+  const shown = await evaluate(`(() => {
+    const sub = document.querySelector('.screen-sub');
+    const m = sub && sub.textContent.match(/([\\d,]+)\\s+songs in the archive/);
+    return m ? Number(m[1].replace(/,/g, '')) : null;
+  })()`);
+
+  let endpointSongs = null;
+  try {
+    const res = await fetch('https://thecarton.net/api/v2/songs.json?limit=20000');
+    const body = await res.json();
+    if (Array.isArray(body.data)) endpointSongs = body.data.length;
+  } catch {
+    /* handled below as a SKIP -- an unreachable third party is not a defect here */
+  }
+
+  if (shown === null) fail('songs: could not read the count from the Songs sub-line');
+  else if (endpointSongs === null) {
+    skip(`catalogue count not cross-checked (Carton unreachable); the app shows ${shown}`);
+  } else if (shown !== endpointSongs) {
+    fail(`songs: the app counts ${shown} but the songs endpoint returns ${endpointSongs} — an orphan song_id is in the catalogue`);
+  } else pass(`catalogue is ${shown}, matching the songs endpoint exactly`);
+
+  // The rows themselves must still be on screen, and must not be controls.
+  // Show 1667710116 is the 2022-11-05 Foundry show carrying "NYE Announcement".
+  await evaluate(`location.hash = '#/show/1667710116';`);
+  await sleep(1400);
+  const custom = await evaluate(`(() => {
+    const songs = [...document.querySelectorAll('.setlist-song')];
+    const el = songs.find((s) => s.textContent.trim() === 'NYE Announcement');
+    if (!el) return { found: false, count: songs.length, names: songs.slice(0, 4).map((s) => s.textContent.trim()) };
+    return {
+      found: true,
+      role: el.getAttribute('role'),
+      tabindex: el.getAttribute('tabindex'),
+      custom: el.getAttribute('data-custom'),
+      // A real song beside it must still BE a control, or this passes because
+      // the setlist stopped being tappable altogether.
+      siblingRole: songs.find((s) => s !== el)?.getAttribute('role') ?? null,
+    };
+  })()`);
+
+  if (!custom.found) {
+    fail(`free-text entry: "NYE Announcement" is not on the 2022-11-05 setlist (${custom.count} songs: ${JSON.stringify(custom.names)})`);
+  } else if (custom.role || custom.tabindex) {
+    fail(`free-text entry: still a control (role=${custom.role}, tabindex=${custom.tabindex}) — it has no song page to open`);
+  } else if (custom.siblingRole !== 'button') {
+    fail(`free-text entry: the real songs beside it are not controls either (role=${custom.siblingRole}) — the setlist stopped being tappable`);
+  } else pass('the entry still renders in the setlist, as text, beside songs that are still tappable');
+
   // --- The set-structure badge is compact, and the row is one control -------
   //
   // "Set 1 + Set 2 + Encore" was pushing venue names into ellipsis on the

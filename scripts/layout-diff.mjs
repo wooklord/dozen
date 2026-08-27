@@ -228,9 +228,23 @@ const main = async () => {
     fingerprints[label] = await ev(
       `(() => {
         let h = 0x811c9dc5;
+        // CR IS STRIPPED, AND THIS IS THE SECOND TIME. The 0.1.60 fix stripped
+        // CR from the FILE lengths this used to compare; moving the probe to
+        // the CSSOM in 0.1.63 quietly reintroduced the same fault in a new
+        // place. CUSTOM PROPERTY VALUES ARE PRESERVED VERBATIM by the CSSOM --
+        // unlike standard declarations, which it re-serialises canonically --
+        // so a multi-line one keeps its line endings. --font in tokens.css
+        // spans two lines, git worktree add honours core.autocrlf, and the
+        // ref side is therefore CRLF while the working tree is LF. Result:
+        // different hashes for byte-identical stylesheets, every run.
+        //
+        // (No backticks in this comment: it is inside the fingerprint template
+        // literal, and one would end the string. Second time this session.)
         const feed = (s) => {
           for (let i = 0; i < s.length; i++) {
-            h ^= s.charCodeAt(i);
+            const c = s.charCodeAt(i);
+            if (c === 13) continue;
+            h ^= c;
             h = Math.imul(h, 0x01000193) >>> 0;
           }
         };
