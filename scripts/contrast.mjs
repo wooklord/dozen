@@ -424,21 +424,32 @@ export const KNOWN_GAPS = [
     fg: 'yolk-line',
     bg: 'surface',
     min: 3,
-    status: 'deferred',
+    status: 'accepted',
     what: '.badge-jam border (--yolk-line over --surface)',
     measured: 'dark 2.17:1, light 1.60:1 — needs 3:1',
     why:
       'Found while measuring the chip accent, because it is the same ' +
       '--yolk-line token with the same root cause: a translucent warm tint on ' +
       'a warm ground has very little to work with. The badge sits on --surface ' +
-      'rather than the sortbar, so it was never covered by the chip pairs and ' +
-      'has been failing unrecorded.',
+      'rather than the sortbar, so it was never covered by the chip pairs.',
+    assessed:
+      'ACCEPTED 2026-08-27 by the repo owner. THE BORDER IS NOT THE ONLY ' +
+      'SIGNAL: the badge also carries --yolk label text, which is asserted ' +
+      'against both its grounds and passes, so the jam badge remains ' +
+      'identifiable with the border contributing nothing. WCAG 1.4.11 is about ' +
+      'boundaries REQUIRED to identify a control or its state, and this one is ' +
+      'not required -- it is decoration on a component that reads without it.',
     note:
-      'The badge also carries --yolk label text, so the border is not the only ' +
-      'signal and this is a weaker failure than the chip one was. The chip fix ' +
-      'deliberately did NOT touch --yolk-line: that token is shared with ' +
-      '.row-shell[data-picked="true"], and changing it would move the picked-row ' +
-      'highlight too. Scoped out on purpose, pending an explicit decision.',
+      'REJECTED FIX: retuning --yolk-line. That token is shared with ' +
+      '.row-shell[data-picked="true"], so moving it to strengthen a secondary ' +
+      'signal on one badge would also move the picked-row highlight, which is ' +
+      'a primary signal on a different screen. The 0.1.59 chip fix ' +
+      'deliberately did not touch it for the same reason and introduced three ' +
+      'dedicated --chip-sel-* tokens instead. Giving the badge its own token ' +
+      'is available if this is ever re-opened, and would be the shape of the ' +
+      'fix -- but it is not worth a fourth token for a border nothing depends ' +
+      'on. Re-open with evidence that the badge is hard to identify, not with ' +
+      'the ratio, which is known.',
   },
 ];
 

@@ -59,19 +59,15 @@ const TYPES = {
 const GAP_ENTRY_POINTS = [
   { name: 'show detail', at: null, // filled in at runtime from a real show id
     click: `[...document.querySelectorAll('.btn-small')].find(b => b.textContent.trim() === 'Gap chart')` },
-  // The Shows tab's compact rows only exist for SEARCH results -- the empty
-  // query lands on full cards, which have no row-action. So this one types a
-  // query first; without that it reports "no control found" and would look
-  // like a missing entry point rather than the wrong screen state.
-  { name: 'Shows search row', at: '#/shows',
-    setup: `(() => {
-      const s = document.querySelector('.search');
-      if (!s) return false;
-      s.value = '2019';
-      s.dispatchEvent(new Event('input', { bubbles: true }));
-      return true;
-    })()`,
-    click: `document.querySelector('.row-action')` },
+  // THE SHOWS SEARCH ROW IS GONE AS OF 0.1.64, and it was the same row the
+  // screenshot called "the Shows list rows" -- the Shows tab's compact rows
+  // only exist for SEARCH results, since the empty query lands on full cards.
+  // So removing the icon from the list removed this entry point; there are
+  // three now, not four. A row is an entry point to a show and the gap chart
+  // lives one tap further in, on show detail.
+  //
+  // Deliberately not replaced with a Shows-landing equivalent: the landing
+  // cards had their gap chart button removed earlier for the same reason.
   { name: 'song performance row', at: '#/song/49',
     click: `document.querySelector('.row-action')` },
   { name: 'venue show row', at: '#/venue/73',
@@ -235,7 +231,7 @@ server.listen(PORT, async () => {
   }
 
 
-  console.log('\ngap chart, all four entry points:');
+  console.log('\ngap chart, all three entry points:');
   for (const ep of GAP_ENTRY_POINTS) {
     const at = ep.at || '#/shows';
     await evaluate(`location.hash = ${JSON.stringify(at)};`);
@@ -1296,6 +1292,119 @@ server.listen(PORT, async () => {
   if (noNotes.songs !== 28) fail(`show notes: the no-notes show did not render (${noNotes.songs} songs, expected 28)`);
   else if (noNotes.block || noNotes.label) fail('show notes: empty notes block rendered on a show with none');
   else pass('a show with 28 songs and no notes renders no block and no header');
+
+  // --- The set-structure badge is compact, and the row is one control -------
+  //
+  // "Set 1 + Set 2 + Encore" was pushing venue names into ellipsis on the
+  // Shows rows, and the venue is what the row is scanned for. Measured on the
+  // rendered page rather than trusted from the mapping: what matters is the
+  // width the badge actually takes and whether the venue beside it still fits.
+  //
+  // Asserted in BOTH themes because the light theme renders jam titles at
+  // weight 600, which makes glyphs wider -- a width claim verified only in
+  // dark is a width claim about half the app.
+  console.log('\nset-structure badge:');
+  for (const theme of ['dark', 'light']) {
+    await evaluate(`document.documentElement.setAttribute('data-theme', ${JSON.stringify(theme)});`);
+    await evaluate(`location.hash = '#/shows';`);
+    await sleep(1400);
+    // Compact rows only exist for search results; the empty query lands on cards.
+    await evaluate(`(() => { const s = document.querySelector('.search');
+      if (!s) return false; s.value = '2019';
+      s.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+    await sleep(1200);
+
+    const badge = await evaluate(`(() => {
+      const rows = [...document.querySelectorAll('.rows li')];
+      const out = { rows: rows.length, badges: [], truncated: 0, actions: 0, widest: 0 };
+      for (const li of rows) {
+        const b = li.querySelector('.badge-set');
+        if (b) {
+          const t = b.textContent.trim();
+          if (!out.badges.includes(t)) out.badges.push(t);
+          out.widest = Math.max(out.widest, Math.round(b.getBoundingClientRect().width));
+        }
+        // A venue line whose rendered width is capped by overflow is ellipsised.
+        const v = li.querySelector('.venue-line');
+        if (v && v.scrollWidth > v.clientWidth + 1) out.truncated++;
+        out.actions += li.querySelectorAll('.row-action').length;
+      }
+
+      // THE SAME COUNT WITH THE LONG BADGE PUT BACK, in this same page.
+      //
+      // "No venue line is ellipsised" is not achievable and asserting it was
+      // wrong: "Adirondack Independence Music Festival" does not fit a 390px
+      // row behind any badge. What the change can be held to is that it FREED
+      // space -- so the long form is rendered into the same rows, remeasured,
+      // and restored. Same fonts, same widths, no second origin, and it
+      // measures the benefit the change exists for rather than a threshold
+      // picked to pass.
+      const expand = (t) => t.split('+').map((p) =>
+        p === 'E' ? 'Encore'
+        : /^E\d+$/.test(p) ? 'Encore ' + p.slice(1)
+        : /^S\d+$/.test(p) ? 'Set ' + p.slice(1)
+        : p === 'One set' ? 'One Set'
+        : p).join(' + ');
+
+      const restore = [];
+      for (const li of rows) {
+        const b = li.querySelector('.badge-set');
+        if (!b) continue;
+        restore.push([b, b.textContent]);
+        b.textContent = expand(b.textContent.trim());
+      }
+      void document.body.offsetHeight; // force reflow before remeasuring
+      out.truncatedLong = 0;
+      for (const li of rows) {
+        const v = li.querySelector('.venue-line');
+        if (v && v.scrollWidth > v.clientWidth + 1) out.truncatedLong++;
+      }
+      for (const [b, t] of restore) b.textContent = t;
+      void document.body.offsetHeight;
+
+      return out;
+    })()`);
+
+    if (!badge.rows) { fail(`badge (${theme}): no search rows rendered`); continue; }
+    if (!badge.badges.length) { fail(`badge (${theme}): no .badge-set found on any row`); continue; }
+
+    // Nothing may still be rendering the long form.
+    const longForm = badge.badges.filter((t) => / \+ |Set \d|Encore/.test(t));
+    if (longForm.length) {
+      fail(`badge (${theme}): still rendering the long form ${JSON.stringify(longForm)}`);
+    } else pass(`${theme}: ${badge.rows} rows, badges ${JSON.stringify(badge.badges)}, widest ${badge.widest}px`);
+
+    // "One set" must be on screen as a word, not as a digit form, wherever a
+    // one-set show appears in the results.
+    // Matched on the one-set token itself, not on "contains 'set' and does not
+    // start with S<digit>" -- that earlier form also matched "Set 1 + Encore"
+    // and reported six spurious failures when proving this red.
+    for (const t of badge.badges.filter((x) => /one set/i.test(x))) {
+      if (/\d/.test(t)) fail(`badge (${theme}): one-set badge ${JSON.stringify(t)} carries a digit`);
+    }
+
+    // The point of the change, measured: fewer venue names cut off.
+    if (badge.truncatedLong <= badge.truncated) {
+      fail(
+        `badge (${theme}): shortening freed nothing — ${badge.truncated} venue line(s) ellipsised ` +
+        `with the short badge vs ${badge.truncatedLong} with the long one`,
+      );
+    } else {
+      pass(
+        `${theme}: venue names cut off ${badge.truncatedLong} -> ${badge.truncated} of ${badge.rows} ` +
+        `(${badge.truncatedLong - badge.truncated} recovered by the short badge)`,
+      );
+    }
+
+    // The gap chart icon is gone from these rows -- one control per row.
+    if (badge.actions) {
+      fail(`badge (${theme}): ${badge.actions} row-action control(s) remain on Shows rows`);
+    } else pass(`${theme}: Shows rows carry no second control`);
+  }
+  await evaluate(`document.documentElement.removeAttribute('data-theme');`);
+  await evaluate(`(() => { const s = document.querySelector('.search');
+    if (s) { s.value = ''; s.dispatchEvent(new Event('input', { bubbles: true })); } })()`);
+  await sleep(1000);
 
   // --- Footnote markers are actually hittable -------------------------------
   //

@@ -19,7 +19,10 @@ import {
   venueLine,
   heatFor,
 } from '../ui/components.js';
-import { gapChartForShow, showStructure } from '../data/index.js';
+// showStructure was imported here and never called. Removed rather than left:
+// an unused import of a function that renders a visible label suggests this
+// screen shows one, and it does not.
+import { gapChartForShow } from '../data/index.js';
 import { formatShowDate, formatShowDateShort } from '../util/dates.js';
 
 export function renderGapChart(ctx, showId) {

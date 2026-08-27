@@ -6,7 +6,11 @@
 //
 // Everything here is filtering, grouping, counting and ordering.
 
-import { el, append, debounce, icon, ICONS } from '../ui/dom.js';
+// `icon` and `ICONS` were dropped when the row's gap chart action went: this
+// file no longer renders a glyph. An unused import is not free -- it is the
+// kind of leftover that makes the next reader look for a control that is not
+// there.
+import { el, append, debounce } from '../ui/dom.js';
 import {
   setlistBlock,
   setlistCard,
@@ -101,17 +105,16 @@ export function renderShows(ctx) {
                 }),
           ],
         ),
-        hasSetlist
-          ? el(
-              'button.row-action',
-              {
-                type: 'button',
-                'aria-label': `Gap chart for ${show.showdate}`,
-                onclick: () => navigate(`#/gapchart/${show.show_id}`),
-              },
-              icon(ICONS.gap, 18),
-            )
-          : null,
+        // NO GAP CHART ACTION HERE. A search result row is an entry point to a
+        // show, and the gap chart lives on show detail one tap further in --
+        // the same reasoning that took the gap chart button off the Home and
+        // Shows cards. A second control on a row makes the row itself read as
+        // two decisions when there is only one.
+        //
+        // Four entry points remain and all of them are places you have already
+        // committed to a show: show detail, the Shows search rows, the song
+        // performance rows, and the venue show rows. scripts/smoke.mjs walks
+        // every one.
       ]),
     ]);
   }
@@ -147,7 +150,16 @@ export function renderShows(ctx) {
 
   function yearBar(activeYear = null) {
     let activeChip = null;
-    const bar = el('div.sortbar.sortbar-secondary', null, [
+    // A PLAIN .sortbar, so this one PINS. The month bar below stays secondary
+    // and scrolls away with the content.
+    //
+    // Both bars were secondary from 0.1.62, when .sortbar-secondary stopped
+    // being a dead rule and started actually applying -- which left Shows with
+    // no pinned control at all, so scrolling into a long year lost the year
+    // switcher entirely. Before that both were sticky at the same 52px offset
+    // and overlapped each other, which was worse. This is the third state and
+    // the intended one: exactly one pinned control, the same shape Songs has.
+    const bar = el('div.sortbar', null, [
       // Backs out of a drill-down without clearing the field by hand, AND
       // carries the unfiltered state. It used to render only during a
       // drill-down, so the landing bar had no pressed chip at all and the

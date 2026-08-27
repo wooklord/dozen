@@ -560,14 +560,16 @@ button.gap-figure:active {
  * Order would fix it too and would be the fragile fix -- someone moves a block
  * and it silently dies again. Specificity survives reordering.
  *
- * NOTE WHAT THIS MEANS FOR SHOWS, because it is a real consequence and not
- * obviously the final answer: both bars there are secondary, so with the rule
- * live NEITHER sticks and the year switcher scrolls away inside a long year.
- * That is coherent -- the class means "not the pinned control" and now says so
- * -- and it is strictly better than two bars pinned to the same 52px. Whether
- * Shows should instead promote its YEAR bar to a plain .sortbar and keep only
- * the month bar secondary is a design question this fix deliberately does not
- * decide. */
+ * SHOWS WENT THROUGH THREE STATES AND IS NOW IN THE INTENDED ONE. Before
+ * 0.1.62 both its bars were sticky at the same 52px offset and overlapped on
+ * scroll, because this rule was dead. Making the rule apply left both of them
+ * secondary, so NEITHER pinned and the year switcher scrolled away inside a
+ * long year -- coherent, better than overlapping, and still wrong. As of
+ * 0.1.64 the YEAR bar is a plain .sortbar and pins; only the month bar is
+ * secondary. Exactly one pinned control per screen, the same shape Songs has.
+ *
+ * So this class means precisely "a bar that is NOT the pinned control", and a
+ * screen with two bars should carry it on exactly one of them. */
 .sortbar.sortbar-secondary {
   top: auto;
   position: static;

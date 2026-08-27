@@ -418,6 +418,39 @@ down. Weight carries hierarchy more than size does, because size costs rows-per-
   phone. Footnotes are tappable, not tooltips.
 - **Density target: ~8 song rows per screen** on a mid-size Android phone, with song name, gap,
   last-played and times-played all legible without zooming.
+- **A row is ONE control.** The Shows search rows carried a second, icon-only gap chart button; it
+  was removed in 0.1.64, the same reasoning that took the gap chart button off the Home and Shows
+  cards. A row is an entry point to a show, and the gap chart lives one tap further in on show
+  detail. Three entry points remain — show detail, song performance rows and venue show rows — and
+  removing this one **was** removing an entry point, not preserving it: the Shows tab's compact
+  rows only exist for search results, so "the Shows list rows" and "the Shows search rows" are the
+  same rows.
+- **On a narrow row, the widest thing must not be the least important one.** The set-structure
+  badge read `Set 1 + Set 2 + Encore` — 22 characters beside a venue name, which is the thing the
+  row is actually scanned for. It is abbreviated to `S1+S2+E`, worst case `S1+S2+S3+E` at ten
+  characters. Measured on the rendered page at 390px, both themes: venue names cut off went
+  **28 → 14 of 63 search rows**, roughly half recovered, with the badge and the icon together
+  accounting for it. The rest are names like "Adirondack Independence Music Festival", which fit
+  behind no badge at any width.
+
+  **`One Set` stays a word — `One set`, not `1 set` — and that is the whole point of the mapping.**
+  It must not blur into `Set 1`: 1493 setlist rows are one-set against 3031 Set 1, and a festival
+  one-set opener is a different pick from a two-set show's opener. `S1` versus `1 set` keeps them
+  technically distinct while putting a digit in both, and the digit is what the eye grabs scanning
+  a column of badges. `S1` versus `One set` shares no digit at all. `tests/structure.test.mjs`
+  asserts exactly that property rather than mere inequality.
+
+  The mapping is **per label, not per structure**: `Set N` → `SN`, `Encore` → `E`, `Encore 2` →
+  `E2`, joined by `+`. Mapping whole strings would have covered the nine shapes that exist today
+  and produced nothing for a tenth — and there are more shapes than are obvious. Measured across
+  all 610 shows with setlists on 2026-08-27: `Set 1 + Set 2` with no encore (17 shows),
+  `Set 1 + Set 2 + Set 3` (4), `Set 1 + Set 2 + Set 3 + Encore` (1) and `Set 1 + Encore + Encore 2`
+  (1) all occur. **Set 3 and Encore 2 both exist in the data.** An unrecognised label passes
+  through intact: a badge that is too long is a layout problem, a badge that is confidently wrong
+  is a data problem.
+
+  `Upcoming` and `No setlist recorded` are untouched — they are a different kind of label, they
+  say something the structure badge cannot, and neither is crowding anything.
 - Safe-area insets respected top and bottom so the tab bar clears the gesture bar.
 - **The fixed bars are full-bleed; their contents sit in the 720px column.** `.app-header` and
   `.tabbar` span the window so their blurred background reaches the edges, but both pad their

@@ -689,7 +689,47 @@ export function showStructure(index, showId) {
     const label = setLabel(r.settype, r.setnumber);
     if (!seen.includes(label)) seen.push(label);
   }
-  return seen.join(' + ');
+  return seen.map(shortSetLabel).join('+');
+}
+
+/**
+ * The compact form of one set label, for the structure badge.
+ *
+ * "Set 1 + Set 2 + Encore" ate most of a row's width and pushed venue names
+ * into ellipsis, and the venue is the thing being scanned for. 22 characters
+ * became 7.
+ *
+ * PER LABEL, NOT PER STRUCTURE. Mapping whole strings would cover the nine
+ * combinations that exist today and produce nothing for the tenth. Composing
+ * from labels means an unseen combination still renders correctly -- and there
+ * ARE more combinations than the obvious five: measured against the live
+ * archive on 2026-08-27, all 610 shows with setlists fall into nine shapes,
+ * including "Set 1 + Set 2" with no encore (17 shows), "Set 1 + Set 2 + Set 3"
+ * (4), "Set 1 + Set 2 + Set 3 + Encore" (1) and "Set 1 + Encore + Encore 2"
+ * (1). Set 3 and Encore 2 both exist.
+ *
+ * "ONE SET" MUST NOT COLLAPSE INTO "SET 1", and it is spelled with a WORD
+ * rather than a digit for exactly that reason. `S1` vs `1 set` would keep them
+ * technically distinct while making the digit the salient character in both,
+ * which is the thing the eye grabs in a dense list; `S1` vs `One set` shares no
+ * character at all. It costs two characters on the 174 shows that are one-set
+ * shows and buys an unmistakable difference.
+ *
+ * The distinction is real and not cosmetic: 1493 setlist rows are "One Set"
+ * against 3031 "Set 1", and a festival one-set opener is a different pick from
+ * a two-set show's opener.
+ */
+export function shortSetLabel(label) {
+  if (label === 'One Set') return 'One set';
+  const encore = label.match(/^Encore(?: (\d+))?$/);
+  if (encore) return `E${encore[1] || ''}`;
+  const set = label.match(/^Set (\w+)$/);
+  if (set) return `S${set[1]}`;
+  // Anything setLabel() starts producing that this does not know about is
+  // passed through intact rather than mangled into something shorter and
+  // wrong. A badge that is too long is a layout problem; a badge that is
+  // confidently incorrect is a data problem.
+  return label;
 }
 
 /** Shows on the same month/day in previous years. */
