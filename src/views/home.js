@@ -113,18 +113,30 @@ function renderNextShow(screen, { index, navigate }, show, today) {
     ]),
   );
 
-  append(screen, cartonLink(showPermalink(show)));
-
+  // THE CARTON LINK IS NOT APPENDED HERE ANY MORE. It stood alone on its own
+  // line directly under the venue line, and .carton-link carries
+  // `min-height: var(--tap)` -- a 44px box around 10px text, with nothing
+  // beside it to share the height. That was most of the dead space above the
+  // set structure block. It now sits in the action row below, next to Venue
+  // history, where the same 44px is height the row needed anyway.
   const allVenueShows = (index.showsByVenue.get(Number(show.venue_id)) || []).filter(
     (s) => s.showdate <= today,
   );
   const playedAtVenue = allVenueShows.filter((s) => index.setlistByShow.has(Number(s.show_id)));
 
-  // --- The venue itself, named ----------------------------------------------
+  // --- The venue's history at a glance --------------------------------------
+  //
+  // NO SECTION HEADER. This block used to open with sectionHead(venuename),
+  // which repeated the venue name already rendered two lines above it in
+  // "Buffalo Iron Works · Buffalo, NY, USA". Saying it twice inside two inches
+  // is what made the area read as empty: a heading that carries no information
+  // the reader does not already have is spacing with words in it.
+  //
+  // The stat grid is the first thing in the block now, so it sits directly
+  // under the venue line, which is what it is about.
   append(
     screen,
     el('div.section', null, [
-      sectionHead(show.venuename),
       el('div.stat-grid', null, [
         el('div.stat', null, [
           statValue(allVenueShows.length, { accent: true }),
@@ -147,6 +159,14 @@ function renderNextShow(screen, { index, navigate }, show, today) {
           { type: 'button', onclick: () => navigate(`#/venue/${show.venue_id}`) },
           'Venue history',
         ),
+        // DELIBERATELY UNCHANGED, only moved. Still .carton-link: --t-2xs at
+        // weight 400 in --ink-faint, no border, no button treatment. It sits
+        // BESIDE a control without becoming one -- .card-actions is
+        // `align-items: center`, so it centres against the 36px button without
+        // any rule of its own. Promoting it here would undo the 0.1.45
+        // decision recorded above .carton-link in app.css: attribution must be
+        // present and findable, not prominent.
+        cartonLink(showPermalink(show)),
       ]),
     ]),
   );

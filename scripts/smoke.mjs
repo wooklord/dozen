@@ -1293,6 +1293,95 @@ server.listen(PORT, async () => {
   else if (noNotes.block || noNotes.label) fail('show notes: empty notes block rendered on a show with none');
   else pass('a show with 28 songs and no notes renders no block and no header');
 
+  // --- Home's venue block: no doubled header, one action row ----------------
+  //
+  // The block opened with a section header carrying the venue name, two lines
+  // under a venue line that already said it, and the Carton link stood alone
+  // on its own row -- .carton-link has min-height: var(--tap), so that was a
+  // 44px box around 10px of text with nothing beside it to share the height.
+  // Together they were most of the dead space above the set structure.
+  //
+  // THE LINK MOVED WITHOUT BEING PROMOTED, and that is asserted by COMPARISON
+  // against a Carton link on another screen rather than against literals: if
+  // the .carton-link treatment is ever retuned both move together, and a
+  // literal here would be the copy that drifted.
+  console.log('\nHome venue block:');
+  for (const theme of ['dark', 'light']) {
+    await evaluate(`document.documentElement.setAttribute('data-theme', ${JSON.stringify(theme)});`);
+    await evaluate(`location.hash = '#/home';`);
+    await sleep(1500);
+
+    const home = await evaluate(`(() => {
+      const venueLine = document.querySelector('.screen .venue-line');
+      const venueName = venueLine ? venueLine.textContent.split('·')[0].trim() : null;
+      const titles = [...document.querySelectorAll('.section-title')].map((n) => n.textContent.trim());
+      const btn = [...document.querySelectorAll('.btn-small')].find((b) => b.textContent.trim() === 'Venue history');
+      const link = btn ? btn.parentElement.querySelector('.carton-link') : null;
+      const grid = document.querySelector('.stat-grid');
+      const cs = link ? getComputedStyle(link) : null;
+      const box = (n) => { const r = n.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, mid: r.top + r.height / 2 }; };
+      return {
+        venueName,
+        // A header repeating the venue name, compared case-insensitively:
+        // .section-title is text-transform uppercase and innerText reports
+        // RENDERED casing.
+        echoes: titles.filter((t) => venueName && t.toLowerCase() === venueName.toLowerCase()),
+        sameRow: !!(btn && link),
+        btnMid: btn ? box(btn).mid : null,
+        linkMid: link ? box(link).mid : null,
+        gridTop: grid ? box(grid).top : null,
+        venueBottom: venueLine ? box(venueLine).bottom : null,
+        style: cs ? { size: cs.fontSize, weight: cs.fontWeight, color: cs.color, border: cs.borderTopWidth } : null,
+      };
+    })()`);
+
+    if (!home.venueName) { fail(`Home (${theme}): no venue line found`); continue; }
+    if (home.echoes.length) {
+      fail(`Home (${theme}): a section header still repeats the venue line — ${JSON.stringify(home.echoes)}`);
+    } else pass(`${theme}: no header repeats "${home.venueName}"`);
+
+    if (!home.sameRow) {
+      fail(`Home (${theme}): the Carton link is not in the Venue history action row`);
+    } else if (Math.abs(home.btnMid - home.linkMid) > 1) {
+      fail(`Home (${theme}): link is not centred against the button (${Math.round(home.linkMid - home.btnMid)}px off)`);
+    } else pass(`${theme}: Carton link sits beside Venue history, centred to within 1px`);
+
+    // The stats sit under the venue line, not under a header that is gone.
+    if (home.gridTop === null) fail(`Home (${theme}): no stat grid`);
+    else {
+      const gap = Math.round(home.gridTop - home.venueBottom);
+      pass(`${theme}: stats start ${gap}px below the venue line`);
+    }
+  }
+
+  // Not promoted: same rendering as a Carton link on another screen.
+  await evaluate(`location.hash = '#/home';`);
+  await sleep(1400);
+  const homeLink = await evaluate(`(() => {
+    const btn = [...document.querySelectorAll('.btn-small')].find((b) => b.textContent.trim() === 'Venue history');
+    const l = btn && btn.parentElement.querySelector('.carton-link');
+    if (!l) return null;
+    const c = getComputedStyle(l);
+    return { size: c.fontSize, weight: c.fontWeight, color: c.color, border: c.borderTopWidth, display: c.display };
+  })()`);
+  await evaluate(`location.hash = '#/venue/73';`);
+  await sleep(1400);
+  const otherLink = await evaluate(`(() => {
+    const l = document.querySelector('.carton-link');
+    if (!l) return null;
+    const c = getComputedStyle(l);
+    return { size: c.fontSize, weight: c.fontWeight, color: c.color, border: c.borderTopWidth };
+  })()`);
+
+  if (!homeLink || !otherLink) fail('Carton link: could not compare Home against another screen');
+  else {
+    const differs = ['size', 'weight', 'color', 'border'].filter((k) => homeLink[k] !== otherLink[k]);
+    if (differs.length) {
+      fail(`Carton link: Home's differs from the venue screen's on ${differs.join(', ')} — ${JSON.stringify(homeLink)} vs ${JSON.stringify(otherLink)}`);
+    } else pass(`moved, not promoted: ${homeLink.size}/${homeLink.weight}, border ${homeLink.border}, same as elsewhere`);
+  }
+  await evaluate(`document.documentElement.removeAttribute('data-theme');`);
+
   // --- Free-text setlist entries are not songs ------------------------------
   //
   // Three rows in the archive carry slug "_custom_" -- banter and
