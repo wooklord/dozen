@@ -539,6 +539,17 @@ explicit about what cannot:
 **An honest partial beats a claim the list cannot support.** The doc now states
 which of the three parts covers what, and names the weakest.
 
+**A measured miss is not automatically a defect, and the record must say which
+kind it is.** `KNOWN_GAPS` entries carry a `status`: `accepted` means someone
+looked at it *on the device this app is used on* and decided the shortfall is
+not worth what fixing it costs; `deferred` means nobody has decided anything.
+Those two produce identical silence on screen, so a list that cannot tell them
+apart invites the settled one to be re-argued every audit and lets the open one
+pass as closed. An `accepted` entry has to record who assessed it and how, or
+the word is just a nicer spelling of undecided — `tests/contrast.test.mjs`
+enforces both halves. The picked-row 4.00:1 is the worked example: measured,
+looked at on a phone in dark mode, both fixes costed and rejected, closed.
+
 The same shape appears wherever a check reads a curated list: `ROUTES` markers
 (0.1.62), `PAIRS` here, `KNOWN_GAPS`. Ask what reads the list, and what would
 happen if the thing it describes moved without the list moving.

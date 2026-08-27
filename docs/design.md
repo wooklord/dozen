@@ -320,6 +320,36 @@ its own fill colour is not a boundary (`.btn-accent`, `.stat-grid`), and contain
 `--line`, which is documented as *meant* to be barely there — control edges use `--btn-line`, and
 `scripts/smoke.mjs` independently requires every control to render that exact border.
 
+#### A threshold miss is not automatically a legibility bug
+
+**Why this discipline exists in the first place: the yolk accent measured 3.85:1 on white and the
+jam green measured 1.54:1.** Those were not paperwork failures — the text was genuinely hard to
+read, and fixing them made the app better. That is the case the measuring is for.
+
+**A sub-half-point shortfall that survives inspection on the actual device is a different finding
+and is not treated as the same kind.** `--ink-faint` on a *picked* row measures **4.00:1** dark
+against a 4.5 threshold. It was looked at on a real phone in dark mode, on an actual picked row,
+and the dim second line reads clearly. WCAG's 4.5:1 is calibrated for the worst realistic viewing
+case; it is a floor chosen to be safe across conditions, not a claim that 4.00:1 is illegible.
+
+Both available fixes were costed and both were rejected, because each spends a real design
+decision on a difference nobody could perceive on the device:
+
+| Fix | What it costs |
+|---|---|
+| Brighten `--ink-faint` to ~`#9c9285` | The token is worn by **26 selectors**. Attribution links, the cache chip and the creator credit all move up across every screen, against the deliberate "present and findable, not prominent" intent recorded above. |
+| Lower `--yolk-wash`'s alpha | Clears it by weakening the picked-row highlight — the one thing that highlight exists to do. |
+
+It stays in `KNOWN_GAPS` marked **`accepted`**, with the measurement, both rejected fixes, and the
+fact that a person assessed it on the device. `deferred` is the other status and means nobody has
+decided yet. **"We looked and it's fine" and "nobody checked" produce identical silence on screen**,
+and a record that cannot tell them apart lets the first be re-argued at every audit and the second
+pass as settled. `tests/contrast.test.mjs` requires every entry to declare which it is, and
+requires an accepted one to say who assessed it and how.
+
+Re-open this one with evidence from the screen, not by re-running the measurement. The number is
+known.
+
 The light palette originally **failed four checks**, the worst being the yolk accent at 3.85:1 on
 white as small text (tab labels, badges, set labels). Corrected values:
 

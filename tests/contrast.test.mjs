@@ -315,3 +315,22 @@ test('a KNOWN_GAP that has started passing is reported, not left in the list', (
   });
   assert.deepEqual(nowPassing.map((g) => g.what), [], 'these KNOWN_GAPS now clear their threshold — move them into PAIRS');
 });
+
+test('every KNOWN_GAP declares whether it was accepted or merely deferred', () => {
+  // "Someone looked at this on the device and decided it is fine" and "nobody
+  // has looked" produce identical silence on screen. A record that cannot tell
+  // them apart lets an accepted gap be re-litigated at every audit and lets a
+  // deferred one pass as settled, which is the more expensive of the two.
+  //
+  // An accepted gap must also say who assessed it and how, or "accepted" is
+  // just a nicer word for undecided.
+  for (const g of KNOWN_GAPS) {
+    assert.ok(
+      g.status === 'accepted' || g.status === 'deferred',
+      `KNOWN_GAP "${g.what}" has no status — say whether it was assessed or is still open`,
+    );
+    if (g.status === 'accepted') {
+      assert.ok(g.assessed, `KNOWN_GAP "${g.what}" is accepted but does not record who assessed it or how`);
+    }
+  }
+});

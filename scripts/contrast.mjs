@@ -356,39 +356,66 @@ export const PAIRS = [
 ];
 
 /**
- * Measured shortfalls that are KNOWN, DOCUMENTED and NOT YET FIXED.
+ * Measured shortfalls that are KNOWN, DOCUMENTED and NOT FIXED.
  *
  * Reported by the CLI, deliberately not asserted by tests/contrast.test.mjs --
  * a red suite for a thing nobody has decided to change trains you to ignore
  * red. Equally it is not omitted, because an unrecorded gap is one that gets
  * rediscovered from scratch.
  *
- * KEEP THIS LIST EMPTY IF YOU CAN. Every entry is a decision someone deferred.
+ * EVERY ENTRY DECLARES A `status`, AND THE TWO ARE NOT THE SAME THING:
+ *
+ *   'accepted'  — someone looked at it, on the device this app is used on,
+ *                 and decided the shortfall is not worth what fixing it costs.
+ *                 A closed decision. Says who assessed it and how.
+ *   'deferred'  — measured, recorded, and nobody has decided anything yet.
+ *                 An open question.
+ *
+ * This distinction used to be missing and the list asserted that every entry
+ * was deferred. "We looked and it is fine" and "nobody has looked" produce the
+ * same silence on screen and are completely different states of knowledge; a
+ * record that cannot tell them apart invites the accepted one to be
+ * re-litigated every audit, and lets the deferred one pass as settled.
+ *
+ * KEEP THIS LIST SHORT. A 'deferred' entry is a decision someone owes.
  */
 export const KNOWN_GAPS = [
   {
     fg: 'ink-faint',
     bg: 'yolk-wash',
     min: 4.5,
+    status: 'accepted',
     what: '--ink-faint text on a PICKED row (--yolk-wash over --surface)',
-    measured: 'dark 4.00:1, light 4.91:1 — needs 4.5. Dark fails.',
+    measured: 'dark 4.00:1, light 4.91:1 — needs 4.5. Dark falls 0.5 short.',
     why:
       'Found in 0.1.63 by the token-coverage check, not by reading the list: ' +
       '--yolk-wash was painted by .row-shell[data-picked="true"] and appeared ' +
       'in no pair, so nothing had ever measured text against it. .row has no ' +
       'background of its own, so the wash reaches .cover-note, .row-meta .sep ' +
       'and .gap-unit, all of which are --ink-faint. Unlike the pressed-row case ' +
-      'fixed in this same build, this state PERSISTS -- a picked row stays ' +
+      'fixed in the same build, this state PERSISTS -- a picked row stays ' +
       'picked.',
+    assessed:
+      'ACCEPTED 2026-08-27 by the repo owner, ON A REAL PHONE IN DARK MODE, ' +
+      'looking at an actual picked row: the dim second line reads clearly. ' +
+      'This is a judgement made against the device the app is used on, not a ' +
+      'waiver written on paper. WCAG 4.5:1 is calibrated for the worst ' +
+      'realistic viewing case; it is not a claim that 4.00:1 is illegible, and ' +
+      'a 0.5 shortfall that survives on-device inspection is a different ' +
+      'finding from the yolk and jam failures this discipline was built for. ' +
+      'DO NOT re-open this by measurement alone -- the number is known. ' +
+      'Re-open it only with new evidence from the screen.',
     note:
-      'Both available fixes are visible design changes and neither is this ' +
-      "batch's to make. Brightening --ink-faint far enough (roughly #9c9285) " +
-      'would clear it but pushes attribution links and the cache chip up ' +
-      'app-wide, against the "quiet" intent in docs/design.md -- the small ' +
-      '#8d8375 -> #918779 move in this build was ΔE 1.6 and deliberately did ' +
-      'not go further. Lowering --yolk-wash\'s alpha would clear it by making ' +
-      'the picked-row highlight weaker, which is the one thing that highlight ' +
-      'exists to do. Needs a decision, not a nudge.',
+      'BOTH FIXES WERE COSTED AND BOTH ARE REJECTED. Brightening --ink-faint ' +
+      'far enough (roughly #9c9285) clears it, but --ink-faint is worn by 26 ' +
+      'selectors and the move would push attribution links, the cache chip and ' +
+      'the creator credit up across every screen, against the deliberate ' +
+      '"present and findable, not prominent" intent in docs/design.md. The ' +
+      'small #8d8375 -> #918779 move in 0.1.63 was ΔE 1.6, cleared the PRESSED ' +
+      'row, and deliberately stopped there. Lowering --yolk-wash\'s alpha ' +
+      'clears it by weakening the picked-row highlight, which is the one thing ' +
+      'that highlight exists to do. Neither is worth spending on a difference ' +
+      'that could not be perceived on the device.',
   },
   // The .chip[aria-pressed="true"] border that lived here (dark 2.14:1, light
   // 1.53:1) is FIXED as of 0.1.59 and has moved into PAIRS as four asserted
@@ -397,6 +424,7 @@ export const KNOWN_GAPS = [
     fg: 'yolk-line',
     bg: 'surface',
     min: 3,
+    status: 'deferred',
     what: '.badge-jam border (--yolk-line over --surface)',
     measured: 'dark 2.17:1, light 1.60:1 — needs 3:1',
     why:
@@ -584,12 +612,20 @@ if (isMain) {
   for (const s of derived.skipped) console.log(`  skip ${(s.selector + ' [' + s.prop + ']').padEnd(46)} ${s.why}`);
 
   if (KNOWN_GAPS.length) {
-    console.log(`\n${KNOWN_GAPS.length} KNOWN GAP(S) — measured, documented, not yet fixed:`);
+    const deferred = KNOWN_GAPS.filter((g) => g.status === 'deferred');
+    console.log(`\n${KNOWN_GAPS.length} KNOWN GAP(S) — measured and documented:`);
     for (const g of KNOWN_GAPS) {
-      console.log(`  - ${g.what}`);
+      // The status leads, because "someone looked and accepted this" and
+      // "nobody has decided" read identically otherwise.
+      console.log(`  - [${(g.status || 'UNDECLARED').toUpperCase()}] ${g.what}`);
       console.log(`      ${g.measured}`);
+      if (g.assessed) console.log(`      ${g.assessed.split('. ')[0]}.`);
     }
-    console.log('  (not asserted by node --test; each is an open decision)');
+    console.log(
+      deferred.length
+        ? `  (not asserted by node --test; ${deferred.length} still awaiting a decision)`
+        : '  (not asserted by node --test; all accepted, none awaiting a decision)',
+    );
   }
   process.exit(bad.length + derivedBad.length ? 1 : 0);
 }
