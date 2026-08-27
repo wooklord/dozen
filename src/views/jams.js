@@ -4,7 +4,7 @@
 // ranked by how many jam chart entries they have, which is counting.
 
 import { el, append } from '../ui/dom.js';
-import { attribution, emptyState, cartonLink, gapExplainerLink } from '../ui/components.js';
+import { attribution, emptyState, cartonLink, gapExplainerLink, heatFor } from '../ui/components.js';
 import { compareSongsByName } from '../data/index.js';
 
 // A-Z by default: the entry count is the useful fact on each row, but ranking
@@ -129,7 +129,7 @@ export function renderJams(ctx) {
       el('li', null, [
         el('div.row-shell', null, [
           el('span.gap-bar', {
-            style: { '--heat': String(Math.max(0.12, s.jamcharts.length / max)) },
+            style: { '--heat': String(heatFor(s.jamcharts.length, max)) },
           }),
           el(
             'button.row',

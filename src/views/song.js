@@ -18,6 +18,7 @@ import {
   openGapExplainer,
   gapExplainerLink,
   venueLine,
+  heatFor,
 } from '../ui/components.js';
 import { SLOT_LABELS, SLOTS, setLabel, longestObservedGap } from '../data/index.js';
 import { formatShowDate, formatShowDateShort } from '../util/dates.js';
@@ -140,7 +141,7 @@ export function renderSong(ctx, songId) {
         list,
         el('li', null, [
           el('div.row', { style: { pointerEvents: 'none' } }, [
-            el('span.gap-bar', { style: { '--heat': String(Math.max(0.15, n / max)) } }),
+            el('span.gap-bar', { style: { '--heat': String(heatFor(n, max)) } }),
             el('div.row-main', null, el('div.row-title', { text: SLOT_LABELS[slot] })),
             el('div.gap-figure', null, [
               el('div.gap-num.num', { text: String(n) }),

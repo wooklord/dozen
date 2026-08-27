@@ -17,7 +17,15 @@ export function el(spec, props = null, children = null) {
       if (v === null || v === undefined || v === false) continue;
       if (k === 'class') node.className = [node.className, v].filter(Boolean).join(' ');
       else if (k === 'style' && typeof v === 'object') Object.assign(node.style, v);
-      else if (k === 'html') node.innerHTML = v; // only ever used with our own markup
+      // NO `html:` PROP. It existed, it set node.innerHTML, and it had zero
+      // call sites in the entire app -- so it was never "only ever used with
+      // our own markup", it was never used at all. The comment at the top of
+      // this file promises nothing user-facing goes through innerHTML while
+      // this line shipped the one escape hatch that could break that promise,
+      // in an app where every string on screen originates from a third party.
+      // A dead prop is a low-cost deletion; an innerHTML door someone
+      // eventually reaches for is not. icon() below still uses innerHTML, on
+      // SVG paths that are literals in this repo and never touch API data.
       else if (k.startsWith('on') && typeof v === 'function') {
         node.addEventListener(k.slice(2).toLowerCase(), v);
       } else if (k === 'text') node.textContent = String(v);

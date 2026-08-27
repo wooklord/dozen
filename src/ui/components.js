@@ -242,13 +242,30 @@ export function gapExplainerLink(index, label = 'How gap is counted') {
 }
 
 /**
- * Heat: opacity of one hue, scaled against the largest gap on screen.
+ * Heat: opacity of one hue, scaled against the largest value on screen.
  * Deliberately NOT a multi-hue scale -- that would imply thresholds the data
  * does not have, and thresholds edge toward prediction.
+ *
+ * NO FLOOR IS APPLIED HERE. The minimum bar opacity is `--heat-floor` in
+ * tokens.css and it is per-theme for a measured reason: 0.1 dark, 0.32 light,
+ * because a low opacity that still registers on near-black disappears on
+ * white. `.gap-bar` composes the two -- floor + heat * (1 - floor).
+ *
+ * This used to clamp to 0.08, and three other call sites clamped to their own
+ * constants: gapchart.js 0.08 (reimplementing this function inline rather than
+ * calling it), jams.js 0.12, song.js 0.15. So the real minimum was a JS
+ * constant stacked on top of the token, and it differed per screen, while
+ * design.md and app.css both stated the minimum was a per-theme token and not
+ * a constant. Four floors, three values, one documented.
+ *
+ * Returning 0 for an absent value is NOT a floor and stays: `.gap-bar` carries
+ * data-heat="none" in that case, which sets opacity 0 outright. A song that
+ * has never been played must render no bar at all, and the floor must not
+ * invent one.
  */
-function heatFor(gap, maxGap) {
-  if (gap === null || !maxGap) return 0;
-  return Math.max(0.08, Math.min(1, gap / maxGap));
+export function heatFor(value, max) {
+  if (value === null || !max) return 0;
+  return Math.min(1, value / max);
 }
 
 /**

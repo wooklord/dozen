@@ -161,8 +161,38 @@ export function yearsFromShows(showRows) {
  *
  * This is NOT sufficient on its own -- a round row count only catches the
  * failure mode we happened to find. verifyArchive() is the real invariant.
+ *
+ * THE CROSS-TABLE DATE CHECK WAS REMOVED IN 0.1.62, AND NOT BECAUSE IT WAS
+ * MERELY UNUSED. This took a third parameter, `newestKnownShowdate`, and
+ * flagged "newest setlist row is X but the shows table goes to Y". It was
+ * always called with `null`, so the branch had never executed once. Wiring it
+ * up to the value sitting three lines above the call site -- the max
+ * `showdate` in the `shows` pull -- was tried, and it hard-failed the app on
+ * completely healthy data. Measured 2026-08-27:
+ *
+ *     max shows.showdate      2026-12-05   <- an UPCOMING show, ~3 months out
+ *     newest PLAYED show      2026-08-14
+ *     max setlists.showdate   2026-08-14   <- correct, and 3 months "behind"
+ *
+ * The `shows` table carries future-dated shows, which by definition have no
+ * setlist. So the comparison fires on every healthy cold start, and the whole
+ * app renders "Could not load the archive".
+ *
+ * Comparing against the newest PLAYED show is not sound either: a show that
+ * has been played but whose setlist The Carton has not posted yet is normal
+ * and the app already counts them (`counts.excludedNoSetlist`). That version
+ * would take the app down for every user for as long as Carton lagged on one
+ * setlist, which is routine. Any fix needs a tolerance, and every tolerance
+ * here is a number invented to make a check pass.
+ *
+ * The sound version of this assertion already exists and is not a heuristic:
+ * verifyArchive() pulls the archive a year at a time and asserts BOTH the
+ * summed row count and the max showdate against the full pull -- same table,
+ * no cross-table inference, no threshold. That is where this belongs, and it
+ * is already there. So the parameter is gone rather than left dead or
+ * "enabled" into a false alarm.
  */
-export function quickTruncationCheck(rows, url, newestKnownShowdate) {
+export function quickTruncationCheck(rows, url) {
   const problems = [];
 
   if (SUSPICIOUS_ROUND_COUNTS.has(rows.length)) {
@@ -172,12 +202,6 @@ export function quickTruncationCheck(rows, url, newestKnownShowdate) {
   }
 
   const maxShowdate = rows.reduce((max, r) => (r.showdate > max ? r.showdate : max), '');
-  if (newestKnownShowdate && maxShowdate && maxShowdate < newestKnownShowdate) {
-    problems.push(
-      `Newest setlist row is ${maxShowdate} but the shows table goes to ${newestKnownShowdate}.`,
-    );
-  }
-
   return { ok: problems.length === 0, problems, maxShowdate, count: rows.length, url };
 }
 
@@ -283,10 +307,10 @@ export async function fetchFullArchive({ onProgress, verify = true } = {}) {
   step('albums');
   const albums = await fetchAlbums();
 
-  const newestShow = shows.rows.reduce((max, r) => (r.showdate > max ? r.showdate : max), '');
-
-  // Cheap tripwire first.
-  const quick = quickTruncationCheck(setlists.rows, setlists.url, null);
+  // Cheap tripwire first. Two arguments, not three -- see the note on
+  // quickTruncationCheck for why the cross-table date comparison was removed
+  // rather than wired up, and what it did to the app when it was wired up.
+  const quick = quickTruncationCheck(setlists.rows, setlists.url);
   if (!quick.ok) {
     console.error(
       `[dozen] Truncation tripwire fired.\n  url: ${setlists.url}\n  ${quick.problems.join('\n  ')}`,
@@ -320,7 +344,12 @@ export async function fetchFullArchive({ onProgress, verify = true } = {}) {
     venues: venues.rows,
     jamcharts: jamcharts.rows,
     albums: albums.rows,
-    newestShow,
+    // `newestShow` is NOT returned. It was, and it went nowhere: writeArchive
+    // does not copy it into the payload, so it never survived a reload, and
+    // nothing read it in memory either. The settings sheet's "newest show"
+    // comes from index.newestShowdate, which buildIndex derives from the
+    // setlist rows -- a different value with a different meaning. Its real job
+    // is the tripwire above.
     verification,
     fetchedAt: Date.now(),
   };

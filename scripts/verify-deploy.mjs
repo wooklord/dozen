@@ -111,10 +111,22 @@ async function checkRenderedUi() {
     // visitor was getting the old app. But it could not distinguish that from
     // a genuinely bad deploy, which is what this fixes.
     await send('Page.navigate', { url: HOST + '/' + bust() });
+
+    // WAIT FOR A SCREEN, NOT FOR THE ABSENCE OF A LOADER.
+    //
+    // This polled `!document.querySelector('.loader')` until 0.1.62, which is
+    // satisfied by the document not having PARSED yet -- Page.navigate
+    // resolves early, so the first poll runs against a blank page, finds no
+    // loader, and declares the app booted. Every assertion after it then runs
+    // on nothing and reports whatever an empty document happens to produce.
+    // smoke.mjs and layout-diff.mjs were both moved off this exact poll when
+    // it was found; the deploy gate kept it, which is the copy that mattered
+    // most. Presence of a rendered screen has one cause; absence of a loader
+    // has two.
     let booted = false;
     for (let i = 0; i < 150; i++) {
       await sleep(2000);
-      if (await ev(`!document.querySelector('.loader')`)) { booted = true; break; }
+      if (await ev(`!!document.querySelector('#main .screen')`)) { booted = true; break; }
     }
     if (!booted) return bad('live app never finished booting');
 
@@ -158,9 +170,16 @@ async function checkRenderedUi() {
         `!!(document.querySelector('.banner strong') &&
             document.querySelector('.banner strong').textContent.includes('failed to load'))`,
       );
+      // Both halves, where a route carries a selector: for show detail the
+      // text alone is not unique ('Gap chart' is the gap chart's own heading),
+      // so checking only the text would let a broken show detail pass while
+      // the gap chart was on screen. The conjunction is the marker.
+      const selOk = !r.selector || (await ev(`!!document.querySelector(${JSON.stringify(r.selector)})`));
       if (boundary) bad(`${r.hash} rendered the error boundary on the live site`);
       else if (!text.toLowerCase().includes(r.expect.toLowerCase())) {
         bad(`${r.hash} did not render live (expected ${JSON.stringify(r.expect)})`);
+      } else if (!selOk) {
+        bad(`${r.hash} rendered its text live but not ${JSON.stringify(r.selector)}`);
       } else ok(`${r.hash} renders live`);
     }
   } finally {

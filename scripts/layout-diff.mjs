@@ -225,11 +225,14 @@ const main = async () => {
       // shifted every later one -- reporting "54 of 54 boxes changed" for a
       // change that touched none of them. Two runs of the same comparison
       // disagreed, which is how this was caught.
+      // Text AND selector, where the route carries one -- see routes.mjs.
+      // Show detail's text marker is not unique on its own.
       let rendered = false;
       for (let i = 0; i < 20; i++) {
         await sleep(300);
         const text = String(await ev(`(document.getElementById('main').innerText || '')`));
-        if (text.toLowerCase().includes(r.expect.toLowerCase())) { rendered = true; break; }
+        const selOk = !r.selector || (await ev(`!!document.querySelector(${JSON.stringify(r.selector)})`));
+        if (text.toLowerCase().includes(r.expect.toLowerCase()) && selOk) { rendered = true; break; }
       }
       if (!rendered) {
         // A failing check must say what it FOUND, not just that it failed.

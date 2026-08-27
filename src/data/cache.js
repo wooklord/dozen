@@ -1,4 +1,4 @@
-// IndexedDB cache with explicit per-type TTLs.
+// IndexedDB cache for the archive, under ONE key with ONE expiry.
 //
 // The setlist archive is ~5.2 MB, which is far past what localStorage can hold,
 // so the bulk payload lives in IndexedDB. localStorage is used only for small
@@ -11,14 +11,25 @@ const DB_NAME = 'dozen';
 const DB_VERSION = 1;
 const STORE = 'payloads';
 
-/** TTLs by data type, in milliseconds. */
-export const TTL = {
-  setlists: 6 * 60 * 60 * 1000, // changes after each show
-  shows: 6 * 60 * 60 * 1000,
-  songs: 24 * 60 * 60 * 1000,
-  jamcharts: 24 * 60 * 60 * 1000,
-  venues: 7 * 24 * 60 * 60 * 1000, // effectively never changes
-};
+/**
+ * How long the cached archive is considered fresh.
+ *
+ * ONE VALUE, because there is one thing to expire. This was a five-entry `TTL`
+ * map keyed by data type -- setlists 6h, shows 6h, songs 24h, jamcharts 24h,
+ * venues 7d -- and four of those five could never fire. Everything is written
+ * as a single blob under a single key with a single `fetchedAt`, so there is
+ * no per-type timestamp to compare against and `isStale()` only ever read
+ * `TTL.setlists`. The map described a cache design the code does not have.
+ *
+ * Per-type expiry is not merely unimplemented, it is structurally impossible
+ * here without splitting the payload into separate keys. That would be a real
+ * change with a real benefit (venues genuinely never move), and it is not this
+ * one -- so the constant now says what the code does. See docs/plan.md.
+ *
+ * Six hours because the setlists table is the one that moves, and it moves
+ * after each show. Anything with a longer natural life rides along with it.
+ */
+export const ARCHIVE_TTL = 6 * 60 * 60 * 1000;
 
 const ARCHIVE_KEY = 'archive.v1';
 
@@ -129,7 +140,7 @@ export async function clearArchive() {
 /** Is the cached archive past its TTL? */
 export function isStale(archive, now = Date.now()) {
   if (!archive?.fetchedAt) return true;
-  return now - archive.fetchedAt > TTL.setlists;
+  return now - archive.fetchedAt > ARCHIVE_TTL;
 }
 
 /** Age of the cache in ms. */

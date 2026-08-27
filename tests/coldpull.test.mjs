@@ -18,7 +18,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fetchFullArchive, COLD_PULL_STEPS } from '../src/data/source.js';
+import { fetchFullArchive, COLD_PULL_STEPS, quickTruncationCheck } from '../src/data/source.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -107,4 +107,41 @@ test('no doc still claims a five-request cold pull', () => {
     [],
     `the cold pull is ${COLD_PULL_STEPS} requests; these still say five`,
   );
+});
+
+// --- the truncation tripwire -------------------------------------------------
+
+test('the tripwire fires on a server-default row count', () => {
+  const rows = Array.from({ length: 4000 }, () => ({ showdate: '2024-10-10' }));
+  const r = quickTruncationCheck(rows, 'u');
+  assert.equal(r.ok, false);
+  assert.match(r.problems.join(' '), /server default/);
+});
+
+test('THE TRIPWIRE DOES NOT FIRE WHEN SETLISTS LAG THE SHOWS TABLE', () => {
+  // This is the regression the check exists for, and it is not hypothetical:
+  // wiring the tripwire's old third parameter to the max showdate in `shows`
+  // hard-failed the whole app on completely healthy data, because `shows`
+  // contains UPCOMING shows that by definition have no setlist. Measured
+  // 2026-08-27: shows ran to 2026-12-05, setlists correctly ended at
+  // 2026-08-14, and every cold start rendered "Could not load the archive".
+  //
+  // A played show whose setlist The Carton has not posted yet produces the
+  // same shape, and that is routine. So the invariant is: a setlists pull
+  // ending BEFORE the newest show is not, on its own, evidence of anything.
+  // verifyArchive() holds the real cross-check, against per-year pulls of the
+  // same table.
+  const rows = [
+    { showdate: '2013-02-23' },
+    { showdate: '2026-08-14' }, // newest PLAYED show with a setlist
+  ];
+  const r = quickTruncationCheck(rows, 'u');
+  assert.equal(r.ok, true, `healthy pull flagged: ${r.problems.join(' ')}`);
+  assert.equal(r.maxShowdate, '2026-08-14');
+});
+
+test('quickTruncationCheck takes no cross-table date argument', () => {
+  // Passing one would silently do nothing, which is how the old parameter sat
+  // dead for so long. Arity is the honest signal that it is gone.
+  assert.equal(quickTruncationCheck.length, 2);
 });

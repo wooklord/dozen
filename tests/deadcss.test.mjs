@@ -10,7 +10,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { findDead, readClassSets, parseRules, pureClassChain, expand } from '../scripts/deadcss.mjs';
+import { findDead, findUnstyled, readClassSets, parseRules, pureClassChain, expand } from '../scripts/deadcss.mjs';
 
 test('the stylesheet parses into rules', () => {
   // An empty parse would make every declaration "live" and the audit below
@@ -64,4 +64,26 @@ test('NO DECLARATION IN app.css IS DEAD', () => {
     [],
     'these declarations can never take effect on any element that carries them',
   );
+});
+
+test('EVERY EMITTED CLASS MATCHES A RULE', () => {
+  // A different failure from a dead declaration: the jam card class was
+  // emitted on every jam entry with no rule behind it while its three children
+  // all had one, and the spacing it should have carried sat in a hardcoded
+  // inline '8px'. findDead() cannot see that -- there is no declaration to be
+  // beaten. The class still LOOKS like a hook, which is the cost.
+  const unstyled = findUnstyled();
+  assert.deepEqual(
+    unstyled.map((u) => `.${u.cls} (emitted in ${u.file})`),
+    [],
+    'these classes are emitted but no CSS rule mentions them',
+  );
+});
+
+test('the unstyled check reads selectors, not the raw stylesheet', () => {
+  // It could not be made to fail on the bug it was written for: the comment
+  // explaining why .jam-card needed a rule contains the string '.jam-card', so
+  // deleting the rule left the check green. Prose about a class is not a rule.
+  const styled = findUnstyled(undefined, [{ classes: ['only-in-a-comment'], file: 'x.js' }]);
+  assert.equal(styled.length, 1, 'a class mentioned nowhere must be reported');
 });

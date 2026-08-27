@@ -24,11 +24,33 @@ body {
 }
 
 /* Every number in this app is scanned vertically. Tabular figures are not a
-   detail -- ragged digit columns are the fastest way to feel cheap. */
+ * detail -- ragged digit columns are the fastest way to feel cheap.
+ *
+ * THIS RULE USED TO NAME `time`, `td` AND `th`, AND THE APP EMITS NONE OF
+ * THEM. There is no table anywhere and no <time> element; three of its four
+ * selectors were decoration, which made the rule look far more thorough than
+ * it was. What it actually covered was `.num`, and `.num` was missing from the
+ * densest list in the app: `.row-meta` renders "Last {date} · {n}×" on every
+ * song row.
+ *
+ * Selectors are CONTAINERS that render numbers, not a class someone has to
+ * remember to add. `.num` stays for the figures that carry it, but a rule that
+ * depends on hand-applied classes fails exactly where this one did -- silently,
+ * on the screen with the most digits on it.
+ *
+ * tabular-nums only affects digits, so applying it to a container with mixed
+ * text is free; the letters are untouched. On `.chip` it does slightly more
+ * than align: the year chips are all four digits, so equal digit widths keep
+ * the chip row from reflowing as the selection moves.
+ */
 .num,
-time,
-td,
-th {
+.row-meta,
+.screen-sub,
+.badge,
+.chip,
+.stat-value,
+.gap-num,
+.gap-unit {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
 }
@@ -1148,6 +1170,17 @@ button.gap-figure:active {
  * Hover does not exist on a phone, so the note is rendered as real text
  * instead -- same data, reachable with a thumb.
  */
+/* The card itself. This class was emitted with NO RULE BEHIND IT while its
+   three children all had one, and the spacing it should have carried lived in
+   a hardcoded inline `marginBottom: '8px'` at the call site. A class that
+   looks like a styling hook and matches nothing is the same shape as the
+   gapFigure accent bug: the next person to restyle these edits .jam-card and
+   watches nothing happen. 8px was already --s-2; it is now spelled that way,
+   in the stylesheet, where the other three rules are. */
+.jam-card {
+  margin-bottom: var(--s-2);
+}
+
 .jam-card-head {
   display: flex;
   align-items: baseline;

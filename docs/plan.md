@@ -47,7 +47,7 @@ src/
   app.js              router + view mounting
   data/
     source.js         ← THE ONLY MODULE THAT TOUCHES THE NETWORK
-    cache.js          IndexedDB store + per-type TTL + cache age
+    cache.js          IndexedDB store + one archive TTL + cache age
     index.js          derived indexes (gap, counts, positions) built once per load
     normalize.js      song-name normalizer + HTML entity decode
   views/              upcoming, gap, recent, song, venue, jamcharts, scratchpad
@@ -110,8 +110,12 @@ it re-downloads everything, not hidden behind a gesture.
 **Always visible in the UI**: cache age, total row count, and the archive's newest `showdate`. A
 stale or truncated index has to be diagnosable without dev tools.
 
-- **TTLs**: setlists/shows 6 h (changes after each show) · songs 24 h · jamcharts 24 h ·
-  venues 7 d (effectively never changes).
+- **TTL**: ONE value, `ARCHIVE_TTL`, 6 h — the setlists table is what moves, and it moves after
+  each show. This was documented as five per-type TTLs (setlists/shows 6 h · songs 24 h ·
+  jamcharts 24 h · venues 7 d) and four of them could never fire: the whole archive is written as
+  a single blob under a single key with a single `fetchedAt`, so there is no per-type timestamp to
+  expire against. Splitting the payload per type would make per-type TTLs possible and is a real
+  change with a real benefit (venues genuinely never move); it has not been made.
 
 ### Decode once, at the boundary
 

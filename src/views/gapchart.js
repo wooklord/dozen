@@ -17,6 +17,7 @@ import {
   sectionHead,
   openGapExplainer,
   venueLine,
+  heatFor,
 } from '../ui/components.js';
 import { gapChartForShow, showStructure } from '../data/index.js';
 import { formatShowDate, formatShowDateShort } from '../util/dates.js';
@@ -87,7 +88,10 @@ export function renderGapChart(ctx, showId) {
         el('li', null, [
           el('div.row-shell', null, [
             el('span.gap-bar', {
-              style: { '--heat': String(e.gap === null ? 0 : Math.max(0.08, e.gap / maxGap)) },
+              // heatFor(), not a second copy of it. This line reimplemented the
+              // function inline with its own 0.08 floor, so the gap chart and
+              // the song rows it sits beside were on different scales.
+              style: { '--heat': String(heatFor(e.gap, maxGap)) },
               'data-heat': e.gap === null ? 'none' : null,
             }),
             el(

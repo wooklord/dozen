@@ -91,6 +91,18 @@ let failures = 0;
 const problems = [];
 const fail = (msg) => { failures++; problems.push(msg); console.log(`  FAIL  ${msg}`); };
 const pass = (msg) => console.log(`  ok    ${msg}`);
+// A SKIP IS NOT A PASS AND MUST NOT PRINT AS ONE.
+//
+// The Carton cross-check routed its unreachable case through pass(), so an
+// unverified claim rendered as "ok    SKIPPED — ...". That is this repo's
+// entire recurring failure in miniature: a green line reporting health that
+// was never established, in the suite written to stop exactly that.
+//
+// Skips do not affect the exit code -- an unreachable third party is not a
+// defect here -- but they are counted and repeated in the summary, so a run
+// that checked less than it looks like cannot be read as a clean one.
+let skips = 0;
+const skip = (msg) => { skips++; console.log(`  SKIP  ${msg}`); };
 
 server.listen(PORT, async () => {
   const chrome = spawn(CHROME, [
@@ -149,18 +161,68 @@ server.listen(PORT, async () => {
     document.querySelector('.banner strong').textContent.includes('failed to load'))`;
 
   console.log('\nroutes:');
+  // Captured per route so the markers can be cross-checked against each other
+  // once the walk is done -- see "route markers are unique" below.
+  const routeText = {};
+  const routeSel = {};
   for (const r of ROUTES) {
     await evaluate(`location.hash = ${JSON.stringify(r.hash)};`);
     await sleep(900);
-    const text = await evaluate(screenText);
+    const text = String(await evaluate(screenText));
     const boundary = await evaluate(errorBanner);
+    routeText[r.hash] = text;
+    // Which of the selectors ANY route uses are present on THIS screen.
+    routeSel[r.hash] = await evaluate(`(() => {
+      const out = {};
+      for (const s of ${JSON.stringify([...new Set(ROUTES.map((x) => x.selector).filter(Boolean))])}) {
+        out[s] = !!document.querySelector(s);
+      }
+      return out;
+    })()`);
+
     if (boundary) fail(`${r.hash} rendered the error boundary`);
-    else if (!String(text).toLowerCase().includes(r.expect.toLowerCase())) {
+    else if (!text.toLowerCase().includes(r.expect.toLowerCase())) {
       // Case-insensitive on purpose: several markers live in .section-title,
       // which is text-transform: uppercase, and innerText reports RENDERED
       // casing rather than source casing.
       fail(`${r.hash} did not render (expected text ${JSON.stringify(r.expect)})`);
+    } else if (r.selector && !routeSel[r.hash][r.selector]) {
+      fail(`${r.hash} rendered its text but not ${JSON.stringify(r.selector)}`);
     } else pass(`${r.hash}`);
+  }
+
+  // --- Route markers are unique, which routes.mjs only ever ASSERTED --------
+  //
+  // The whole apparatus rests on one property: a route's marker must not
+  // appear on any other route, or a screen that failed to render passes
+  // because the PREVIOUS screen is still on display. routes.mjs says so in a
+  // comment. Two of its markers did not satisfy it -- 'shows in the archive'
+  // renders on song detail too, 'Jam charts' renders as a Songs filter chip --
+  // and both passed only because of where they sat in the array.
+  //
+  // So the property is measured against what the routes actually rendered,
+  // just now, in this browser. Not grepped from source: a marker can appear on
+  // a screen through a component three files away, which is exactly how both
+  // of these got there.
+  console.log('\nroute markers are unique:');
+  for (const r of ROUTES) {
+    const matches = ROUTES.filter((other) => {
+      const text = routeText[other.hash] || '';
+      const textHit = text.toLowerCase().includes(r.expect.toLowerCase());
+      const selHit = !r.selector || routeSel[other.hash]?.[r.selector];
+      return textHit && selHit;
+    }).map((o) => o.hash);
+
+    if (matches.length === 0) {
+      fail(`${r.hash}: its own marker matched nothing — the capture is broken, not the marker`);
+    } else if (matches.length > 1) {
+      const others = matches.filter((h) => h !== r.hash);
+      fail(
+        `${r.hash}: marker ${JSON.stringify(r.expect)}${r.selector ? ` + ${r.selector}` : ''} also matches ${others.join(', ')} — a failed render there would pass`,
+      );
+    } else if (matches[0] !== r.hash) {
+      fail(`${r.hash}: its marker matches ${matches[0]} instead of itself`);
+    } else pass(`${r.hash} — ${JSON.stringify(r.expect)}${r.selector ? ` + ${r.selector}` : ''}`);
   }
 
   console.log('\nredirects:');
@@ -469,7 +531,7 @@ server.listen(PORT, async () => {
     skipped = `could not reach The Carton (${err.message})`;
   }
 
-  if (skipped) pass(`SKIPPED — coverage note not cross-checked: ${skipped}`);
+  if (skipped) skip(`coverage note not cross-checked: ${skipped}`);
   else if (!cov.text) fail('jams: no sub-line rendered');
   else if (!expectedYears) { /* already reported above */ }
   else if (!cov.text.includes(`Entries begin in ${expectedYears.jam}.`)) {
@@ -1794,7 +1856,16 @@ server.listen(PORT, async () => {
     for (const e of [...new Set(runtimeErrors)]) fail(e);
   } else pass('none');
 
-  console.log('\n' + (failures ? `SMOKE FAILED — ${failures} problem(s)` : 'SMOKE PASSED — all routes rendered'));
+  // Skips are carried into the summary line. A run that could not check
+  // something must not read as a run that checked everything, even when it is
+  // otherwise clean.
+  const skipNote = skips ? ` (${skips} check${skips === 1 ? '' : 's'} SKIPPED, not verified)` : '';
+  console.log(
+    '\n' +
+      (failures
+        ? `SMOKE FAILED — ${failures} problem(s)${skipNote}`
+        : `SMOKE PASSED — all routes rendered${skipNote}`),
+  );
   finish(chrome);
 
   function finish(proc) {

@@ -130,7 +130,7 @@ src/
   app.js              boot, router, refresh, cache status
   data/
     source.js         the ONLY module that touches the network
-    cache.js          IndexedDB + per-type TTLs
+    cache.js          IndexedDB + one archive TTL
     index.js          derived indexes (gap, counts, position slots)
     normalize.js      song-name normalizer + entity decoding
   ui/                 dom helpers, shared components

@@ -132,12 +132,58 @@ export function readClassSets(dir = path.join(ROOT, 'src')) {
       if (entry.isDirectory()) walk(p);
       else if (entry.name.endsWith('.js')) {
         const src = fs.readFileSync(p, 'utf8');
-        // el('tag.a.b', ...) and el(`tag.a.b`, ...)
-        for (const m of src.matchAll(/\bel\(\s*['"`]([^'"`]+)['"`]/g)) {
-          const spec = m[1];
-          const [, ...classes] = spec.split('.');
-          const clean = classes.map((c) => c.split('#')[0]).filter(Boolean);
-          if (clean.length) sets.push({ classes: clean, file: path.relative(ROOT, p) });
+        // el('tag.a.b', ...) and el(`tag.a.b${cond ? '' : '.c'}.d`, ...)
+        //
+        // Template specs are real and there are four of them. Splitting the
+        // raw spec on '.' turns `div.gap-num${accent ? '' : '.plain'}.num`
+        // into the class name "gap-num${accent ? " -- a name that matches no
+        // rule, which made those four elements invisible to both checks below
+        // AND showed up as four phantom unstyled classes. Classes are pulled
+        // out by pattern instead, including the ones inside a conditional,
+        // since either branch can reach the DOM.
+        //
+        // `${...}` blocks are handled explicitly rather than by one clever
+        // pattern: pull the class names out of any string literal inside the
+        // block, then delete the block and split what remains on '.' as
+        // before. A single regex over the whole spec cannot tell the '.' in
+        // `div.row-shell` (tag to class) from the one in `${x.length}`
+        // (property access) -- the first attempt used a lookbehind and
+        // silently rejected EVERY first class in the app, reporting zero
+        // combinations. Which the caller would have read as "nothing to
+        // check" rather than "the reader is broken", so readClassSets is
+        // asserted non-trivial in tests/deadcss.test.mjs.
+        //
+        // Two patterns, not one with a backreference: a template spec contains
+        // SINGLE QUOTES inside its `${...}` block, so a character class that
+        // excludes all three quote characters stops matching at the first one
+        // and the four template specs were never read at all.
+        const specs = [
+          ...[...src.matchAll(/\bel\(\s*(['"])([^'"]*)\1/g)].map((m) => m[2]),
+          ...[...src.matchAll(/\bel\(\s*`([^`]*)`/g)].map((m) => m[1]),
+        ];
+        for (const spec of specs) {
+          const conditional = [];
+          const flat = spec.replace(/\$\{[^}]*\}/g, (block) => {
+            for (const lit of block.matchAll(/['"]([^'"]*)['"]/g)) {
+              for (const c of lit[1].split('.')) if (c) conditional.push(c);
+            }
+            return '';
+          });
+          const [, ...classes] = flat.split('.');
+          const base = classes.map((c) => c.split('#')[0]).filter(Boolean);
+          const rel = path.relative(ROOT, p);
+
+          // BOTH BRANCHES, as two separate elements. A conditional class is
+          // present on some elements and absent on others, and recording it as
+          // always-present is wrong in the direction that matters: it made
+          // `.setlist-song { color }` look dead because `.setlist-song.jam`
+          // overrides colour, when the class it is "beaten by" is exactly the
+          // one that is missing from every non-jam song. Two entries, so a
+          // declaration only counts as dead if it loses on BOTH.
+          if (base.length) sets.push({ classes: base, file: rel });
+          if (conditional.length) {
+            sets.push({ classes: [...base, ...conditional], file: rel });
+          }
         }
         // A `class:` prop adds to whatever the spec already set. Only literal
         // values are read; a computed one is unknowable from the source and is
@@ -222,13 +268,71 @@ export function findDead(cssPath = path.join(ROOT, 'src/styles/app.css'), sets =
   return dead;
 }
 
+/**
+ * Classes the app emits that NO stylesheet rule mentions anywhere.
+ *
+ * A different failure from a dead declaration and it needed its own check:
+ * `.jam-card` was emitted on every jam entry with no rule behind it, while its
+ * three children `.jam-card-head`, `-song` and `-note` all had one, and the
+ * spacing it should have carried sat in a hardcoded inline `marginBottom:
+ * '8px'` at the call site. findDead() cannot see that -- there is no
+ * declaration to be beaten. `.gap-num.plain` was the same shape in 0.1.58.
+ *
+ * The damage is that the class LOOKS like a styling hook. The next person to
+ * restyle these edits `.jam-card`, sees nothing change, and goes looking for a
+ * specificity problem that does not exist.
+ *
+ * ALLOWED lists the classes that are deliberately not styled, each with a
+ * reason. An allowlist is a liability -- it is where a check goes to die -- so
+ * it names exact classes, never patterns, and every entry has to say why.
+ */
+export const UNSTYLED_ALLOWED = {
+  // Structural hooks the checks and the router query, never painted.
+  screen: 'route marker: every view is a .screen, and the boot checks wait on it',
+  section: 'grouping wrapper; every visual rule is on its children',
+  'row-main': 'flex child of .row; sized by .row, targeted by .row-main > .venue-line',
+};
+
+export function findUnstyled(cssPaths, sets = readClassSets()) {
+  const paths = cssPaths || [
+    path.join(ROOT, 'src/styles/app.css'),
+    path.join(ROOT, 'src/styles/tokens.css'),
+  ];
+  // SELECTORS ONLY, never the raw file.
+  //
+  // The first version tested the class name against the whole stylesheet text
+  // and could not be made to fail on the bug it was written for: the comment
+  // explaining why `.jam-card` needed a rule itself contains the string
+  // `.jam-card`, so deleting the rule left the check green. Prose about a class
+  // is not a rule for it. Parsing to selectors also stops a class name inside a
+  // property value or a token comment from counting.
+  const selectors = paths.flatMap((p) => parseRules(fs.readFileSync(p, 'utf8')).map((r) => r.selector));
+  const used = new Map();
+  for (const s of sets) for (const c of s.classes) if (!used.has(c)) used.set(c, s.file);
+
+  const out = [];
+  for (const [cls, file] of used) {
+    if (UNSTYLED_ALLOWED[cls]) continue;
+    // Word-boundary on the class name so `.jam-card` is not considered styled
+    // by `.jam-card-head`, which is the precise mistake that hid it.
+    const re = new RegExp(`\\.${cls}(?![\\w-])`);
+    if (!selectors.some((sel) => re.test(sel))) out.push({ cls, file });
+  }
+  return out;
+}
+
 // Runnable on its own, the way scripts/contrast.mjs is. pathToFileURL, not a
 // hand-built file:// string -- on Windows that produces `file://C:/...` with a
 // slash missing, never matches, and the script exits 0 having printed nothing.
 // Which is indistinguishable from a clean run.
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+// argv[1] is guarded: it is undefined when this module is imported from a
+// context without a script path (`node -e`, some runners), and pathToFileURL
+// throws on undefined -- so an unguarded check crashes the IMPORT rather than
+// skipping the CLI block.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const sets = readClassSets();
   const dead = findDead(undefined, sets);
+  const unstyled = findUnstyled(undefined, sets);
   console.log(`read ${sets.length} class combinations from src/`);
   if (!dead.length) console.log('no dead declarations in src/styles/app.css');
   for (const d of dead) {
@@ -236,5 +340,9 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
       `DEAD  ${d.selector} { ${d.prop}: ${d.value} }\n      beaten by ${d.beatenBy.join(', ')} on .${d.on[0]}`,
     );
   }
-  process.exit(dead.length ? 1 : 0);
+  if (!unstyled.length) console.log('every emitted class matches a rule');
+  for (const u of unstyled) {
+    console.log(`UNSTYLED  .${u.cls} is emitted (${u.file}) but no rule mentions it`);
+  }
+  process.exit(dead.length + unstyled.length ? 1 : 0);
 }

@@ -150,7 +150,7 @@ export function renderShow(ctx, showId) {
     for (const j of jams) {
       append(
         jamSection,
-        el('div.card.jam-card', { style: { marginBottom: '8px' } }, [
+        el('div.card.jam-card', null, [
           el('div.jam-card-head', null, [
             // Tappable to the same place the setlist title above goes, and in
             // the same green, so the two are visibly the same entry.

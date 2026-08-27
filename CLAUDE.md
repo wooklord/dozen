@@ -52,9 +52,14 @@ source.** If a change would put third-party content on screen, it is out.
 
 ## Repo isolation rule
 
-This is a standalone project. **Never read from or write to
-`C:\Users\kylem\projects\fantasytour` or `C:\Users\kylem\projects\ambassadortracker`, under any
-circumstances.** If something appears to be needed from either, stop and ask.
+This is a standalone project. **Never read from or write to the sibling `fantasytour` or
+`ambassadortracker` repositories, under any circumstances** — they sit beside this one in the same
+projects directory. If something appears to be needed from either, stop and ask.
+
+> Written without the absolute paths on purpose. They spelled out a home directory, and therefore
+> an OS username, in the file whose own rule forbids location identifiers and which deliberately
+> declines to spell the owner's name two sections below. The repo names are what the rule is
+> actually about; the drive letter never added anything to it.
 
 ---
 
@@ -129,7 +134,9 @@ complexity to solve something that may not exist.
 It also disallows `/actions/`, `/ajax/`, `/auth/`, `/admin/`, `/stats/`, and `/gap-chart/`.
 We are a user-initiated app, not a crawler, but we behave accordingly:
 
-- **Cache aggressively** with explicit per-type TTLs.
+- **Cache aggressively** with an explicit TTL. One value governs the whole archive — it is stored
+  as a single blob under a single key, so per-type expiry is not merely unimplemented but
+  structurally impossible without splitting the payload. See `ARCHIVE_TTL` in `src/data/cache.js`.
 - **Never poll in a loop.** No background timers that refetch.
 - **Never fire per-keystroke requests.** Search and filtering run against cached data in memory.
 - **Cold start is one batched pull**, not dozens of requests.
@@ -292,35 +299,49 @@ Credit The Carton and Songfish visibly, and deep-link back to the corresponding 
 page from every show, song, and venue view. This is a fan app riding on someone else's work and it
 should send traffic home.
 
-## Personal identifiers: the rule, and the two deliberate exceptions
+## Personal identifiers: the rule, and the three deliberate exceptions
 
 **This repository is public.** The standing rule is **no personal identifiers in
 tracked files** — no real names, no email addresses, no handles, no locations.
 
-**There are exactly two exceptions, both deliberate, both made knowingly by the
+**There are exactly three exceptions, all deliberate, all made knowingly by the
 repo owner. Do not "fix" them.**
 
 | Where | What | Why |
 |---|---|---|
 | `LICENSE`, the copyright line | the owner's name, after `Copyright (c) 2026` | A copyright notice without a holder asserts nothing. The name IS the legal function of the line |
 | Settings & data sheet, last line | the owner's name, after `Built by` | Creator credit, rendered by `.creator-credit` in `src/app.js` |
+| The deployment domain, wherever it appears | the owner's handle, as part of `dozen.wooklord.net` | **Functionally required.** `CNAME` IS the domain, and Pages reads it from the repo. `scripts/verify-deploy.mjs` must request the real host or it verifies nothing. Docs describing the DNS setup have to name the record being created |
 
 **This file does not spell the name**, on purpose: recording an exception is not
-a reason to add a third instance of the thing being excepted. Read the two
-places above if you need the exact string.
+a reason to add a third instance of the thing being excepted. Read the first two
+places above if you need the exact string. The domain is different — it is a
+public DNS record and is written out in full wherever it is needed.
 
-**The exception is narrow and stays narrow.** Those two places only. Specifically
-NOT:
+> **The third row was added in 0.1.62 to describe what was already true.** The
+> handle appears in `CNAME`, `README.md`, this file, `docs/plan.md` and
+> `scripts/verify-deploy.mjs`, and it has to: a site cannot be deployed to a
+> domain the repo declines to name. The rule said "two exceptions" and "no
+> handles" while five tracked files carried one. Scrubbing them would have
+> broken the deploy; the honest fix is the rule matching the repo. Recorded
+> under the same principle as everywhere else here — a stale record reads with
+> the same authority as a current one, and this one would have sent someone
+> deleting a `CNAME`.
 
-- no email address anywhere, in either place or any other
+**The exceptions stay narrow.** Those three and no others. Specifically NOT:
+
+- no email address anywhere, in any of them or any other
 - no name in commit messages, commit-adjacent docs, README, or code comments
-- no handle, no location, no other identifier
+- no location, no file path containing a home directory or an OS username, no
+  other identifier
+- no handle **except** as part of the deployment domain — the bare handle on its
+  own is not covered by the third row
 - no name in `package.json`, `manifest.webmanifest`, or any metadata file
 - no expansion to other screens — the credit is two taps into a sheet, and that
   is the whole of its presence in the UI
 
-If you are about to add the name somewhere a third row would be needed for,
-that is out of scope: ask first.
+If you are about to add an identifier somewhere a fourth row would be needed
+for, that is out of scope: ask first.
 
 **The credit must stay quieter than the Carton attribution.** `.attrib` credits
 The Carton and Songfish on every screen at 13px; `.creator-credit` is 11px, one
@@ -486,6 +507,38 @@ Two other bypasses were considered and rejected:
 - **Skip registration on localhost entirely.** Same objection as gating on
   hostname above: it would mean the offline path is never exercised outside
   production.
+
+### Dead code is not always safe to simply switch on
+
+**A parameter that has never been used has never been tested**, and "wire it up
+to the obvious value" is a change, not a cleanup.
+
+`quickTruncationCheck` took a third argument, `newestKnownShowdate`, and was
+called with `null` from its only call site — so the branch comparing the newest
+setlist row against the shows table had never executed once. The value it
+plainly wanted was sitting three lines above the call. Passing it **hard-failed
+the app on completely healthy data**: every cold start rendered "Could not load
+the archive", because `shows` contains upcoming shows that by definition have no
+setlist. Measured 2026-08-27 — `shows` ran to `2026-12-05`, setlists correctly
+ended at `2026-08-14`.
+
+Comparing against the newest *played* show is not sound either: a show played
+before The Carton posts its setlist produces the same shape, and the app already
+counts those (`counts.excludedNoSetlist`). Any version of this needs a
+tolerance, and every tolerance available is a number invented to make the check
+pass — which is the thing this file spends most of its length warning about.
+
+It was removed rather than left dead or "enabled" into a false alarm, because
+the sound version of the assertion already exists: `verifyArchive()` pulls the
+archive a year at a time and asserts both row count and max showdate against the
+full pull — same table, no cross-table inference, no threshold.
+
+**The rule.** When you find dead code, the question is not "why isn't this
+wired up" but **"what happens when it runs?"** Run it before deciding. If it
+was dead because it never worked, deleting it is the fix and the reasoning is
+what gets kept. `tests/coldpull.test.mjs` now asserts the healthy case — a
+setlists pull ending before the newest show is not, on its own, evidence of
+anything.
 
 ### A stale record is worse than a missing one
 
