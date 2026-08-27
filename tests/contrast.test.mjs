@@ -14,7 +14,10 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readPalette, audit, ratio, r2, bStar, deltaE, PAIRS } from '../scripts/contrast.mjs';
+import {
+  readPalette, audit, ratio, r2, bStar, deltaE, PAIRS,
+  deriveRulePairs, tokensUsedByRules, KNOWN_GAPS, composite,
+} from '../scripts/contrast.mjs';
 
 test('the palette parses out of tokens.css', () => {
   const p = readPalette();
@@ -108,9 +111,15 @@ test('b* separates warm from cool', () => {
 });
 
 test('PAIRS covers the tokens most likely to be retuned', () => {
-  // Not a completeness proof -- it is a floor. jam, yolk, btn-line and
-  // ink-faint are the four that have actually moved, and each has cost a
-  // measurement round. If one drops out of PAIRS it stops being audited.
+  // A floor, and a weak one, kept only for the four tokens that have actually
+  // moved. It asserts a token appears as SOME foreground, so dropping
+  // `jam on surface-up` while keeping `jam on shell` passes it -- its own
+  // comment conceded that and nothing acted on it for several builds.
+  //
+  // THE REAL COVERAGE CHECK IS "EVERY TOKEN A RULE USES IS AUDITED SOMEWHERE"
+  // below, which reads the stylesheet instead of this list. This one now only
+  // guards the case that check cannot see: a token still painted by a rule,
+  // still technically audited, but audited on fewer grounds than before.
   for (const fg of ['jam', 'yolk', 'btn-line', 'ink-faint']) {
     assert.ok(PAIRS.some((p) => p.fg === fg), `${fg} is no longer audited`);
   }
@@ -171,4 +180,138 @@ test('CIEDE2000 is symmetric', () => {
   for (const [a, b] of SHARMA) {
     assert.equal(deltaE00Lab(a, b), deltaE00Lab(b, a));
   }
+});
+
+// --- the half that comes out of the stylesheet ------------------------------
+//
+// PAIRS pairs TOKEN NAMES, and its `where` field is prose. Nothing tied
+// `{ fg: 'chip-sel-ink', bg: 'chip-sel-fill' }` to the rule that renders it, so
+// a rule could switch which token it used and every listed pair stayed green --
+// the palette had not moved. The list was checking the palette while claiming
+// to check the app.
+//
+// A rule that sets BOTH a foreground and a background is a complete pair with
+// no DOM involved, and that subset is now derived and measured as written.
+// Text on an ANCESTOR's background still needs the DOM and stays in PAIRS;
+// scripts/smoke.mjs measures those against the rendered page.
+
+test('EVERY SAME-RULE PAIR IN app.css CLEARS ITS THRESHOLD', () => {
+  const { pairs } = deriveRulePairs();
+  // A derivation that found nothing would pass this vacuously, and a parser
+  // returning [] is far likelier than the stylesheet losing every rule that
+  // sets a colour on a background.
+  assert.ok(pairs.length >= 12, `only ${pairs.length} same-rule pairs derived; the parse is broken`);
+
+  const palette = readPalette();
+  const bad = [];
+  for (const p of pairs) {
+    for (const theme of ['dk', 'lt']) {
+      const v = r2(palette[theme][p.fg], palette[theme][p.bg]);
+      if (v < p.min) bad.push(`${theme} ${p.where}: ${p.fg} on ${p.bg} = ${v}:1 (min ${p.min})`);
+    }
+  }
+  assert.deepEqual(bad, []);
+});
+
+test('the derivation actually reaches the rules it claims to', () => {
+  // Named rules rather than a count: a refactor that stopped matching
+  // attribute selectors, or `border` shorthand, would drop pairs silently and
+  // the threshold test above would keep passing on the smaller set.
+  const { pairs } = deriveRulePairs();
+  const seen = pairs.map((p) => p.where);
+  for (const want of [
+    '.chip[aria-pressed="true"] { color }',      // attribute selector
+    '.chip[aria-pressed="true"] { border-color }',
+    '.btn { border-color }',                      // `border:` shorthand
+    '.btn-accent { color }',                      // the inverted pair
+  ]) {
+    assert.ok(seen.includes(want), `derivation no longer reaches ${want}`);
+  }
+});
+
+test('EVERY TOKEN A RULE USES IS AUDITED SOMEWHERE', () => {
+  // The real answer to "a rule could switch tokens and stay green". If a rule
+  // starts painting with a token that appears in no pair -- listed or derived
+  // -- it is unmeasured, and this is the only check that would notice.
+  const used = tokensUsedByRules();
+  const { pairs } = deriveRulePairs();
+  // KNOWN_GAPS counts as ACCOUNTED FOR, not as passing. A measured shortfall
+  // somebody has written down and deferred is a different state from a token
+  // nobody has ever looked at, and this check is about the second. The gaps
+  // are reported by the CLI every run and carry their own numbers; failing
+  // here for one would make the suite red for an open decision, which trains
+  // people to ignore red. Their tokens are declared as fields precisely so
+  // this can tell the two states apart.
+  const auditedFg = new Set([...PAIRS.map((p) => p.fg), ...pairs.map((p) => p.fg), ...KNOWN_GAPS.map((g) => g.fg)]);
+  const auditedBg = new Set([...PAIRS.map((p) => p.bg), ...pairs.map((p) => p.bg), ...KNOWN_GAPS.map((g) => g.bg)]);
+
+  // A translucent ground that flattens to one already audited. --shell-alpha
+  // is the shell colour at .86 OVER the shell, so it composites back to
+  // exactly --shell and everything in the header is measured by the `bg:
+  // shell` pairs. An alias, not an exemption -- the pair is really checked.
+  const GROUND_ALIAS = { 'shell-alpha': 'shell' };
+
+  // Grounds that carry no text, named by SELECTOR rather than by token, so
+  // exempting the grip cannot also exempt a future rule that puts text on a
+  // --line background. Each needs a reason.
+  const NO_TEXT_ON_IT = {
+    '.sheet-grip': 'a 4px drag handle; nothing renders on top of it',
+  };
+
+  // Tokens that are not a colour on a ground at all.
+  const NOT_A_COLOUR_PAIR = new Set([
+    'jam-weight',   // a font-weight
+    'heat-floor',   // an opacity
+    'scrim',        // a full-screen overlay whose job is to obscure
+    'shadow-up', 'shadow-sheet', 'cell-inset',
+  ]);
+
+  const unaudited = [];
+  for (const [token, selector] of used.color) {
+    if (NOT_A_COLOUR_PAIR.has(token)) continue;
+    if (!auditedFg.has(token)) unaudited.push(`color --${token} (${selector})`);
+  }
+  for (const [token, selector] of used.background) {
+    if (NOT_A_COLOUR_PAIR.has(token)) continue;
+    if (NO_TEXT_ON_IT[selector]) continue;
+    const resolved = GROUND_ALIAS[token] || token;
+    if (!auditedBg.has(resolved)) unaudited.push(`background --${token} (${selector})`);
+  }
+  assert.deepEqual(unaudited, [], 'these tokens are painted by a rule but appear in no measured pair');
+});
+
+test('every KNOWN_GAP names real tokens', () => {
+  // The gaps are consulted by the coverage check above, so a typo in one would
+  // silently exempt nothing and quietly re-open a hole. They also have to stay
+  // measurable: a gap naming a token that has been removed is a record of a
+  // problem that no longer exists, which is the stalest kind of record.
+  const p = readPalette();
+  for (const g of KNOWN_GAPS) {
+    assert.ok(g.fg && g.bg, `KNOWN_GAP "${g.what}" has no fg/bg tokens`);
+    for (const t of [g.fg, g.bg]) {
+      assert.ok(p.dk[t] && p.lt[t], `KNOWN_GAP "${g.what}" names --${t}, which is not in tokens.css`);
+    }
+  }
+});
+
+test('a KNOWN_GAP that has started passing is reported, not left in the list', () => {
+  // "Not yet fixed" has to keep being true. A gap that a palette retune
+  // silently fixed would sit here forever describing a problem nobody has,
+  // and the CLI would go on printing it as an open decision.
+  const p = readPalette();
+  const nowPassing = KNOWN_GAPS.filter((g) => {
+    // `min` is REQUIRED, not defaulted. The first version of this defaulted to
+    // 3, so the 4.00:1 --ink-faint TEXT gap -- which needs 4.5 -- came back as
+    // "now passing" and would have been moved into PAIRS, where it would have
+    // failed the threshold test for real. A default here is an invented
+    // threshold, which is the thing this whole file exists to avoid.
+    assert.ok(typeof g.min === 'number', `KNOWN_GAP "${g.what}" has no min; it cannot be judged`);
+    const min = g.min;
+    return ['dk', 'lt'].every((t) => {
+      const bg = String(p[t][g.bg]).startsWith('#') ? p[t][g.bg] : composite(p[t][g.bg], p[t].surface);
+      const fg = String(p[t][g.fg]).startsWith('#') ? p[t][g.fg] : composite(p[t][g.fg], bg);
+      return r2(fg, bg) >= min;
+    });
+  });
+  assert.deepEqual(nowPassing.map((g) => g.what), [], 'these KNOWN_GAPS now clear their threshold — move them into PAIRS');
 });

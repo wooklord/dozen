@@ -17,6 +17,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseRules } from './deadcss.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -263,6 +264,12 @@ export const PAIRS = [
   { fg: 'ink-dim', bg: 'surface', min: 4.5, where: 'footnote text, jam entry notes' },
   { fg: 'ink-place', bg: 'shell', min: 4.5, where: 'venue city/state' },
   { fg: 'ink-place', bg: 'surface', min: 4.5, where: 'venue city/state inside a card' },
+  // Its own token, and it was in no pair at all until the coverage check
+  // below started reading the stylesheet. `.venue-line` is primary
+  // information -- which Brooklyn Bowl of three you are looking at -- so it is
+  // held to the text threshold like any other body copy.
+  { fg: 'ink-venue', bg: 'shell', min: 4.5, where: 'venue name on the page ground' },
+  { fg: 'ink-venue', bg: 'surface', min: 4.5, where: 'venue name inside a card or row' },
 
   // The accent. Carries meaning, so it is held to the text threshold even
   // where it renders bold -- see docs/design.md.
@@ -278,6 +285,20 @@ export const PAIRS = [
   // so it gets 4.5 and not 3 -- this pair is why the colour cannot go dimmer.
   { fg: 'ink-faint', bg: 'shell', min: 4.5, where: 'Carton links, cache chip' },
   { fg: 'ink-faint', bg: 'surface', min: 4.5, where: 'Carton links inside a card' },
+  // THE PRESSED GROUND, which was missing and was failing at 4.33:1 dark.
+  // `.cover-note` and `.row-meta .sep` are --ink-faint inside `.row`, and
+  // `.row:active` sets background: var(--surface-up); `.gap-unit` is the same
+  // story under `button.gap-figure:active`. Pressed grounds were already in
+  // scope -- jam on surface-up and btn-line on surface-up are both asserted --
+  // so this was an inconsistency in the list, not a scoping decision.
+  //
+  // --dk-ink-faint moved #8d8375 -> #918779 to clear it (4.33 -> 4.56).
+  // ΔE 1.6, below the threshold at which the change is visible side by side,
+  // and it moves the token UP, which the "must not go dimmer" floor in
+  // docs/design.md permits. The hierarchy it sits in is unchanged: still far
+  // below --ink-label (6.85 on the shell), so section labels stay clearly
+  // brighter than Carton links, which smoke.mjs asserts independently.
+  { fg: 'ink-faint', bg: 'surface-up', min: 4.5, where: 'cover note, row-meta separator and gap unit on a PRESSED row' },
 
   // Section and stat labels. A dedicated token so brightening them cannot
   // drag up .carton-link, .creator-credit or .attrib, which share --ink-faint
@@ -304,10 +325,32 @@ export const PAIRS = [
   //
   // `bg: shell` is the sortbar ground: the bar paints --shell-alpha over the
   // shell, and that composites back to exactly --shell.
+  //
+  // `chip-sel-line on surface` USED TO BE HERE AND HAS BEEN REMOVED, which is
+  // a reduction in the list and deliberate. It asserted a selected chip's
+  // border against a NEIGHBOURING chip's fill, at 7.15:1 light. The mirror of
+  // it -- `btn-line on chip-sel-fill`, an unselected border beside a selected
+  // fill -- measures 2.61 dark / 2.89 light and would fail. The two rest on
+  // identical reasoning, so the list was asserting the non-adjacency that
+  // passes and omitting the one that does not.
+  //
+  // NEITHER IS AN ADJACENCY. `.sortbar` sets `gap: var(--s-2)`, so 8px of bar
+  // ground sits between any two chips and no border ever meets a neighbour's
+  // fill. A border's real boundaries are its own fill and the bar ground, and
+  // both are asserted below for chip-sel-line and above for btn-line. Adding
+  // the failing mirror would have been recording a WCAG failure that does not
+  // exist on screen; keeping the passing one was recording a pass that means
+  // nothing. The measured figures are kept here so they are not re-derived.
   { fg: 'chip-sel-ink', bg: 'chip-sel-fill', min: 4.5, where: 'selected sort/filter chip label' },
   { fg: 'chip-sel-line', bg: 'chip-sel-fill', min: 3, where: 'selected chip border against its own fill' },
   { fg: 'chip-sel-line', bg: 'shell', min: 3, where: 'selected chip border against the sortbar ground' },
-  { fg: 'chip-sel-line', bg: 'surface', min: 3, where: 'selected chip border beside an unselected chip fill' },
+
+  // The pressed state of the SELECTED segment in the theme control. The
+  // colour comes from the non-pressed rule and the ground from the `:active`
+  // one, so it is two rules and the derivation cannot see it -- exactly the
+  // shape that has to stay hand-listed, and exactly the shape that goes
+  // unnoticed. Found by the coverage check below, not by reading the file.
+  { fg: 'yolk-ink', bg: 'yolk-deep', min: 4.5, where: 'selected theme segment while pressed' },
 
   { fg: 'danger', bg: 'shell', min: 4.5, where: 'error text, the NO SW chip' },
 ];
@@ -323,10 +366,37 @@ export const PAIRS = [
  * KEEP THIS LIST EMPTY IF YOU CAN. Every entry is a decision someone deferred.
  */
 export const KNOWN_GAPS = [
+  {
+    fg: 'ink-faint',
+    bg: 'yolk-wash',
+    min: 4.5,
+    what: '--ink-faint text on a PICKED row (--yolk-wash over --surface)',
+    measured: 'dark 4.00:1, light 4.91:1 — needs 4.5. Dark fails.',
+    why:
+      'Found in 0.1.63 by the token-coverage check, not by reading the list: ' +
+      '--yolk-wash was painted by .row-shell[data-picked="true"] and appeared ' +
+      'in no pair, so nothing had ever measured text against it. .row has no ' +
+      'background of its own, so the wash reaches .cover-note, .row-meta .sep ' +
+      'and .gap-unit, all of which are --ink-faint. Unlike the pressed-row case ' +
+      'fixed in this same build, this state PERSISTS -- a picked row stays ' +
+      'picked.',
+    note:
+      'Both available fixes are visible design changes and neither is this ' +
+      "batch's to make. Brightening --ink-faint far enough (roughly #9c9285) " +
+      'would clear it but pushes attribution links and the cache chip up ' +
+      'app-wide, against the "quiet" intent in docs/design.md -- the small ' +
+      '#8d8375 -> #918779 move in this build was ΔE 1.6 and deliberately did ' +
+      'not go further. Lowering --yolk-wash\'s alpha would clear it by making ' +
+      'the picked-row highlight weaker, which is the one thing that highlight ' +
+      'exists to do. Needs a decision, not a nudge.',
+  },
   // The .chip[aria-pressed="true"] border that lived here (dark 2.14:1, light
   // 1.53:1) is FIXED as of 0.1.59 and has moved into PAIRS as four asserted
   // pairs. Do not re-add it; if it regresses, `node --test` goes red.
   {
+    fg: 'yolk-line',
+    bg: 'surface',
+    min: 3,
     what: '.badge-jam border (--yolk-line over --surface)',
     measured: 'dark 2.17:1, light 1.60:1 — needs 3:1',
     why:
@@ -343,6 +413,115 @@ export const KNOWN_GAPS = [
       'highlight too. Scoped out on purpose, pending an explicit decision.',
   },
 ];
+
+/**
+ * PAIRS DERIVED FROM THE STYLESHEET, not from the list above.
+ *
+ * THE STRUCTURAL PROBLEM THIS ADDRESSES. PAIRS pairs TOKEN NAMES. Its `where`
+ * field is prose -- nothing connects `{ fg: 'chip-sel-ink', bg: 'chip-sel-fill' }`
+ * to the rule that actually renders it. A rule could switch which token it
+ * uses and every hand-listed pair would stay green, because the palette had
+ * not changed. What the list checks is the palette; what it claims to check is
+ * the app. docs/design.md said "every foreground/background pair in use" when
+ * it was every pair someone remembered to write down.
+ *
+ * WHAT CAN HONESTLY BE DERIVED, AND WHAT CANNOT. A rule that sets BOTH a
+ * foreground and a background is a complete pair on its own -- no DOM, no
+ * nesting, no ancestry. `.btn-accent`, `.segmented-item[aria-pressed="true"]`
+ * and `.badge-accent` are all of this shape, and so is the selected chip. That
+ * subset is derived here and measured exactly as written.
+ *
+ * Text on an ANCESTOR's background is not derivable from CSS alone: knowing
+ * that `.cover-note` sits inside `.row` requires the DOM. Those stay in PAIRS,
+ * and scripts/smoke.mjs measures them for real against the rendered page --
+ * see "contrast, measured on the rendered page" there. This function is the
+ * static half and does not pretend to be the whole contract.
+ *
+ * Translucent grounds are SKIPPED rather than guessed at: a colour over
+ * `--shell-alpha` composites whatever is scrolling beneath it, so any figure
+ * would be true only at scroll position zero. Those are listed explicitly in
+ * PAIRS with the composited ground stated, which is the honest way to handle
+ * them. Skipped rules are returned so nothing is silently dropped.
+ */
+export function deriveRulePairs(cssPath = path.join(ROOT, 'src/styles/app.css'), palette = readPalette()) {
+  const rules = parseRules(fs.readFileSync(cssPath, 'utf8'));
+  const tokenOf = (value) => {
+    const m = String(value).match(/var\(\s*--([a-z0-9-]+)\s*\)/);
+    return m ? m[1] : null;
+  };
+  const opaque = (theme, token) => {
+    const v = palette[theme][token];
+    return typeof v === 'string' && v.startsWith('#');
+  };
+
+  const pairs = [];
+  const skipped = [];
+  for (const r of rules) {
+    const bg = tokenOf(r.decls.get('background') || r.decls.get('background-color') || '');
+    if (!bg) continue;
+
+    // A foreground on the same rule. `color` is text (4.5); a border is a
+    // non-text boundary (3, WCAG 1.4.11).
+    const fgs = [
+      ['color', tokenOf(r.decls.get('color') || ''), 4.5],
+      ['border-color', tokenOf(r.decls.get('border-color') || r.decls.get('border') || ''), 3],
+    ];
+    for (const [prop, fg, min] of fgs) {
+      if (!fg) continue;
+      if (!palette.dk[bg] || !palette.dk[fg]) {
+        skipped.push({ selector: r.selector, prop, fg, bg, why: 'not a palette token' });
+        continue;
+      }
+      if (!opaque('dk', bg) || !opaque('lt', bg)) {
+        skipped.push({ selector: r.selector, prop, fg, bg, why: 'translucent ground — belongs in PAIRS with the composited value' });
+        continue;
+      }
+
+      // A border painted in its own fill colour is not a boundary anyone is
+      // meant to see. `.btn-accent` and `.stat-grid` both do this deliberately
+      // -- the accent button reads as a solid block, and .stat-grid's
+      // background IS its 1px grid gutter. Measuring them yields 1:1 and says
+      // nothing.
+      if (fg === bg) {
+        skipped.push({ selector: r.selector, prop, fg, bg, why: 'border matches its own fill — deliberate, not a boundary' });
+        continue;
+      }
+
+      // `--line` is DOCUMENTED as a hairline that is meant to be barely there
+      // (see tokens.css): it separates rows and outlines containers. WCAG
+      // 1.4.11's 3:1 covers boundaries needed to identify a CONTROL, and the
+      // token for those is `--btn-line`, which every control uses and which is
+      // asserted here at 3:1 on all three of its grounds.
+      //
+      // This is not a loophole for putting `--line` on a control: smoke.mjs
+      // sweeps .btn, .chip, .status-chip, .icon-btn-bordered, .search and
+      // .segmented across screens and requires every one to render the SAME
+      // border colour as a real .btn. A control wearing --line fails there.
+      if (prop === 'border-color' && fg === 'line') {
+        skipped.push({ selector: r.selector, prop, fg, bg, why: 'decorative container hairline; control edges use --btn-line and are asserted' });
+        continue;
+      }
+
+      pairs.push({ fg, bg, min, prop, selector: r.selector, where: `${r.selector} { ${prop} }` });
+    }
+  }
+  return { pairs, skipped };
+}
+
+/** Every palette token a rule in app.css actually uses, by property. */
+export function tokensUsedByRules(cssPath = path.join(ROOT, 'src/styles/app.css')) {
+  const rules = parseRules(fs.readFileSync(cssPath, 'utf8'));
+  const out = { color: new Map(), background: new Map() };
+  for (const r of rules) {
+    for (const [prop, key] of [['color', 'color'], ['background', 'background'], ['background-color', 'background']]) {
+      const v = r.decls.get(prop);
+      if (!v) continue;
+      const m = String(v).match(/var\(\s*--([a-z0-9-]+)\s*\)/);
+      if (m && !out[key].has(m[1])) out[key].set(m[1], r.selector);
+    }
+  }
+  return out;
+}
 
 /** Measure every pair in both themes. Returns rows, worst first. */
 export function audit(palette = readPalette()) {
@@ -385,6 +564,25 @@ if (isMain) {
   }
   console.log(`\n${bad.length ? `${bad.length} pair(s) below threshold` : 'all pairs clear their threshold'}`);
 
+  // The half that comes out of the stylesheet rather than the list above.
+  const derived = deriveRulePairs();
+  const palette = readPalette();
+  const derivedBad = [];
+  for (const p of derived.pairs) {
+    for (const theme of ['dk', 'lt']) {
+      const v = r2(palette[theme][p.fg], palette[theme][p.bg]);
+      if (v < p.min) derivedBad.push(`${theme} ${p.where} — ${p.fg} on ${p.bg} = ${v}:1 (min ${p.min})`);
+    }
+  }
+  console.log(`\nDERIVED FROM app.css — ${derived.pairs.length} same-rule pair(s), ${derived.skipped.length} skipped:`);
+  for (const p of derived.pairs) {
+    const d = r2(palette.dk[p.fg], palette.dk[p.bg]);
+    const l = r2(palette.lt[p.fg], palette.lt[p.bg]);
+    const mark = d < p.min || l < p.min ? 'FAIL' : 'ok  ';
+    console.log(`  ${mark} ${p.where.padEnd(46)} ${p.fg} on ${p.bg}  dk ${d} / lt ${l}`);
+  }
+  for (const s of derived.skipped) console.log(`  skip ${(s.selector + ' [' + s.prop + ']').padEnd(46)} ${s.why}`);
+
   if (KNOWN_GAPS.length) {
     console.log(`\n${KNOWN_GAPS.length} KNOWN GAP(S) — measured, documented, not yet fixed:`);
     for (const g of KNOWN_GAPS) {
@@ -393,5 +591,5 @@ if (isMain) {
     }
     console.log('  (not asserted by node --test; each is an open decision)');
   }
-  process.exit(bad.length ? 1 : 0);
+  process.exit(bad.length + derivedBad.length ? 1 : 0);
 }

@@ -25,7 +25,7 @@ the work that an illustration would otherwise do.
 --line         #332C25   hairlines
 --ink          #F5EFE6   primary text, warm white
 --ink-dim      #bcb2a3   secondary text
---ink-faint    #8d8375   tertiary, timestamps
+--ink-faint    #918779   tertiary, timestamps
 --yolk         #F5A623   THE accent
 --yolk-deep    #C77F14   pressed
 --yolk-wash    rgba(245,166,35,.12)   selected row fill
@@ -291,9 +291,34 @@ across theme blocks is how palettes drift apart.
 
 ### Contrast is measured, not eyeballed
 
-Every foreground/background pair in use is checked against WCAG AA: **4.5:1 for normal text, 3:1
-for large/bold**. This is not decoration — the yolk accent carries meaning on gap figures, so
-failing contrast is a legibility bug, not a taste one.
+Pairs are checked against WCAG AA: **4.5:1 for normal text, 3:1 for large/bold and for non-text
+boundaries**. This is not decoration — the yolk accent carries meaning on gap figures, so failing
+contrast is a legibility bug, not a taste one.
+
+**What that actually covers, stated precisely, because this section used to claim "every
+foreground/background pair in use" and that was not true.** `PAIRS` in `scripts/contrast.mjs`
+pairs *token names*; its `where` field is prose. Nothing connected a pair to the rule that renders
+it, so a rule could switch which token it painted with and every listed pair stayed green — the
+palette had not moved. What was checked was the palette; what was claimed was the app. Three real
+holes were sitting in it: `--ink-venue` was in no pair at all, `--yolk-ink` on `--yolk-deep` was
+in no pair, and text on a picked row had never been measured against `--yolk-wash`.
+
+Coverage now comes in three parts, and only the first two are proofs:
+
+1. **Derived from the stylesheet.** Any rule setting *both* a foreground and a background is a
+   complete pair with no DOM involved — `.btn-accent`, `.chip[aria-pressed="true"]`,
+   `.segmented-item[aria-pressed="true"]` and twelve others. These are parsed out of `app.css` and
+   measured exactly as written, so switching a rule's token is caught.
+2. **Every token a rule paints with must appear in some measured pair**, listed or derived, or be
+   recorded in `KNOWN_GAPS`. This is what found all three holes above.
+3. **Hand-listed pairs** for text on an *ancestor's* background — `.cover-note` inside `.row`,
+   quiet text on a pressed row. Those need the DOM and cannot be derived from CSS, so this part
+   remains a list someone maintains. It is the weakest part and it is not pretending otherwise.
+
+Six rules are deliberately excluded from (1) and each says why in the source: a border painted in
+its own fill colour is not a boundary (`.btn-accent`, `.stat-grid`), and container hairlines use
+`--line`, which is documented as *meant* to be barely there — control edges use `--btn-line`, and
+`scripts/smoke.mjs` independently requires every control to render that exact border.
 
 The light palette originally **failed four checks**, the worst being the yolk accent at 3.85:1 on
 white as small text (tab labels, badges, set labels). Corrected values:

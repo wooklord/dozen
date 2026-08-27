@@ -508,6 +508,41 @@ Two other bypasses were considered and rejected:
   hostname above: it would mean the offline path is never exercised outside
   production.
 
+### A contract written over NAMES is not a contract over the thing
+
+**If a check's inputs are a hand-maintained list, what it verifies is the list.**
+
+`scripts/contrast.mjs` measured 33 pairs of TOKEN NAMES and `docs/design.md`
+said it covered "every foreground/background pair in use". Nothing tied a pair
+to the rule that renders it — the `where` field was prose. A rule could switch
+which token it painted with and all 33 stayed green, because no hex had moved.
+Proved by changing `.chip[aria-pressed="true"]` to paint `--ink-faint` on
+`--chip-sel-fill`: the hand-listed check stayed green while the label sat at
+**3.79:1**.
+
+The fix is not a longer list. It is deriving what can be derived and being
+explicit about what cannot:
+
+- **Any rule that sets both a foreground and a background is a complete pair**,
+  with no DOM involved. Fifteen of them are parsed out of `app.css` and
+  measured as written.
+- **Every token a rule paints with must appear in some measured pair** — listed,
+  derived, or recorded in `KNOWN_GAPS`. This is the check that closes the hole,
+  and it immediately found three tokens nobody had ever measured: `--ink-venue`
+  (in no pair at all), `--yolk-ink` on `--yolk-deep`, and text on a picked row
+  against `--yolk-wash`, which is still failing at 4.00:1 dark and is now
+  recorded as a gap rather than being invisible.
+- **What genuinely needs the DOM stays a list**, and says so. Text on an
+  ancestor's background — quiet text inside a pressed row — cannot be derived
+  from CSS. Three parts, and only the first two are proofs.
+
+**An honest partial beats a claim the list cannot support.** The doc now states
+which of the three parts covers what, and names the weakest.
+
+The same shape appears wherever a check reads a curated list: `ROUTES` markers
+(0.1.62), `PAIRS` here, `KNOWN_GAPS`. Ask what reads the list, and what would
+happen if the thing it describes moved without the list moving.
+
 ### Dead code is not always safe to simply switch on
 
 **A parameter that has never been used has never been tested**, and "wire it up
@@ -667,6 +702,34 @@ real numbers about a smaller universe than its output implies:
   inputs that can never be equal, is a guard that cannot report the false
   negative it exists for. CR is stripped before measuring now; the two sides
   fingerprint equal on unchanged CSS and still diverge on a one-line edit.
+
+And the self-check itself could not detect the failure it was written for, which
+was found in 0.1.63 and is the third fault in a row in this one guard:
+
+- **It fingerprinted with `fetch(url, { cache: 'no-store' })`.** The failure it
+  guards against is "the browser fetched the new CSS while still APPLYING the
+  old parsed sheet" — and a fresh fetch bypasses the CSSOM entirely and
+  re-downloads from that side's own port, so it reported the correct file no
+  matter what the document was rendering with. It was measuring the server, not
+  the page. Demonstrated by mutating `document.styleSheets` in a live page: the
+  fetch probe returned an identical value, the CSSOM probe changed. It reads
+  `document.styleSheets` now and hashes the serialised rules.
+- **Byte length was never a fingerprint.** Any length-preserving edit — a hex
+  swap, `600` to `500` — leaves the lengths equal while the rules differ,
+  firing SELF-CHECK FAILED on exactly the palette retunes this tool exists to
+  arbitrate. The CRLF version of this same mistake was the 0.1.60 fix; hashing
+  is what actually fixes it.
+
+Fixing the first created a third problem worth recording, because it is the
+house pattern again: **the CSSOM drops comments**, so a comment-only CSS edit
+produces identical fingerprints while `git diff --name-only` reports a change —
+and the guard would have announced that the run "cannot detect anything" on a
+run where there was correctly nothing to detect. Two causes, one condition. The
+comparison is now against the stylesheets with comments and punctuation spacing
+normalised away, so "the rules differ" has one cause.
+
+`.btn-small` was also removed from the probe list: every small button is
+`el('button.btn.btn-small')`, so listing both counted each one twice.
 
 **It also makes two full archive pulls per run** — roughly 38 API requests.
 Running it repeatedly trips The Carton's documented 60/minute limit, which

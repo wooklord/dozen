@@ -111,8 +111,17 @@ function serve(root, port) {
 const PROBE = `(() => {
   const round = (n) => Math.round(n * 10) / 10;
   const out = [];
+  // .btn-small is NOT in this list, and its absence is deliberate. Every small
+  // button is el('button.btn.btn-small') -- there is no bare .btn-small
+  // anywhere -- so listing both counted each one twice, once as .btn#i and
+  // once as .btn-small#j. Harmless to the verdict, since the duplication is
+  // identical on both sides, but it inflated every box count and every diff
+  // involving a button. .btn already matches them all, and a change specific
+  // to small buttons still shows through it.
+  //
+  // (No backticks in this comment: it lives inside the PROBE template literal.)
   for (const sel of [
-    '.screen-title', '.section-title', '.card', '.btn', '.btn-small',
+    '.screen-title', '.section-title', '.card', '.btn',
     '.setlist-song', '.setlist-label', '.fn-list li', '.venue-line',
     '.carton-link', '.info-link', '.stat', '.row-shell', '.tab', '.jam-card-song',
     '.sortbar', '.chip',
@@ -193,20 +202,46 @@ const main = async () => {
     // sheet, and reported every route identical -- a false negative for any
     // change at all. Comparing fingerprints catches that directly, rather than
     // trusting that a different server implies different styles.
-    // CR IS STRIPPED BEFORE MEASURING, and that is the whole check working.
-    // `git worktree add` honours core.autocrlf, which is true on the machine
-    // this runs on, so the ref side is served CRLF and the working tree LF.
-    // The raw lengths therefore differed by exactly one byte per line -- 1502
-    // for app.css, 344 for tokens.css -- on every run, CSS change or not. The
-    // guard below fires only when the fingerprints MATCH, so a difference that
-    // can never go away is a guard that can never fire: it had no way to
-    // report the false negative it exists for. Normalising line endings is
-    // what makes equal mean equal.
+    // FINGERPRINT THE CSSOM, NOT A FETCH, AND HASH IT RATHER THAN COUNT BYTES.
+    //
+    // Two defects, both of which made this incapable of the job it was written
+    // for. The failure it guards against is "the browser fetched the new CSS
+    // while still APPLYING the old parsed sheet", which is a real thing that
+    // happened and made every route diff as identical.
+    //
+    //   1. It used `fetch(url, { cache: 'no-store' })`. A fresh fetch bypasses
+    //      the CSSOM entirely and re-downloads from that side's own port, so it
+    //      reported the correct file no matter what the document was rendering
+    //      with. It could not detect a stale parsed sheet even in principle --
+    //      it was measuring the server, not the page. `document.styleSheets`
+    //      is the thing that actually paints, so that is what is read.
+    //
+    //   2. It compared BYTE LENGTH. Any length-preserving edit -- a hex swap,
+    //      600 to 500 -- leaves the lengths equal while git reports a change,
+    //      firing SELF-CHECK FAILED on exactly the palette retunes this tool
+    //      exists to arbitrate. The CRLF version of this same mistake was
+    //      found in 0.1.60; length was never a fingerprint. It is hashed now.
+    //
+    // Same-origin, so cssRules is readable. A sheet that throws on access is
+    // recorded as such rather than skipped: a fingerprint that quietly omits a
+    // sheet would make two different pages agree.
     fingerprints[label] = await ev(
-      `Promise.all(['/src/styles/tokens.css', '/src/styles/app.css'].map((u) =>
-         fetch(u, { cache: 'no-store' }).then((r) => r.text()).then((t) => t.replace(/\\r/g, '').length)
-       )).then((n) => n.join('/'))`,
-      true,
+      `(() => {
+        let h = 0x811c9dc5;
+        const feed = (s) => {
+          for (let i = 0; i < s.length; i++) {
+            h ^= s.charCodeAt(i);
+            h = Math.imul(h, 0x01000193) >>> 0;
+          }
+        };
+        let rules = 0;
+        for (const sheet of document.styleSheets) {
+          let list;
+          try { list = sheet.cssRules; } catch (e) { feed('UNREADABLE:' + sheet.href); continue; }
+          for (const rule of list) { feed(rule.cssText); rules++; }
+        }
+        return rules + 'r/' + h.toString(16);
+      })()`,
     );
     globalThis.__diagLabel = label;
     if (THEME) {
@@ -273,15 +308,43 @@ const main = async () => {
 
   // If the working tree differs from the ref in CSS but both sides rendered
   // byte-identical stylesheets, this run proved nothing and must say so.
-  const cssChanged = execFileSync('git', ['diff', '--name-only', REF, '--', 'src/styles'], { cwd: ROOT })
-    .toString().trim();
+  // WHETHER THE CSS THAT MATTERS CHANGED, not whether git touched the files.
+  //
+  // This was `git diff --name-only`, which reports a change for a comment-only
+  // edit -- and this repo makes a lot of those. The fingerprint below now reads
+  // the CSSOM, and the CSSOM drops comments, so a comment-only edit produces
+  // IDENTICAL fingerprints and git reports a change: the guard would fire
+  // SELF-CHECK FAILED and announce that the run "cannot detect anything", on a
+  // run where there was correctly nothing to detect. Two causes for one
+  // condition, which is the same proxy mistake this file keeps recording.
+  //
+  // Comparing the stylesheets with comments and whitespace stripped leaves one
+  // cause: the rules really differ. Compared as text rather than through
+  // parseRules() because that skips @media bodies, and the entire light
+  // palette lives in one.
+  //
+  // Punctuation spacing is normalised too, not just runs of whitespace: the
+  // CSSOM re-serialises every rule, so a reformat that moves a space around a
+  // colon or a brace produces identical fingerprints, and a comparison that
+  // called that "the rules differ" would fire the guard for the same wrong
+  // reason comments did.
+  const stripCss = (s) => s
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s*([{};:,>])\s*/g, '$1')
+    .trim();
+  const cssFiles = ['src/styles/tokens.css', 'src/styles/app.css'];
+  const cssChanged = cssFiles
+    .filter((f) => stripCss(fs.readFileSync(path.join(WORKTREE, f), 'utf8'))
+                !== stripCss(fs.readFileSync(path.join(ROOT, f), 'utf8')))
+    .join(', ');
   const fpA = fingerprints[REF];
   const fpB = fingerprints['working tree'];
   console.log(`  stylesheets: ${REF}=${fpA}  working tree=${fpB}`);
   if (cssChanged && fpA === fpB) {
     failures++;
-    console.log(`  SELF-CHECK FAILED: git reports CSS changes (${cssChanged.replace(/\s+/g, ', ')})`);
-    console.log('  but both sides rendered identical stylesheets — this run cannot detect anything.');
+    console.log(`  SELF-CHECK FAILED: the RULES differ in ${cssChanged}`);
+    console.log('  but both documents parsed identical stylesheets — this run cannot detect anything.');
   }
 
   let changed = 0;

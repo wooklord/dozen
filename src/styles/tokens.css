@@ -9,7 +9,8 @@
  * place. Duplicating hex values across theme blocks is how palettes drift.
  *
  * CONTRAST
- *   Every foreground/background pair in use was measured against WCAG AA:
+ *   Pairs are measured against WCAG AA -- partly derived from app.css and
+ *   partly hand-listed; see docs/design.md for exactly how much is which.
  *   4.5:1 for normal text, 3:1 for large/bold. The light palette originally
  *   failed four checks -- the yolk accent was 3.85:1 on white as small text --
  *   and the values below are the corrected ones. The two themes deliberately
@@ -27,7 +28,7 @@
   --dk-line-soft: #262019;
   --dk-ink: #f5efe6;
   --dk-ink-dim: #bcb2a3;
-  --dk-ink-faint: #8d8375;
+  --dk-ink-faint: #918779;
   /* Section and stat labels. A DEDICATED TOKEN, not --ink-faint.
 
      --ink-faint is shared by twenty selectors, and three of them are
