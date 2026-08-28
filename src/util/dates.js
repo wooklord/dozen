@@ -58,13 +58,6 @@ export function formatShowDateShort(showdate) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-/** "2026-08-14" -> "8/14/26", matching how Carton writes LTP footnotes. */
-export function formatShowDateTiny(showdate) {
-  const d = parseShowDate(showdate);
-  if (!d) return showdate ?? '';
-  return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
-}
-
 /**
  * A month-day key rendered for a human: "08-14" -> "Aug 14".
  *
@@ -78,6 +71,14 @@ export function formatShowDateTiny(showdate) {
  *
  * The year is arbitrary and never rendered. 2000 is used because it is a leap
  * year, so "02-29" formats as Feb 29 rather than rolling into March.
+ *
+ * `formatShowDateTiny()` was deleted here in 0.1.70. It rendered "8/14/26" to
+ * match how Carton writes its LTP footnotes, it worked correctly, and it had
+ * never had a caller. Removed rather than kept for a someday use: it was a
+ * ready-made way to put a numeric date back on screen, which is the thing this
+ * function exists to have taken off. If Carton's own footnote spelling is ever
+ * needed verbatim, quote Carton's string rather than rebuilding it — the house
+ * rule is that their text renders as-is and ours names its months.
  */
 export function formatMonthDay(monthDay) {
   if (typeof monthDay !== 'string') return '';
