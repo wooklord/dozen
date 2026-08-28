@@ -517,6 +517,13 @@ a reintroduced `showOrVenue.location ||` cannot pass by coincidence.
   accounting for it. The rest are names like "Adirondack Independence Music Festival", which fit
   behind no badge at any width.
 
+  > **Those figures measure the badge change and are no longer the current state (0.1.67).**
+  > Dropping `, USA` from show venue lines took the same rows from **19 → 10 of 63** before the
+  > badge is shortened, and **9** after. The 28 → 14 above stands as what abbreviating the badge
+  > was worth on the day; it is not what you will read off the screen now. Left rather than
+  > rewritten — the number was evidence for a decision, and editing it to today's value would
+  > destroy the evidence while looking tidier.
+
   **`One Set` stays a word — `One set`, not `1 set` — and that is the whole point of the mapping.**
   It must not blur into `Set 1`: 1493 setlist rows are one-set against 3031 Set 1, and a festival
   one-set opener is a different pick from a two-set show's opener. `S1` versus `1 set` keeps them
