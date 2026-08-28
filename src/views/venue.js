@@ -18,7 +18,7 @@ import {
   emptyState,
   statTile,
   statValue,
-  venueLine,
+  venuePlace,
 } from '../ui/components.js';
 import { showStructure } from '../data/index.js';
 import { formatShowDate, formatShowDateShort } from '../util/dates.js';
@@ -43,14 +43,10 @@ export function renderVenue(ctx, venueId) {
   }
 
   append(screen, el('h1.screen-title', { text: venue.venuename }));
-  append(
-    screen,
-    el('div.venue-line', null, [
-      el('span.place', {
-        text: [venue.city, venue.state, venue.country].filter(Boolean).join(', '),
-      }),
-    ]),
-  );
+  // venuePlace(), not hand-built markup: the h1 above already carries the
+  // name. This was the second of two screens rendering .venue-line by hand,
+  // which is two more places the treatment could drift from the helper.
+  append(screen, venuePlace(venue));
   // "Venue info" leads: it is the outbound Maps deep link, built from Carton's
   // own fields and rendered only when there is a usable query, and on a venue
   // screen it answers the more immediate question. The Carton link follows,

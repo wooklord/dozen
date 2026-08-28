@@ -1382,6 +1382,173 @@ server.listen(PORT, async () => {
   }
   await evaluate(`document.documentElement.removeAttribute('data-theme');`);
 
+  // --- Venue text is one size everywhere it is not in a row -----------------
+  //
+  // Reported twice: "venue names are too small again", both times about the On
+  // This Date cards on Home. They were NOT bypassing venueLine() -- they were
+  // calling it with { small: true }, a flag 0.1.24 shipped in the same commit
+  // as the helper meant to stop exactly this. Seven of eleven call sites
+  // passed it.
+  //
+  // WHAT THIS MEASURES IS THE RENDERED PIXEL SIZE, not a class name and not a
+  // call site. tests/hygiene.test.mjs already asserts the flag is gone from
+  // the source; a source check cannot tell you that the CSS which replaced it
+  // actually lands on the element. Two different claims, both needed.
+  //
+  // The expected value is DERIVED, from the venue line on the Home hero --
+  // .venue-line with no modifier, the one placement nobody has ever called too
+  // small. A literal 15px here would be a second copy of --t-md and would go
+  // red on a deliberate retune of the type scale rather than on this bug.
+  console.log('\nvenue text size:');
+  for (const theme of ['dark', 'light']) {
+    await evaluate("document.documentElement.setAttribute('data-theme', " + JSON.stringify(theme) + ");");
+    await evaluate("location.hash = '#/home';");
+    await sleep(1500);
+
+    const vsize = await evaluate(`(() => {
+      const px = (n) => Math.round(parseFloat(getComputedStyle(n).fontSize) * 100) / 100;
+      const all = [...document.querySelectorAll('.screen .venue-line')];
+      if (!all.length) return null;
+      // The hero line is the only .venue-line on Home outside a card.
+      const hero = all.find((n) => !n.closest('.card'));
+      const inCards = all.filter((n) => n.closest('.card') && !n.closest('.row-main'));
+      return {
+        hero: hero ? px(hero) : null,
+        // Reported as the DISTINCT sizes found, so "they all agree" and "there
+        // was only one of them" are distinguishable in the output.
+        cardSizes: [...new Set(inCards.map(px))],
+        cards: inCards.length,
+        // The place half must not be quietly smaller than the name half.
+        placeSizes: [...new Set(all.flatMap((n) => [...n.querySelectorAll('.place')].map(px)))],
+      };
+    })()`);
+
+    if (!vsize) { fail("venue size (" + theme + "): no .venue-line on Home"); continue; }
+    if (vsize.hero === null) { fail("venue size (" + theme + "): no un-nested venue line to derive the size from"); continue; }
+    // Both sides rendering nothing is the failure this repo keeps hitting:
+    // zero cards would make the comparison below vacuously true.
+    if (!vsize.cards) { fail("venue size (" + theme + "): no card venue lines rendered - nothing was compared"); continue; }
+
+    if (vsize.cardSizes.some((n) => n < vsize.hero)) {
+      fail("venue size (" + theme + "): card venue lines render at " + JSON.stringify(vsize.cardSizes) + "px, hero is " + vsize.hero + "px");
+    } else pass(theme + ": " + vsize.cards + " card venue lines at " + JSON.stringify(vsize.cardSizes) + "px, matching the hero's " + vsize.hero + "px");
+
+    const smallPlace = vsize.placeSizes.filter((n) => n < vsize.hero);
+    if (smallPlace.length) {
+      fail("venue size (" + theme + "): the place half renders at " + JSON.stringify(smallPlace) + "px against " + vsize.hero + "px");
+    } else pass(theme + ": city/state renders at the same size as the venue name");
+  }
+
+  // The step-down that IS intended: inside a dense row, where the line shares
+  // a fixed-height row with a badge. Asserted as truncating too, so "the row
+  // rule stopped applying" reads as a failure rather than as an improvement.
+  //
+  // A SEARCH IS RUN FIRST. The empty query lands on cards, not rows -- the
+  // first version of this navigated to #/shows and reported "no row venue
+  // lines", which is the right failure for the wrong reason: it would have
+  // said the same thing if the rule had been deleted. Same query the badge
+  // check below uses, for the same reason.
+  await evaluate("location.hash = '#/shows';");
+  await sleep(1500);
+  await evaluate(`(() => { const s = document.querySelector('.search');
+    if (!s) return false; s.value = '2019';
+    s.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+  await sleep(1200);
+  const rowSize = await evaluate(`(() => {
+    const px = (n) => Math.round(parseFloat(getComputedStyle(n).fontSize) * 100) / 100;
+    const rows = [...document.querySelectorAll('.row-main > .venue-line')];
+    if (!rows.length) return null;
+    return {
+      n: rows.length,
+      sizes: [...new Set(rows.map(px))],
+      clipped: rows.filter((n) => getComputedStyle(n).textOverflow === 'ellipsis').length,
+    };
+  })()`);
+  if (!rowSize) fail('venue size: no row venue lines on #/shows');
+  else if (rowSize.sizes.length !== 1) fail("venue size: rows disagree - " + JSON.stringify(rowSize.sizes) + "px");
+  else if (rowSize.clipped !== rowSize.n) fail("venue size: " + (rowSize.n - rowSize.clipped) + " of " + rowSize.n + " row lines are sized down without truncating");
+  else pass("dense rows: " + rowSize.n + " lines at " + rowSize.sizes[0] + "px, all truncating");
+  await evaluate("document.documentElement.removeAttribute('data-theme');");
+
+  // --- "On this date" names its month ---------------------------------------
+  //
+  // The header rendered "10/15" while the card directly beneath it rendered
+  // "Wed Oct 15, 2025". Compared against THE CARDS, not against a literal
+  // month name: the assertion is that the two agree, which is what was wrong,
+  // and it cannot be satisfied by a header that merely looks date-shaped.
+  console.log('\n"On this date" header:');
+  await evaluate("location.hash = '#/home';");
+  await sleep(1500);
+  const otd = await evaluate(`(() => {
+    const h = [...document.querySelectorAll('.section-title')].find((n) => /on this date/i.test(n.textContent));
+    if (!h) return { found: false };
+    const section = h.closest('.section');
+    // RAW TEXT OUT, MATCHING DONE IN NODE. A backslash-d inside this template
+    // literal is not an escape -- it collapses to a literal "d" before the
+    // page ever sees it, so a date regex written here matches nothing and the
+    // caller reads that as "no dates on screen" and reports SKIPPED. Which is
+    // exactly what the first version of this did: it read as a legitimate
+    // quiet run and was a broken probe. No backslashes go inside this string.
+    const hero = document.querySelector('.screen .screen-title');
+    return {
+      found: true,
+      text: h.textContent.trim(),
+      heroText: hero ? hero.textContent.trim() : null,
+      cardTexts: section ? [...section.querySelectorAll('.card')].map((c) => c.textContent) : [],
+    };
+  })()`);
+
+  // "Fri, Sep 4, 2026" -- the weekday carries a comma. Written without one the
+  // first time, which matched nothing and read as "no dates on screen".
+  const DATE_RE = /[A-Z][a-z]{2},? [A-Z][a-z]{2} \d{1,2}, \d{4}/;
+  otd.heroDate = otd.heroText ? (otd.heroText.match(DATE_RE) || [])[0] || null : null;
+  otd.cardDates = (otd.cardTexts || []).map((t) => (t.match(DATE_RE) || [])[0]).filter(Boolean);
+
+  // TWO SEPARATE CLAIMS, REPORTED SEPARATELY. The format assertion holds every
+  // run; the agreement cross-check needs another date on screen to compare
+  // against, and there is not always one. Folding them together let a real
+  // pass disappear into a SKIPPED line on the first run of this check.
+  let mday = null;
+  if (!otd.found) fail('"On this date": header not found on Home');
+  else if (/\d+\s*\/\s*\d+/.test(otd.text)) fail('"On this date": still numeric - ' + JSON.stringify(otd.text));
+  else {
+    mday = otd.text.match(/\(([A-Z][a-z]{2}) (\d{1,2})\)/);
+    if (!mday) fail('"On this date": header does not name a month and day - ' + JSON.stringify(otd.text));
+    else pass('header names its month: ' + JSON.stringify(otd.text));
+  }
+
+  if (mday) {
+    // Prefer the HERO date. The section anchors off the upcoming show, whose
+    // date is the h1 at the top of the same screen, so that comparison is
+    // available on every run -- unlike the anniversary cards, which only exist
+    // when the archive happens to hold a show on this calendar day. Both are
+    // the same claim: the header and the dates around it name one day.
+    const against = otd.heroDate ? [otd.heroDate] : otd.cardDates;
+    const source = otd.heroDate ? 'the show it anchors on' : otd.cardDates.length + ' cards beneath it';
+    if (!against.length && (otd.cardTexts || []).length) {
+      // Cards on screen and not one parseable date in them is a BROKEN PROBE,
+      // not a quiet run, and the two must not report the same way. This is how
+      // the missing comma in DATE_RE was found: it skipped, looking exactly
+      // like a legitimate "no anniversaries today".
+      fail(
+        '"On this date": ' + otd.cardTexts.length + ' card(s) on screen and no date parsed out of any of them' +
+        ' — hero read ' + JSON.stringify(otd.heroText),
+      );
+    } else if (!against.length) {
+      // No cards and a hero with no date in it ("Nothing on the books") is a
+      // real state and proves nothing about agreement. Says what it saw, so a
+      // future probe failure cannot hide here either.
+      console.log(
+        '  SKIPPED  nothing to compare ' + JSON.stringify(otd.text) + ' against — hero read ' +
+        JSON.stringify(otd.heroText) + ', 0 cards',
+      );
+    } else {
+      const disagree = against.filter((d) => !d.includes(mday[1] + ' ' + mday[2] + ','));
+      if (disagree.length) fail('"On this date": header ' + JSON.stringify(otd.text) + ' disagrees with ' + JSON.stringify(disagree));
+      else pass(JSON.stringify(otd.text) + ' agrees with ' + source + ' (' + against.join(', ') + ')');
+    }
+  }
+
   // --- Free-text setlist entries are not songs ------------------------------
   //
   // Three rows in the archive carry slug "_custom_" -- banter and

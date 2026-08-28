@@ -620,6 +620,39 @@ export function setlistCard({
 }
 
 /**
+ * City/state/country as one string, built the same way for every record type.
+ *
+ * IT NO LONGER PREFERS `location`, AND THAT IS A BUG FIX, NOT A SIMPLIFICATION
+ * (0.1.67). `location` exists on `shows` and on nothing else -- not on
+ * `setlists`, `jamcharts` or `venues`, all confirmed against the live API. So
+ * the same venue rendered three different ways depending on which table the
+ * row came from:
+ *
+ *   Home / Shows      (shows)      "Funk 'n Waffles · Syracuse, NY, USA"
+ *   Song detail       (setlists)   "Funk 'n Waffles · Syracuse, NY"
+ *   Venue screen      (venues)     "Syracuse, NY, USA"   (hand-built, no filter)
+ *
+ * The USA filter below has been in this function since 0.1.24 and had NEVER
+ * RUN for a show, because `location` always won -- dead code that read as the
+ * rule and was overridden on the only rows anyone reported.
+ *
+ * Dropping the preference loses nothing measurable: across all 804 shows,
+ * `location` is byte-identical to these three fields joined on 798 of them,
+ * and on the other six it is strictly worse -- the Atlantic Ocean cruise shows
+ * carry `"Atlantic Ocean, "`, with a trailing comma and nothing after it.
+ *
+ * The filter drops "USA" only when city and state are both present, so a show
+ * in Toronto still reads "Toronto, ON, Canada" and a venue with a country and
+ * nothing else keeps it.
+ */
+function placeOf(showOrVenue) {
+  return [showOrVenue.city, showOrVenue.state, showOrVenue.country]
+    .filter(Boolean)
+    .filter((p, i, arr) => !(p === 'USA' && arr.length > 2))
+    .join(', ');
+}
+
+/**
  * Venue name + place, rendered at primary weight everywhere it appears.
  *
  * One helper so no screen can quietly drop this back into `.note` or another
@@ -627,22 +660,47 @@ export function setlistCard({
  * different venues share the name "Brooklyn Bowl", so the place is part of
  * knowing what you are looking at.
  *
- * @param {object} showOrVenue  anything with venuename plus location or city/state
- * @param {{small?: boolean}} [opts]
+ * THERE IS NO `small` OPTION ANY MORE, and its absence is the point (0.1.67).
+ * 0.1.24 added the tokens and this helper to stop views de-emphasizing venue
+ * text, then added a `small: true` flag in the same commit -- and seven of the
+ * eleven call sites passed it, including the On This Date cards, which are not
+ * dense rows and had a full card width to spend. A helper whose callers can
+ * opt out of the treatment it exists to enforce is the list-shaped contract
+ * this repo keeps getting caught by: nothing tied the flag to the condition
+ * that justified it, so it spread by copy-paste.
+ *
+ * The step-down is real but it belongs to a CONTEXT, not to a caller's
+ * opinion: inside `.row-main` the line has to share a fixed-height row with a
+ * badge and truncate. CSS can see that context directly, so `.row-main >
+ * .venue-line` sizes it and every other placement gets --t-md. The same rule
+ * already owned the truncation, which is the other half of the same
+ * constraint.
+ *
+ * @param {object} showOrVenue  anything with venuename plus city/state/country
  */
-export function venueLine(showOrVenue, { small = false } = {}) {
+export function venueLine(showOrVenue) {
   const name = showOrVenue.venuename || '';
-  const place =
-    showOrVenue.location ||
-    [showOrVenue.city, showOrVenue.state, showOrVenue.country]
-      .filter(Boolean)
-      .filter((p, i, arr) => !(p === 'USA' && arr.length > 2))
-      .join(', ');
+  const place = placeOf(showOrVenue);
 
-  return el(`div.venue-line${small ? '.venue-line-sm' : ''}`, null, [
+  return el('div.venue-line', null, [
     el('span', { text: name }),
     place ? el('span.place', { text: ` · ${place}` }) : null,
   ]);
+}
+
+/**
+ * The place half alone, for the two screens that already render the venue name
+ * as their own heading -- the venue screen's h1 and the venue search row's
+ * title. Repeating the name underneath itself is the thing 0.1.66 took off
+ * Home.
+ *
+ * Both hand-built the `.venue-line`/`.place` markup themselves, which meant
+ * two more places the treatment could drift from the helper without any check
+ * noticing. Same classes, same tokens, one definition.
+ */
+export function venuePlace(showOrVenue) {
+  const place = placeOf(showOrVenue);
+  return el('div.venue-line', null, [place ? el('span.place', { text: place }) : null]);
 }
 
 /**

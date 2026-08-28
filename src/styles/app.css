@@ -270,14 +270,19 @@ a {
   color: var(--ink-place);
 }
 
-/* Inside a dense row, one step down in size but the same contrast. */
-.venue-line-sm {
+/* Inside a row: one step down in size, same contrast, and truncating.
+   ONE RULE, DRIVEN BY CONTEXT. This was `.venue-line-sm`, a class the caller
+   asked for via `venueLine(show, { small: true })` -- and callers asked for it
+   almost everywhere, including card heads with a whole card width to spend.
+   That is what put "Funk 'n Waffles · Syracuse, NY, USA" at 13px on the On
+   This Date cards twice.
+   A dense row is the only placement that earns the step-down, and it earns it
+   for the same reason it needs the ellipsis: fixed height, a badge beside it,
+   no room to wrap. The two declarations describe one constraint, so they are
+   one rule and the DOM decides, not the call site. */
+.row-main > .venue-line {
   font-size: var(--t-sm);
   font-weight: 500;
-}
-
-/* Inside a row the venue line must truncate rather than widen the row. */
-.row-main > .venue-line {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

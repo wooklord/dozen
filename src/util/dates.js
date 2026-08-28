@@ -65,6 +65,33 @@ export function formatShowDateTiny(showdate) {
   return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
 }
 
+/**
+ * A month-day key rendered for a human: "08-14" -> "Aug 14".
+ *
+ * NOT `md.replace('-', '/')`. "10/15" was the only numeric date rendered
+ * anywhere in the UI, and it was ambiguous to exactly the reader this app is
+ * for: an "On this date" header names a calendar day, and 10/15 reads as a
+ * fraction before it reads as October. Every other date on screen goes
+ * through formatShowDate/formatShowDateShort and spells its month, and this
+ * one now comes out of the same locale call, so the abbreviations cannot
+ * drift apart.
+ *
+ * The year is arbitrary and never rendered. 2000 is used because it is a leap
+ * year, so "02-29" formats as Feb 29 rather than rolling into March.
+ */
+export function formatMonthDay(monthDay) {
+  if (typeof monthDay !== 'string') return '';
+  const m = monthDay.match(/^(\d{2})-(\d{2})$/);
+  if (!m) return monthDay;
+  const mo = Number(m[1]);
+  const day = Number(m[2]);
+  const d = new Date(2000, mo - 1, day);
+  // Reject 13-40 and 02-31 rather than letting Date roll them into a
+  // plausible-looking wrong month.
+  if (d.getMonth() !== mo - 1 || d.getDate() !== day) return monthDay;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 /** Month-day key "08-14" for "On This Date" lookups. */
 export function monthDayKey(showdate) {
   if (!showdate || typeof showdate !== 'string') return '';

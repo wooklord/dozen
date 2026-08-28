@@ -554,6 +554,22 @@ The same shape appears wherever a check reads a curated list: `ROUTES` markers
 (0.1.62), `PAIRS` here, `KNOWN_GAPS`. Ask what reads the list, and what would
 happen if the thing it describes moved without the list moving.
 
+**And it is not only checks. A shared helper with an opt-out flag is the same
+hole (0.1.67).** `venueLine()` exists so no view can quietly drop venue text
+into a metadata style — and 0.1.24 gave it a `small: true` parameter in the
+same commit. Seven of eleven call sites passed it, five of them card heads with
+a full card width to spend, and venue text was reported as too small twice.
+Nothing tied the flag to the condition that justified one, so it spread by
+copy-paste to whatever the previous call site did.
+
+The fix is the same as for a curated list: **derive the condition instead of
+declaring it.** The step-down belongs to a placement the DOM already states, so
+it moved into `.row-main > .venue-line` and the parameter is gone. When a
+helper enforces a treatment, ask what a caller can still opt out of — and if
+the answer is "the part someone will get wrong", that is not an option, it is
+the hole. **A helper some callers can skip is worse than no helper**, because
+it is trusted.
+
 ### Dead code is not always safe to simply switch on
 
 **A parameter that has never been used has never been tested**, and "wire it up

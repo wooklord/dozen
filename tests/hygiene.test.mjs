@@ -139,3 +139,70 @@ test('.row-meta gets tabular figures', () => {
     assert.ok(selectors.includes(want), `${want} is not in the tabular-nums rule`);
   }
 });
+
+// --- venue text ----------------------------------------------------------------
+
+test('no view builds .venue-line markup by hand', () => {
+  // 0.1.24 added venueLine() so "no view can quietly drop this back into a
+  // metadata style", and two views went on rendering the classes themselves --
+  // the venue screen's place line and the venue search row's. Neither was
+  // wrong on the day it was written; both were a second definition of the
+  // treatment, free to drift from the helper without anything going red. They
+  // are venuePlace() now.
+  //
+  // Matches the CLASS IN el(), not any mention of the string: components.js
+  // and this file both talk ABOUT .venue-line, and a naive text search would
+  // fail on the fixed tree.
+  const offenders = [];
+  for (const f of srcFiles().filter((p) => p.endsWith('.js'))) {
+    if (f.endsWith(path.join('ui', 'components.js'))) continue; // the one definition
+    const src = fs.readFileSync(f, 'utf8').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    if (/el\(\s*[`'"][a-z]*\.[^`'"]*venue-line/.test(src)) offenders.push(path.relative(ROOT, f));
+  }
+  assert.deepEqual(offenders, [], 'venue text must come from venueLine()/venuePlace()');
+});
+
+test('venueLine takes no size option', () => {
+  // THE ESCAPE HATCH IS THE BUG. 0.1.24 shipped the helper and a `small: true`
+  // flag in one commit; seven of eleven call sites passed it, including card
+  // heads with a full card width, and venue text was reported as too small
+  // twice. Nothing tied the flag to the condition that justified it, so it
+  // spread by copy-paste -- the same list-shaped contract failure recorded in
+  // CLAUDE.md.
+  //
+  // The step-down now lives in `.row-main > .venue-line`, where the DOM states
+  // the condition. This asserts the hatch is not reopened: no options argument
+  // reaches venueLine from anywhere.
+  const comp = read('src/ui/components.js');
+  assert.match(comp, /export function venueLine\(showOrVenue\)/, 'venueLine must take exactly one argument');
+
+  const callers = [];
+  for (const f of srcFiles().filter((p) => p.endsWith('.js'))) {
+    const src = fs.readFileSync(f, 'utf8').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    for (const m of src.matchAll(/venueLine\(([^)]*)\)/g)) {
+      if (m[1].includes(',')) callers.push(`${path.relative(ROOT, f)}: venueLine(${m[1]})`);
+    }
+  }
+  assert.deepEqual(callers, [], 'venueLine takes the record and nothing else');
+});
+
+test('the row step-down carries the size and the truncation together', () => {
+  // They are one constraint -- a fixed-height row with a badge beside the line
+  // -- and were two rules, one of them reachable only by a call-site flag.
+  // Splitting them again is how the size half gets applied somewhere the
+  // truncation half is not, or dropped where it is.
+  const css = read('src/styles/app.css');
+  const i = css.indexOf('.row-main > .venue-line');
+  assert.ok(i > 0, '.row-main > .venue-line rule is gone');
+  const body = css.slice(i, css.indexOf('}', i));
+  for (const want of ['font-size', 'text-overflow']) {
+    assert.ok(body.includes(want), `${want} must sit in the same rule as the rest of the row treatment`);
+  }
+  // COMMENTS STRIPPED FIRST. The comment above this very rule names
+  // .venue-line-sm to record what it replaced, and the raw-text version of
+  // this assertion failed against the FIXED stylesheet -- and would equally
+  // have passed against a broken one whose comment happened not to mention it.
+  // Same correction as the innerHTML check above.
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.doesNotMatch(rules, /\.venue-line-sm/, '.venue-line-sm is the flag-driven class the DOM now replaces');
+});

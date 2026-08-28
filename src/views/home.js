@@ -27,6 +27,7 @@ import {
   formatShowDate,
   formatShowDateShort,
   monthDayKey,
+  formatMonthDay,
   localToday,
   daysBetween,
 } from '../util/dates.js';
@@ -289,7 +290,7 @@ function renderNoUpcoming(screen, { index, navigate }, today) {
         onSong: (id) => navigate(`#/song/${id}`),
         head: el('div', null, [
           el('div', { style: { fontWeight: '650' }, text: formatShowDate(latest.showdate) }),
-          venueLine(latest, { small: true }),
+          venueLine(latest),
         ]),
         showId: latest.show_id,
         navigate,
@@ -307,7 +308,7 @@ function renderOnThisDate(screen, { index, navigate }, anchorDate, excludeShowId
   );
 
   const section = el('div.section');
-  append(section, sectionHead(`On this date (${md.replace('-', '/')})`));
+  append(section, sectionHead(`On this date (${formatMonthDay(md)})`));
 
   if (!anniversaries.length) {
     append(section, emptyState('No shows played on this calendar date in past years.'));
@@ -328,7 +329,7 @@ function renderOnThisDate(screen, { index, navigate }, anchorDate, excludeShowId
             el('div', { style: { fontWeight: '600' }, text: formatShowDate(s.showdate) }),
             cartonLink(showPermalink(s), 'Carton'),
           ]),
-          venueLine(s, { small: true }),
+          venueLine(s),
         ]),
         showId: s.show_id,
         navigate,
@@ -358,7 +359,7 @@ function openShowPicker(index, navigate) {
           },
           [
             el('div', { style: { fontWeight: '600' }, text: formatShowDate(s.showdate) }),
-            venueLine(s, { small: true }),
+            venueLine(s),
           ],
         ),
       );

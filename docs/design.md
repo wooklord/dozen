@@ -390,6 +390,90 @@ down. Weight carries hierarchy more than size does, because size costs rows-per-
 --t-xl  26px   the one big number (gap on song detail)
 ```
 
+### Venue text: the step-down belongs to a context, not to a caller (0.1.67)
+
+Venue text was reported as too small twice, both times about the On This Date cards on Home:
+"Funk 'n Waffles · Syracuse, NY, USA" getting lost under a card head.
+
+**They were not bypassing `venueLine()`. They were calling it with `{ small: true }`.** 0.1.24
+added `--ink-venue`/`--ink-place` and the shared helper so "no view can quietly drop this back
+into a metadata style" — and shipped the `small` flag in the same commit. Seven of eleven call
+sites passed it. Only two of those seven were dense rows.
+
+That is the failure shape CLAUDE.md records under *a contract written over NAMES is not a
+contract over the thing*, in its purest form: the flag named a size, nothing tied it to the
+condition that justified one, and it spread by copy-paste to every call site that looked like the
+last one. The helper enforced the colour tokens it was built for and had a hole in the middle for
+the other half of the treatment.
+
+**0.1.24 was not half a fix — it fixed contrast, which was what it was aimed at.** What it did not
+do is notice that it had opened a second door on the way past. Venue text on the cards has been
+`--ink-venue` at full contrast since 0.1.24 and the tokens have not moved; it was 13px.
+
+The step-down is real, and it belongs to exactly one placement:
+
+| Placement | Size | Why |
+|---|---|---|
+| Anywhere else — card heads, sheet items, the Home hero, the venue screen | `--t-md` 15px, weight 550 | The line is what the block is *about*. There is a full card width and nothing competing for it |
+| Inside `.row-main` | `--t-sm` 13px, weight 500 | Fixed-height row, a set-structure badge beside it, one line, truncating |
+
+So the size moved out of JS and into `.row-main > .venue-line`, **the same rule that already owned
+the truncation** — they are two statements of one constraint, and splitting them is how the size
+half ends up applied where the ellipsis half is not. The DOM states the condition; the call site
+no longer gets an opinion. `venueLine()` takes one argument.
+
+The place half (`.place`) is a weight and colour step, never a size step. City and state are how
+you tell three venues called Brooklyn Bowl apart.
+
+**Two views were also rendering `.venue-line` markup by hand** — the venue screen's place line and
+the venue search row's — because both already show the name as their own heading and the helper
+would have repeated it. They are `venuePlace()` now. Neither was wrong when written; both were a
+second definition of the treatment, free to drift with nothing going red.
+
+Three checks, because they are three different claims and no one of them covers another:
+
+- `tests/hygiene.test.mjs` — the flag is gone from the signature, no caller passes a second
+  argument, no view builds the markup itself, and the row rule still carries size and truncation
+  together. Source-level; cannot tell you what renders.
+- `scripts/smoke.mjs` — the **rendered pixel size** of every venue line on Home, both themes, at
+  390px, compared against the Home hero rather than a literal `15px`. A literal would be a second
+  copy of `--t-md` and would go red on a deliberate retune of the scale instead of on this bug.
+- The dense-row case is asserted as smaller *and* truncating, so "the row rule stopped applying"
+  reads as a failure rather than as an improvement.
+
+Proved red: reconstructing the pre-fix state reports `card venue lines render at [13]px, hero is
+15px` in both themes, and four failures.
+
+
+#### And the same venue read three different ways (0.1.67)
+
+Found while sweeping the call sites above. `venueLine()` renders records from **four** Carton
+tables, and only `shows` carries a `location` field — confirmed against the live API, not assumed.
+The helper preferred it, so the table a row came out of decided how its venue was spelled:
+
+| Screen | Table | Rendered |
+|---|---|---|
+| Home, Shows | `shows` | `Funk 'n Waffles · Syracuse, NY, USA` |
+| Song detail — jam entries, performance rows | `setlists`, `jamcharts` | `Funk 'n Waffles · Syracuse, NY` |
+| Venue screen | `venues` | `Syracuse, NY, USA` (hand-built, no filter at all) |
+
+The USA-stripping filter had been in the helper since 0.1.24 and **had never once run for a show**,
+because `location` always won. It read as the rule and was overridden on exactly the rows anyone
+ever complained about — a dead branch that looked live.
+
+`location` is now ignored. It costs nothing: across all 804 shows it is byte-identical to
+`[city, state, country].join(', ')` on 798, and on the other six it is strictly worse — the
+Atlantic Ocean cruise shows carry `"Atlantic Ocean, "`, trailing comma and nothing after it.
+
+**Show venue lines lose the `, USA` as a result**, which is the visible half of this change and
+was not what the report asked for. It is the right direction anyway: the country is noise on every
+US row, it was already absent on the song screens, and dropping it gives the Shows rows back the
+width the set-structure badge spends. Non-US shows are unaffected — the filter names `USA` and
+only fires when city and state are both present, so Toronto still reads `Toronto, ON, Canada`.
+
+`tests/venueline.test.mjs` pins it, including a case where `location` disagrees with the parts, so
+a reintroduced `showOrVenue.location ||` cannot pass by coincidence.
+
 ## Layout and touch
 
 - **Bottom tab bar.** Primary navigation sits within thumb reach; nothing critical lives in the top

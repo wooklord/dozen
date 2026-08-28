@@ -258,7 +258,7 @@ One row per show, including **future shows**. `/v2/shows.json?order_by=showdate&
 | `showtitle` | string | |
 | `venue_id` | number | |
 | `venuename` | string | **HTML-entity-encoded here**: `"Annabel&#039;s"` |
-| `location` | string | `"Toronto, ON, Canada"` — also entity-encoded |
+| `location` | string | `"Toronto, ON, Canada"` — also entity-encoded. **`shows` ONLY, and the UI does not use it** — see below |
 | `city` / `state` / `country` | string | |
 | `timezone` | null | |
 | `tour_id` / `tourname` | number / string | |
@@ -273,6 +273,24 @@ One row per show, including **future shows**. `/v2/shows.json?order_by=showdate&
 
 > **`show_year` vs `showyear`** — `shows` uses `show_year`; `setlists` uses `showyear`. A typo here
 > returns empty data rather than an error.
+
+### `location` is a `shows`-only field, and the UI ignores it (measured 2026-08-27)
+
+`location` appears on `shows` and on **none** of `setlists`, `jamcharts` or `venues`, all of which
+carry `city` / `state` / `country` instead. Verified by request against each endpoint.
+
+That asymmetry is a trap for anything rendering a venue, because the same venue then reads
+differently depending on which table the row came from. `venueLine()` preferred `location` and
+rendered `Syracuse, NY, USA` on Home while rendering `Syracuse, NY` on song detail.
+
+**Preferring it buys nothing.** Across all 804 shows, `location` is byte-identical to
+`[city, state, country].join(', ')` on **798**. On the remaining **6** — the Atlantic Ocean cruise
+shows, which have a city and no state or country — it is strictly worse: `"Atlantic Ocean, "`, with
+a trailing comma and nothing after it.
+
+So `src/ui/components.js` builds the place string from `city` / `state` / `country` for every
+record type and never reads `location`. It is still decoded at ingest in `src/data/index.js`, which
+costs nothing and keeps the row shape honest.
 
 ### Show tags do not exist in this dataset
 

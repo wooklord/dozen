@@ -20,6 +20,7 @@ import {
   sectionHead,
   emptyState,
   venueLine,
+  venuePlace,
 } from '../ui/components.js';
 import { showStructure, compareVenuesByName } from '../data/index.js';
 import { formatShowDate, formatShowDateShort } from '../util/dates.js';
@@ -94,7 +95,7 @@ export function renderShows(ctx) {
           [
             el('div.row-main', null, [
               el('div.row-title', { text: formatShowDate(show.showdate) }),
-              showVenue ? venueLine(show, { small: true }) : null,
+              showVenue ? venueLine(show) : null,
             ]),
             // Format is shown only where setlist data establishes it. Upcoming
             // shows assert nothing; played shows with no setlist say so.
@@ -309,6 +310,17 @@ export function renderShows(ctx) {
         const shows = (index.showsByVenue.get(Number(venue.venue_id)) || []);
         const played = shows.filter((s) => s.showdate <= index.today);
         const reason = matchReasonLabel(reasons);
+
+        // venuePlace(), not hand-built .venue-line markup: the name is already
+        // the row title, so only the place goes on this line, but it is still
+        // venue text and has to move with the helper. The match-reason badge
+        // is appended here rather than built into the helper -- it is this
+        // screen's concern, not the venue line's.
+        const placeLine = venuePlace(venue);
+        if (reason) {
+          append(placeLine, el('span.badge', { style: { marginLeft: '6px' }, text: reason }));
+        }
+
         append(
           list,
           el('li', null, [
@@ -319,10 +331,7 @@ export function renderShows(ctx) {
                 [
                   el('div.row-main', null, [
                     el('div.row-title', { text: venue.venuename }),
-                    el('div.venue-line.venue-line-sm', null, [
-                      el('span.place', { text: [venue.city, venue.state].filter(Boolean).join(', ') }),
-                      reason ? el('span.badge', { style: { marginLeft: '6px' }, text: reason }) : null,
-                    ]),
+                    placeLine,
                   ]),
                   el('div.gap-figure', null, [
                     el('div.gap-num.num', { text: String(played.length) }),
@@ -370,7 +379,7 @@ export function renderShows(ctx) {
             [
               el('div', { style: { minWidth: '0' } }, [
                 el('div', { style: { fontWeight: '650' }, text: formatShowDate(show.showdate) }),
-                venueLine(show, { small: true }),
+                venueLine(show),
               ]),
               rows.length
                 ? el('span.badge.badge-set', { text: showStructure(index, show.show_id) || '' })

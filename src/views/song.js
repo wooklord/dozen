@@ -205,7 +205,7 @@ export function renderSong(ctx, songId) {
             el('div', { style: { fontWeight: '600' }, text: formatShowDate(j.showdate) }),
             el('span.badge.badge-set', { text: setLabel('Set', j.setnumber) }),
           ]),
-          venueLine(j, { small: true }),
+          venueLine(j),
           j.jamchartnote
             ? el('p', { style: { margin: '8px 0 0', fontSize: 'var(--t-sm)' }, text: j.jamchartnote })
             : null,
@@ -238,7 +238,7 @@ export function renderSong(ctx, songId) {
               [
                 el('div.row-main', null, [
                   el('div.row-title', { text: formatShowDate(p.showdate) }),
-                  venueLine(p, { small: true }),
+                  venueLine(p),
                 ]),
                 el('span.badge.badge-set', { text: setLabel(p.settype, p.setnumber) }),
               ],
