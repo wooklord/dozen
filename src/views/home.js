@@ -205,7 +205,22 @@ function renderNextShow(screen, { index, navigate }, show, today) {
           : null,
         venueShows.length
           ? el('div', { style: { marginTop: runShows.length ? '12px' : '0' } }, [
-              el('div.section-title', { text: `Previously at ${show.venuename}` }),
+              // "Previously here", NOT "Previously at {venue}" (0.1.69).
+              //
+              // The venue name was rendered three times on this screen: the
+              // hero venue line, this header, and — since this build — the
+              // "Last time at {venue}" header one section below. Two of those
+              // are headers naming the same room within a screen-height of
+              // each other, which is the doubled-header problem 0.1.66 removed
+              // from the block above and did not finish.
+              //
+              // THE LABEL STAYS, ONLY THE NAME GOES. This card holds two
+              // sibling lists — "Earlier in this run" and this one — and
+              // deleting the header outright leaves the second list unlabelled
+              // and reading as a continuation of the first, with nothing but a
+              // 12px gap between them. "here" carries the distinction the
+              // header exists for; the name it was repeating is what did not.
+              el('div.section-title', { text: 'Previously here' }),
               el(
                 'ul.fn-list',
                 null,
@@ -234,9 +249,30 @@ function renderNextShow(screen, { index, navigate }, show, today) {
   // --- Last time at this venue ----------------------------------------------
   const lastAtVenue = playedAtVenue[playedAtVenue.length - 1];
   const venueSection = el('div.section');
+  // "Last time at {venue}", not "Last time here" (0.1.69).
+  //
+  // This is the one place on Home the venue name earns a header. It sits far
+  // below the hero venue line, with the whole set-structure block between
+  // them, and it labels a setlist card that is otherwise just a date — "here"
+  // required the reader to remember what "here" referred to from the top of
+  // the screen.
+  //
+  // IT WRAPS TO TWO LINES ON 74 OF THE 415 VENUE NAMES (18%), and that was
+  // measured before shipping rather than after. The wrap is cheap: .carton-link
+  // carries `min-height: var(--tap)`, so this row is ALREADY 44px tall for the
+  // tap target, and a second line takes it to 49.4px. Five pixels.
+  //
+  // On exactly the venues that wrap, this change makes the screen SHORTER, not
+  // longer: "Previously at {venue}" above wrapped to two lines too, over a list
+  // of two or three rows, and it is gone. Nothing reaches three lines --
+  // "Everwise Amphitheater at White River State Park", the longest name in the
+  // archive at 47 characters, is two.
   append(
     venueSection,
-    sectionHead('Last time here', lastAtVenue ? cartonLink(showPermalink(lastAtVenue), 'Carton') : null),
+    sectionHead(
+      `Last time at ${show.venuename}`,
+      lastAtVenue ? cartonLink(showPermalink(lastAtVenue), 'Carton') : null,
+    ),
   );
   if (lastAtVenue) {
     append(

@@ -1659,6 +1659,111 @@ server.listen(PORT, async () => {
     }
   }
 
+  // --- No screen names the same venue in two headers -----------------------
+  //
+  // Reported twice. 0.1.66 removed sectionHead(venuename) from the Home venue
+  // block, and the sweep that followed it declared Home clean while leaving
+  // "Previously at {venue}" in the set-structure card -- judged then as "a
+  // label doing real work at a distance". That judgement was wrong, and the
+  // reason it was wrong is that the criterion was too tight: it only looked at
+  // the line IMMEDIATELY ABOVE a header. The rule is broader. A header naming
+  // a venue that the screen already names anywhere is the same problem.
+  //
+  // Two derived rules, no list of strings to maintain:
+  //
+  //  1. No section title may contain the screen title verbatim. Needs no venue
+  //     knowledge at all, and catches the venue screen growing an "Every show
+  //     at {venuename}" header under its own h1.
+  //  2. Headers naming a venue that is also rendered in a venue line on the
+  //     same screen are COUNTED, and the count is asserted per route.
+  //
+  // Rule 2 has a reviewed expectation rather than a flat zero, because there
+  // is exactly one deliberate instance: Home's "Last time at {venue}". It sits
+  // a full set-structure block below the hero venue line and labels a setlist
+  // card that is otherwise just a date. Anything NEW has to change this number,
+  // which is the point -- the exception is reviewable instead of invisible.
+  //
+  // RAW TEXT OUT, MATCHING IN NODE. No backslash goes inside the evaluate
+  // string: a backslash-s in a template literal collapses to a literal "s"
+  // before the page sees it, which is how the "On this date" probe silently
+  // matched nothing in 0.1.67.
+  console.log('\nvenue named in more than one header:');
+  const HEADERS_NAMING_A_VENUE = {
+    // route -> how many headers may name an on-screen venue
+    '#/home': 1, // "Last time at {venue}" — see src/views/home.js
+  };
+
+  for (const r of ROUTES) {
+    await evaluate("location.hash = " + JSON.stringify(r.hash) + ";");
+    await sleep(1400);
+    const dom = await evaluate(`(() => {
+      const txt = (n) => n.textContent;
+      const screen = document.querySelector('.screen');
+      if (!screen) return null;
+      return {
+        screenTitles: [...screen.querySelectorAll('.screen-title')].map(txt),
+        sectionTitles: [...screen.querySelectorAll('.section-title')].map(txt),
+        rowTitles: [...screen.querySelectorAll('.row-title')].map(txt),
+        // The NAME half of every venue line: everything before the middot.
+        venueNames: [...screen.querySelectorAll('.venue-line')]
+          .map((v) => v.textContent.split('·')[0])
+          .filter(Boolean),
+      };
+    })()`);
+
+    if (!dom) { fail('header sweep (' + r.hash + '): no .screen rendered'); continue; }
+
+    const norm = (s) => String(s).replace(/\s+/g, ' ').trim().toLowerCase();
+    const titles = dom.screenTitles.map(norm).filter((t) => t.length >= 3);
+    const sections = dom.sectionTitles.map(norm);
+    const rows = dom.rowTitles.map(norm);
+    const names = [...new Set(dom.venueNames.map(norm))].filter((n) => n.length >= 3);
+
+    // Rule 1 — a section title echoing the screen title.
+    //
+    // A COUNT HEADER IS NOT AN ECHO. Shows renders an h1 "Shows" over a
+    // section head "Shows (63)", and Songs and the venue screen do the same
+    // thing: the section title IS the screen title plus a count, which is a
+    // deliberate pattern and says something the h1 does not. The defect this
+    // rule is for is the screen title EMBEDDED IN A LONGER PHRASE -- "Every
+    // show at Toad's Place" under an h1 already reading "Toad's Place".
+    //
+    // So the parenthetical is stripped first, and an exact match after that is
+    // allowed. Anything still containing the title with other words around it
+    // is the echo. Found by the check going red on #/shows, which is the right
+    // way round: narrowed, not switched off.
+    const stripCount = (s) => s.replace(/\s*\([^)]*\)\s*$/, '').trim();
+    const echoes = [];
+    for (const t of titles) {
+      for (const s of sections) {
+        const bare = stripCount(s);
+        if (bare !== t && bare.includes(t)) echoes.push({ t, s });
+      }
+    }
+    if (echoes.length) {
+      fail('header sweep (' + r.hash + '): section title repeats the screen title — ' +
+        echoes.map((e) => JSON.stringify(e.s) + ' contains ' + JSON.stringify(e.t)).join('; '));
+    }
+
+    // Rule 2 — headers naming a venue the screen names elsewhere.
+    // Row titles count: on the Shows venue results a row title IS a venue name,
+    // and a second mention beside it would be the same defect one level down.
+    const naming = [];
+    for (const h of [...sections, ...titles, ...rows]) {
+      for (const n of names) if (h.includes(n)) { naming.push({ h, n }); break; }
+    }
+    const expected = HEADERS_NAMING_A_VENUE[r.hash] || 0;
+    if (naming.length !== expected) {
+      fail('header sweep (' + r.hash + '): ' + naming.length + ' header(s) name an on-screen venue, expected ' +
+        expected + ' — ' + JSON.stringify(naming.map((x) => x.h)));
+    } else if (expected) {
+      pass(r.hash + ': ' + expected + ' deliberate venue header — ' + JSON.stringify(naming[0].h));
+    } else if (!echoes.length) {
+      pass(r.hash + ': no header repeats a venue or the screen title (' +
+        sections.length + ' section titles, ' + names.length + ' venue lines)');
+    }
+  }
+
   // --- Free-text setlist entries are not songs ------------------------------
   //
   // Three rows in the archive carry slug "_custom_" -- banter and

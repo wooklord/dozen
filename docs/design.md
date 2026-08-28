@@ -581,6 +581,81 @@ disagree with you; it locked the assumption in and then read as evidence for it.
   previous stylesheet, not by inspection. This is alignment only: **desktop remains a courtesy**,
   and nothing here is a large-screen design pass.
 
+### A screen names a venue once in a header, and the sweep for that was too tight (0.1.69)
+
+**Reported twice.** 0.1.66 removed `sectionHead(venuename)` from Home's venue block — a heading
+repeating the venue line two lines above it, which is *"spacing with words in it"*. The sweep run
+after that fix declared Home clean and deliberately left `Previously at {venue}` in the
+set-structure card, judged as *"a label doing real work at a distance"*.
+
+**That judgement was wrong, and the criterion is why.** The sweep asked *does this header repeat
+the line immediately above it?* The actual rule is broader: **a header naming a venue the screen
+already names anywhere is the same defect**, however far apart they sit. Distance makes a
+repetition less jarring; it does not make it informative.
+
+The rule as it now stands:
+
+> **One header per screen may name a venue, and only where the name is doing work the reader
+> cannot get from context.** Everything else refers to it as "here".
+
+On Home that one header is `Last time at {venue}`. It earns the name: it sits a full set-structure
+block below the hero venue line, and it labels a setlist card whose own heading is just a date, so
+"here" asked the reader to carry a referent from the top of the screen. `Previously here` in the
+set-structure card does not earn it — the card is already inside a venue context, and the name was
+its third appearance on the screen.
+
+**The label stayed; only the name went.** Deleting `Previously at {venue}` outright was the literal
+request and would have introduced a different bug: the card holds two sibling lists, "Earlier in
+this run" and this one, and an unlabelled second list reads as a continuation of the first with a
+12px gap. `Previously here` keeps the distinction and drops the repetition.
+
+#### The wrap was measured before shipping, not after
+
+`Last time at {venue}` is a `.section-title`: 13px, weight 700, uppercase, 0.08em tracking, sharing
+a `.section-head` row with the Carton link. Measured in the browser at 390px across **all 415 venue
+names that appear in `shows`**:
+
+| Lines | Venues | |
+|---|---|---|
+| 1 | 341 | 82% |
+| 2 | 74 | 18% |
+| 3 | 0 | — |
+
+The longest name in the archive is **"Everwise Amphitheater at White River State Park"** (47
+characters, longer than the "Adirondack Independence Music Festival" usually quoted as the worst
+case) and it renders on two lines, not three. The threshold sits around 21 characters of venue
+name; the title box is 306px, being 390 less the screen padding, the flex gap and the Carton link.
+
+**The two-line cost is 5.4px, and it is nearly free for a reason worth remembering:**
+`.carton-link` carries `min-height: var(--tap)`, so this row is **already 44px tall** for the tap
+target. A second line of 13px text takes the row to 49.4px rather than doubling it.
+
+**On the venues that wrap, this change makes Home shorter, not longer.** `Previously at {venue}`
+wrapped to two lines on the same names, sitting above a list of two or three rows — a header taller
+than its own content — and it is gone. The screen nets out ahead on exactly the worst case that
+made the wrap worth checking.
+
+#### The check, and why it has a reviewed exception rather than a zero
+
+`scripts/smoke.mjs` sweeps every route with two derived rules and no list of strings:
+
+1. **No section title may contain the screen title verbatim.** Needs no venue knowledge, and
+   catches the venue screen growing an `Every show at {venuename}` header under its own `h1`.
+   A trailing parenthetical is stripped first and an exact match then allowed — `Shows` over
+   `Shows (63)` is a count header, not an echo, and that distinction was found by the rule going
+   red on `#/shows` rather than by reasoning about it.
+2. **Headers naming a venue also rendered in a venue line on the same screen are counted**, and
+   the count is asserted per route against `HEADERS_NAMING_A_VENUE`.
+
+Rule 2 expects **1** on `#/home` and **0** everywhere else. A reviewed number rather than a flat
+zero, because the one instance is deliberate and an invisible exception is how the last one
+survived a sweep. Adding a second venue header now requires editing that number, which is the
+point.
+
+Both proved red against real defects rather than invented ones: restoring `Previously at {venue}`
+reports *"2 header(s) name an on-screen venue, expected 1"*, and adding `Every show at {venuename}`
+to the venue screen reports *"section title repeats the screen title"*.
+
 ## The carton motif, used once
 
 The dozen is twelve. The **cold-start loading state is a 12-cell carton grid that fills** as the
