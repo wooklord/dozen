@@ -183,7 +183,16 @@ function renderNextShow(screen, { index, navigate }, show, today) {
   append(
     screen,
     el('div.section', null, [
-      sectionHead('Set structure'),
+      // "Previous set structures", not "Set structure" (0.1.71).
+      //
+      // Plural and past-tense, and the tense is the part that matters. Every
+      // row in this card is a show that has already been played -- both lists
+      // filter `showdate < show.showdate` and require a recorded setlist --
+      // but the singular header sat directly above the upcoming show's own
+      // block, where it could be read as the structure that show WILL have.
+      // That is the language test in CLAUDE.md: describes what happened, ships;
+      // implies what will happen, does not.
+      sectionHead('Previous set structures'),
       el('div.card', null, [
         runShows.length
           ? el('div', null, [
@@ -214,12 +223,39 @@ function renderNextShow(screen, { index, navigate }, show, today) {
               // each other, which is the doubled-header problem 0.1.66 removed
               // from the block above and did not finish.
               //
-              // THE LABEL STAYS, ONLY THE NAME GOES. This card holds two
-              // sibling lists — "Earlier in this run" and this one — and
-              // deleting the header outright leaves the second list unlabelled
-              // and reading as a continuation of the first, with nothing but a
-              // 12px gap between them. "here" carries the distinction the
-              // header exists for; the name it was repeating is what did not.
+              // THE LABEL STAYS, ONLY THE NAME GOES. "here" carries the
+              // distinction the header exists for; the name it was repeating
+              // did not.
+              //
+              // REMOVING THIS LABEL WAS TRIED AND REJECTED IN 0.1.71, on
+              // measurement rather than taste, and the reason is not the one
+              // written here in 0.1.69. That reasoning said an unlabelled list
+              // reads as a continuation of the one above it, which a plural
+              // past-tense section header would in fact have answered.
+              //
+              // The real blocker is that THESE TWO LISTS CAN CONTAIN THE SAME
+              // SHOW. They are different criteria, not different periods:
+              // "earlier in this run" is any venue within a consecutive-date
+              // run, "previously here" is this venue at any time. A show that
+              // is both -- a two-night stand, a festival's second day --
+              // qualifies twice and renders twice.
+              //
+              // Measured across all 610 played shows, treating each as the
+              // anchor: both lists render for 119 of them, 36 of those (30%)
+              // share at least one show, and in 9 cases the two lists are
+              // IDENTICAL -- every row printed twice. Anchor 2021-09-18
+              // renders "Sep 16, 2021  S1", a 12px gap, then "Sep 16, 2021
+              // S1" again.
+              //
+              // The labels are what explain that duplication: the same show
+              // qualifying under two criteria is information. Unlabelled it is
+              // a rendering bug, and a section header cannot fix it because
+              // the ambiguity is not about what the lists ARE.
+              //
+              // Not currently visible: all 18 upcoming shows have an empty run
+              // list, because the earlier shows in their runs are upcoming too
+              // and have no setlist yet. It appears mid-tour -- which is
+              // exactly when this app gets opened in a venue.
               el('div.section-title', { text: 'Previously here' }),
               el(
                 'ul.fn-list',
