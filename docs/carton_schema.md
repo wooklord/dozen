@@ -89,8 +89,8 @@ summing `/setlists/showyear/YYYY.json` across all 14 years also totals **6361**.
 | `setlists` (complete) | 6361 | ~5.2 MB |
 | `songs` | 366 | ~64 KB |
 | `shows` | 804 | — |
-| `venues` | 441 | — |
-| `jamcharts` | 765 | — |
+| `venues` | 440 | — |
+| `jamcharts` | 807 | — |
 
 `setlists` is the only large payload. Everything else is trivial.
 
@@ -337,13 +337,38 @@ Note `isoriginal` disagrees between methods for some songs: `songs` reports `"Eg
 | `venue_id` | number | `1` |
 | `venuename` | string | `"The Peach Music Festival"` |
 | `city` / `state` / `country` | string | |
-| `zip` | string | often `""` |
-| `capacity` | number | often `0` — mostly unpopulated, do not rely on it |
+| `zip` | string | blank on **439 of 440** rows — dead field |
+| `capacity` | number | `0` on **all 440** rows — dead field |
 | `slug` | string | `"the-peach-music-festival-scranton-pa-usa"` |
+
+440 rows as of 2026-08-27 (441 when this file was first written — Carton appears to have merged a
+duplicate `9:30 Club`).
+
+### Three venues have a blank `city`, `state` or `country` — and only three
+
+Checked across all 440 venues, 804 shows, 6361 setlist rows and 807 jamchart rows on 2026-08-27.
+**Any rule written as "all three fields are filled in" is wrong on these, and each is wrong
+differently:**
+
+| id | `venuename` | `city` | `state` | `country` |
+|---|---|---|---|---|
+| 443 | `The Atlantis` | `Washington, D.C.` | *(blank)* | `USA` |
+| 192 | `Jamburg` | *(blank)* | *(blank)* | `USA` |
+| 282 | `MSC Divina` | `Atlantic Ocean` | *(blank)* | *(blank)* |
+
+**443 carries the state inside `city`.** That is the trap: the row is two populated fields and
+three pieces of information, so a field count is not a content count. It shipped rendering
+`Washington, D.C., USA` in 0.1.67 because the country-stripping filter tested `parts.length > 2`.
+
+**192 is the row that keeps the filter honest** — no city and no state, so stripping the country
+would leave nothing at all. It renders `USA` on purpose.
+
+The same room also exists as **283 `Atlantis`** (`Washington` / `DC`), which is why 443's rendering
+looked wrong next to it rather than merely thin.
 
 ## `jamcharts` — 21 fields
 
-765 rows. `uniqueid`, `setnumber`, `position`, `footnote`, `tracktime`, **`jamchartnote`**,
+807 rows. `uniqueid`, `setnumber`, `position`, `footnote`, `tracktime`, **`jamchartnote`**,
 `song_id`, `isrecommended`, **`showid`** (no underscore), `songname`, `song_slug`, `showdate`,
 `artist_id`, `artist`, `artist_slug`, `venuename`, `venue_slug`, `city`, `state`, `country`,
 `permalink`.

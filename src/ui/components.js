@@ -641,14 +641,44 @@ export function setlistCard({
  * and on the other six it is strictly worse -- the Atlantic Ocean cruise shows
  * carry `"Atlantic Ocean, "`, with a trailing comma and nothing after it.
  *
- * The filter drops "USA" only when city and state are both present, so a show
- * in Toronto still reads "Toronto, ON, Canada" and a venue with a country and
- * nothing else keeps it.
+ * "USA" IS DROPPED WHENEVER IT IS NOT THE ONLY THING WE KNOW (0.1.68). The
+ * test used to be `arr.length > 2` -- effectively "city AND state are both
+ * filled in" -- which quietly assumed the state always arrives in the `state`
+ * field. Exactly one venue breaks that assumption and it is the one that got
+ * reported:
+ *
+ *   id  venuename       city                 state    country   rendered
+ *   443 The Atlantis    "Washington, D.C."   ""       "USA"     Washington, D.C., USA
+ *   192 Jamburg         ""                   ""       "USA"     USA
+ *   282 MSC Divina      "Atlantic Ocean"     ""       ""        Atlantic Ocean
+ *
+ * Those three are the ONLY venues in the archive with a blank city, state or
+ * country -- checked across all 440 venues, 804 shows, 6361 setlist rows and
+ * 807 jamchart rows, and no other row renders "USA" at all.
+ *
+ * 443 packs the state into the city string, so after `.filter(Boolean)` there
+ * are two parts, the old guard never fired, and it read ", USA" while its own
+ * sibling row (283, "Atlantis", city "Washington", state "DC") read
+ * "Washington, DC". `> 1` fixes it, and note what the fix does NOT do: it
+ * never looks inside the city string or tries to decide whether that string
+ * already contains a state. It only asks whether we know anything besides the
+ * country, which is true no matter what the city field turns out to hold.
+ *
+ * 192 is why the guard exists at all and why it is `> 1` and not dropped
+ * outright. Jamburg has no city and no state, so removing "USA" would leave an
+ * EMPTY place and the venue line would render a bare name with no location.
+ * "Jamburg · USA" is thin, but it is the whole of what Carton knows about that
+ * row, and thin-but-true beats blank.
+ *
+ * 282 already rendered correctly -- it has no country to strip.
+ *
+ * A show in Toronto still reads "Toronto, ON, Canada": the filter names "USA"
+ * and nothing else.
  */
 function placeOf(showOrVenue) {
   return [showOrVenue.city, showOrVenue.state, showOrVenue.country]
     .filter(Boolean)
-    .filter((p, i, arr) => !(p === 'USA' && arr.length > 2))
+    .filter((p, i, arr) => !(p === 'USA' && arr.length > 1))
     .join(', ');
 }
 

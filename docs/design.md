@@ -469,10 +469,40 @@ Atlantic Ocean cruise shows carry `"Atlantic Ocean, "`, trailing comma and nothi
 was not what the report asked for. It is the right direction anyway: the country is noise on every
 US row, it was already absent on the song screens, and dropping it gives the Shows rows back the
 width the set-structure badge spends. Non-US shows are unaffected — the filter names `USA` and
-only fires when city and state are both present, so Toronto still reads `Toronto, ON, Canada`.
+nothing else, so Toronto still reads `Toronto, ON, Canada`.
 
 `tests/venueline.test.mjs` pins it, including a case where `location` disagrees with the parts, so
 a reintroduced `showOrVenue.location ||` cannot pass by coincidence.
+
+#### The filter counted fields and should have counted knowledge (0.1.68)
+
+**0.1.67 shipped with `Washington, D.C., USA` still on screen**, and the sentence above originally
+ended "…only fires when city and state are both present", which is the bug written down as if it
+were the design.
+
+`venue_id` 443, `The Atlantis`, has `city = "Washington, D.C."` and a **blank `state`** — the state
+is inside the city string. After dropping blanks that leaves two parts, the `parts.length > 2`
+guard never fired, and the row rendered `Washington, D.C., USA` directly beside its own sibling
+row (283, `Atlantis`, `Washington` / `DC`) rendering `Washington, DC`.
+
+The guard now fires whenever the country **is not the only thing we know** (`> 1` rather than
+`> 2`). Two properties matter more than the one-character diff:
+
+- **It never inspects the city string.** It does not ask whether `Washington, D.C.` "already
+  contains a state" — that would be exactly the assumption that broke, replaced with a cleverer
+  one. It asks whether anything besides the country is present, which is answerable no matter what
+  the city field turns out to hold.
+- **`Jamburg` (192) still reads `USA`**, and should. City and state are both blank, so stripping
+  the country would leave an empty place and render a bare venue name. Thin and true beats blank.
+  That row is why the guard exists and why it is `> 1` and not simply deleted.
+
+Verified by running the shipped `placeOf` over **all 8412 rows** in `venues`, `shows`, `setlists`
+and `jamcharts`: exactly one still renders `USA`, and it is Jamburg.
+
+The test that asserted the old behaviour was written against `{ city: 'Somewhere', country: 'USA' }`
+— **a row shape that does not exist in this archive.** A test built from invented data cannot
+disagree with you; it locked the assumption in and then read as evidence for it. Every case in
+`tests/venueline.test.mjs` is now quoted by `venue_id` from a real row.
 
 ## Layout and touch
 

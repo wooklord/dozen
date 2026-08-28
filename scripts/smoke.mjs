@@ -1549,6 +1549,116 @@ server.listen(PORT, async () => {
     }
   }
 
+  // --- The venues with a blank field render a sane place line --------------
+  //
+  // 0.1.67 stripped ", USA" from venue text and shipped with
+  // "Washington, D.C., USA" still on screen, because the filter tested "are
+  // all three fields populated" and venue 443 keeps its state INSIDE the city
+  // string. tests/venueline.test.mjs pins the pure function; this pins what
+  // the venue screen actually renders, which is the thing that was reported.
+  //
+  // THE ROW LIST IS DERIVED, NOT CURATED. It is computed from the venues table
+  // at run time, so a fourth odd row appearing in Carton is picked up here
+  // instead of sailing past a hardcoded list of three ids -- the exact failure
+  // CLAUDE.md records for ROUTES, PAIRS and KNOWN_GAPS. Three ids in this file
+  // would have been the same mistake one layer down.
+  console.log('\nvenues with a blank city/state/country:');
+  let oddVenues = null;
+  try {
+    const res = await fetch('https://thecarton.net/api/v2/venues.json?limit=20000');
+    const body = await res.json();
+    if (Array.isArray(body.data)) {
+      oddVenues = body.data.filter((v) => !v.city || !v.state || !v.country);
+    }
+  } catch {
+    oddVenues = null;
+  }
+
+  if (!oddVenues) {
+    // An unreachable third party is not a defect in this repo.
+    console.log('  SKIPPED  could not reach the venues endpoint; nothing was checked');
+  } else if (!oddVenues.length) {
+    // Not health. If Carton cleans these rows up the check has nothing to say,
+    // and saying so is better than reporting a pass it did not earn.
+    console.log('  SKIPPED  no venue has a blank city/state/country any more');
+  } else {
+    for (const v of oddVenues) {
+      await evaluate("location.hash = '#/venue/" + v.venue_id + "';");
+      await sleep(1300);
+      const got = await evaluate(`(() => {
+        const line = document.querySelector('.screen .venue-line');
+        const title = document.querySelector('.screen .screen-title');
+        return {
+          place: line ? line.textContent.trim() : null,
+          title: title ? title.textContent.trim() : null,
+        };
+      })()`);
+
+      const label = v.venue_id + ' ' + JSON.stringify(v.venuename);
+
+      if (got.title === 'Venue not found') { fail('venue ' + label + ': screen says "Venue not found"'); continue; }
+      if (got.place === null) { fail('venue ' + label + ': no .venue-line rendered'); continue; }
+
+      // What is actually being asserted, in order of how wrong it would be:
+      //
+      //  1. No trailing or doubled comma. This is the shape Carton's own
+      //     `location` has on the cruise rows ("Atlantic Ocean, ") and the
+      //     reason the UI stopped reading that field.
+      //  2. "USA" appears ONLY when it is the whole line. Venue 192 has no
+      //     city and no state, so "USA" is all there is and stripping it would
+      //     leave the screen with no place at all -- that row is why the guard
+      //     exists. Anywhere else the country is redundant, which is what
+      //     443 was getting wrong.
+      const problems = [];
+      if (/,\s*$/.test(got.place)) problems.push('trailing comma');
+      if (/,\s*,/.test(got.place)) problems.push('doubled comma');
+      if (/\bUSA\b/.test(got.place) && got.place !== 'USA') problems.push('redundant country');
+
+      if (problems.length) fail('venue ' + label + ': ' + JSON.stringify(got.place) + ' — ' + problems.join(', '));
+      else pass(label + ' renders ' + JSON.stringify(got.place));
+    }
+
+    // The sibling-row comparison, which is what made 443 look wrong rather
+    // than merely thin: 283 "Atlantis" and 443 "The Atlantis" are the same
+    // Washington room in two rows, and they read "Washington, DC" and
+    // "Washington, D.C., USA". Carton's punctuation still differs and that is
+    // its business; whether one of them carries a country is ours.
+    //
+    // Both ids are looked up by NAME, so a renumbering fails loudly here
+    // instead of silently checking two unrelated venues.
+    const atlantis = oddVenues.length
+      ? await (async () => {
+          const res = await fetch('https://thecarton.net/api/v2/venues.json?limit=20000');
+          const all = (await res.json()).data || [];
+          return all.filter((v) => /^(the )?atlantis$/i.test(String(v.venuename).trim()));
+        })()
+      : [];
+
+    if (atlantis.length < 2) {
+      console.log('  SKIPPED  fewer than two Atlantis rows; the sibling comparison had nothing to compare');
+    } else {
+      const places = [];
+      let anyCarriesCountry = false;
+      for (const v of atlantis) {
+        await evaluate("location.hash = '#/venue/" + v.venue_id + "';");
+        await sleep(1300);
+        const p = await evaluate("(() => { const l = document.querySelector('.screen .venue-line'); return l ? l.textContent.trim() : null; })()");
+        places.push(v.venue_id + ':' + JSON.stringify(p));
+        if (p !== null && /\bUSA\b/.test(p)) {
+          anyCarriesCountry = true;
+          fail('Atlantis ' + v.venue_id + ' still carries a country: ' + JSON.stringify(p));
+        }
+      }
+      // GUARDED. The first version printed this pass unconditionally, so a run
+      // that had just failed on 443 still reported "both Atlantis rows drop the
+      // country" one line below the failure. A pass that can print while the
+      // thing it claims is false is worse than no line at all -- it is the
+      // proxy failure in miniature, and it was caught by proving this check
+      // red rather than by reading it.
+      if (!anyCarriesCountry) pass('both Atlantis rows drop the country — ' + places.join('  '));
+    }
+  }
+
   // --- Free-text setlist entries are not songs ------------------------------
   //
   // Three rows in the archive carry slug "_custom_" -- banter and

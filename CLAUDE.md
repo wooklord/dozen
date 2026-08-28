@@ -197,7 +197,8 @@ wrong prefix returns 404 rather than redirecting. These were shipped broken in 0
 
 `jamcharts.permalink` is the same bare filename as `shows.permalink` and needs `/setlists/` too.
 Song and venue slugs from the API match the live URLs exactly (verified against the sitemap: 366/366
-songs, 441/441 venues).
+songs, 441/441 venues — **the venue figure was 441 when that check ran; the table now returns 440**,
+and the sweep has not been re-run against the sitemap since).
 
 **`/gap-chart/` is robots-disallowed — link to it, never fetch it.** The same applies to `/stats/`.
 URL shapes are discoverable from `sitemap-shows.xml`, `sitemap-songs.xml`, `sitemap-venues.xml` and
@@ -221,16 +222,39 @@ and types. Notable corrections to the published docs already captured there:
   throws. Check `content-type` before parsing. Column names are case-insensitive. Everything
   returns HTTP 200, including error pages, so status is useless as a health check.
 - **`venues` has exactly 8 fields and NO coordinates.** `venue_id`, `venuename`, `city`, `state`,
-  `country`, `zip`, `capacity`, `slug` — identical across all 441 rows. Nothing matching
+  `country`, `zip`, `capacity`, `slug` — identical across all **440** rows. Nothing matching
   `lat|lon|lng|geo|coord` exists, so anything location-shaped must be built from the name and
   place strings.
 - **`zip` and `capacity` are dead fields. Do not build against either.** `zip` is blank on
-  **440 of 441** rows; `capacity` is `0` on **all 441**. They are present in the schema and carry
+  **439 of 440** rows; `capacity` is `0` on **all 440**. They are present in the schema and carry
   no information in this dataset.
-- **Venue names are NOT unique — always key on `venue_id`.** 9 names exist in more than one city;
-  `Brooklyn Bowl` is in Brooklyn NY, Las Vegas NV *and* Philadelphia PA. Grouping venues by name
-  silently merges distinct venues. (`9:30 Club` also appears twice with the city spelled
-  `Washington, D.C.` and `Washington, DC` — two `venue_id`s for what is likely one room.)
+- **Venue names are NOT unique — always key on `venue_id`.** 15 names sit on more than one
+  `venue_id`: **8** of them in genuinely different places — `Brooklyn Bowl` is in Brooklyn NY, Las
+  Vegas NV *and* Philadelphia PA — and **7** are duplicate rows for the same city and state.
+  Grouping venues by name silently merges distinct venues.
+- **Three venues, and only three, have a blank `city`, `state` or `country`.** They are the rows
+  that break any rule written against "all three fields are filled in", and each breaks it
+  differently:
+
+  | id | `venuename` | `city` | `state` | `country` |
+  |---|---|---|---|---|
+  | 443 | `The Atlantis` | `Washington, D.C.` | *(blank)* | `USA` |
+  | 192 | `Jamburg` | *(blank)* | *(blank)* | `USA` |
+  | 282 | `MSC Divina` | `Atlantic Ocean` | *(blank)* | *(blank)* |
+
+  **443 keeps the state inside the `city` string**, which is what makes it dangerous: the row
+  looks two-field and is semantically three. It shipped reading `Washington, D.C., USA` in 0.1.67
+  because the country-stripping filter tested `parts.length > 2` and therefore assumed the state
+  always arrives in `state`. See `placeOf` in `src/ui/components.js`.
+
+  > **This bullet used to say `9:30 Club` appears twice, spelled `Washington, D.C.` and
+  > `Washington, DC`, "two `venue_id`s for what is likely one room". That is no longer true and
+  > it cost a wrong hypothesis.** `9:30 Club` is now a single row (385, `Washington` / `DC`).
+  > Carton appears to have merged it — which is also why the count moved 441 → 440 and the
+  > multi-city figure 9 → 8. The duplicate-room case in Washington is now `Atlantis` (283,
+  > `Washington` / `DC`) and `The Atlantis` (443, above). The old note was accurate when written,
+  > survived the merge, and then pointed an investigation at the one DC venue that was fine.
+  > Re-measured 2026-08-27 against the live API.
 - **Match `state` exactly, never as a substring.** A substring match on `ma` hits 18 venue names,
   which buries a real state query.
 
