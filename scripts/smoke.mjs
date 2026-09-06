@@ -1461,6 +1461,176 @@ server.listen(PORT, async () => {
   }
   await evaluate(`document.documentElement.removeAttribute('data-theme');`);
 
+  // --- Home's hierarchy: one hero object, then reference (0.1.74) -----------
+  //
+  // The page read as a flat stack of same-weight sections. Two things fixed it
+  // and both are asserted, because either one alone would leave the complaint
+  // standing:
+  //
+  //  1. The upcoming show is ONE element. Not "a .hero exists" -- that would
+  //     pass on an empty div. The h1, the venue line, the stat grid and the
+  //     action row must all be INSIDE it, which is the claim that makes the
+  //     stats unambiguously part of the show rather than of the section below.
+  //  2. The countdown kicker must render SMALLER than the section titles under
+  //     it. It used to BE a .section-title, so "IN 81 DAYS" and "ON THIS DATE"
+  //     were the same element at the same size and the page had three headings
+  //     of equal rank. Measured as a comparison, never against 11px: a type
+  //     scale retune must move both together or fail here.
+  //
+  // And the order: the hero first, "On this date" last. Asserted by position in
+  // the rendered document, not by reading the source.
+  console.log('\nHome hierarchy:');
+  for (const theme of ['dark', 'light']) {
+    await evaluate(`document.documentElement.setAttribute('data-theme', ${JSON.stringify(theme)});`);
+    await evaluate(`location.hash = '#/home';`);
+    await sleep(1500);
+    const h = await evaluate(`(() => {
+      const screen = document.querySelector('.screen');
+      const hero = screen && screen.querySelector('.hero');
+      const kicker = hero && hero.querySelector('.hero-kicker');
+      const titles = [...screen.querySelectorAll('.section-title')];
+      const sections = [...screen.querySelectorAll(':scope > .section')];
+      const last = sections[sections.length - 1];
+      return {
+        heroes: screen ? screen.querySelectorAll('.hero').length : null,
+        holds: hero ? {
+          h1: !!hero.querySelector('.screen-title'),
+          venue: !!hero.querySelector('.venue-line'),
+          stats: !!hero.querySelector('.stat-grid'),
+          actions: !!hero.querySelector('.card-actions'),
+        } : null,
+        heroIsFirst: hero ? screen.firstElementChild === hero : null,
+        kickerIsSectionTitle: kicker ? kicker.classList.contains('section-title') : null,
+        kickerSize: kicker ? parseFloat(getComputedStyle(kicker).fontSize) : null,
+        titleSizes: titles.map((t) => parseFloat(getComputedStyle(t).fontSize)),
+        lastSectionTitle: last ? (last.querySelector('.section-title') || {}).textContent : null,
+      };
+    })()`);
+
+    if (h.heroes !== 1) fail(`Home (${theme}): ${h.heroes} .hero element(s), expected exactly 1`);
+    else {
+      const missing = Object.entries(h.holds || {}).filter(([, v]) => !v).map(([k]) => k);
+      if (missing.length) {
+        fail(`Home (${theme}): the hero card does not contain ${missing.join(', ')} — the show's parts are still loose on the page`);
+      } else if (!h.heroIsFirst) {
+        fail(`Home (${theme}): something renders above the upcoming show`);
+      } else pass(`${theme}: one hero holding the date, venue, stats and actions, first on the screen`);
+    }
+
+    const minTitle = Math.min(...(h.titleSizes.length ? h.titleSizes : [0]));
+    if (h.kickerIsSectionTitle) {
+      fail(`Home (${theme}): the countdown is still a .section-title — it ranks equal with the page's headings`);
+    } else if (!h.kickerSize || !minTitle) {
+      fail(`Home (${theme}): could not measure the kicker (${h.kickerSize}) against the section titles (${JSON.stringify(h.titleSizes)})`);
+    } else if (h.kickerSize >= minTitle) {
+      fail(`Home (${theme}): the countdown is ${h.kickerSize}px against section titles at ${minTitle}px — it must be smaller`);
+    } else pass(`${theme}: countdown ${h.kickerSize}px under section titles at ${minTitle}px`);
+
+    if (!/^on this date/i.test(String(h.lastSectionTitle || '').trim())) {
+      fail(`Home (${theme}): the last section is ${JSON.stringify(h.lastSectionTitle)}, expected "On this date"`);
+    } else pass(`${theme}: "On this date" is the last section on the page`);
+  }
+  await evaluate(`document.documentElement.removeAttribute('data-theme');`);
+
+  // --- The merged "Previous shows" card says each show ONCE (0.1.74) --------
+  //
+  // "Previous set structures" and "Last time at {venue}" were two sections over
+  // the same history, and the structure list's top row WAS the show in the card
+  // below it: Toad's Place printed "Nov 26, 2025  S1+S2+E" and then, 250px
+  // lower, "Wed, Nov 26, 2025" with SET 1 / SET 2 / ENCORE spelled out.
+  //
+  // THIS NEEDS A SHOW THAT ACTUALLY HAS VENUE HISTORY. The default selection is
+  // whichever upcoming show is next, and today that is a festival with none --
+  // the merged card renders one empty line and every assertion below would pass
+  // without touching the case it exists for. So the picker is walked until a
+  // Home render has BOTH an expanded setlist and older one-liners under it, and
+  // if no upcoming show has that, this reports SKIP rather than a green tick.
+  console.log('\nHome merges the venue history into one card:');
+  await evaluate(`location.hash = '#/home';`);
+  await sleep(1400);
+  const pickerCount = await evaluate(`(() => {
+    const c = [...document.querySelectorAll('.screen .chip')].find((x) => x.textContent.trim() === 'Change');
+    if (!c) return 0;
+    c.click();
+    const n = document.querySelectorAll('.sheet .sheet-item').length;
+    const back = document.querySelector('.sheet-backdrop');
+    if (back) back.click();
+    return n;
+  })()`);
+
+  let merged = null;
+  for (let i = 0; i < pickerCount; i++) {
+    await evaluate(`(() => {
+      const c = [...document.querySelectorAll('.screen .chip')].find((x) => x.textContent.trim() === 'Change');
+      if (c) c.click();
+      const items = document.querySelectorAll('.sheet .sheet-item');
+      if (items[${i}]) items[${i}].click();
+    })()`);
+    await sleep(1400);
+    const probe = await evaluate(`(() => {
+      const heads = [...document.querySelectorAll('.screen .section-head')];
+      const prev = heads.find((n) => /previous/i.test(n.textContent));
+      const card = prev && prev.parentElement.querySelector('.card');
+      if (!card) return null;
+      const headDate = (card.firstElementChild || {}).textContent || '';
+      const foot = card.querySelector('.card-foot');
+      return {
+        sections: [...document.querySelectorAll('.screen .section-title')].map((n) => n.textContent.trim()),
+        headDate: headDate.trim(),
+        hasSetlist: !!card.querySelector('.setlist-card-body'),
+        // EVERY visit one-liner in the section, and separately the ones sitting
+        // in the foot. Selecting only the foot would make a build that renders
+        // no foot at all look like a show with no older visits -- the walk would
+        // run out and report SKIP, which is how the pre-merge layout would have
+        // slipped past the check written to describe the merge.
+        //
+        // .visit-list, NOT .fn-list. The merged card holds two fn-lists -- these
+        // rows and the setlist's own footnotes -- so the broader selector
+        // counted footnotes as visits, and this check passed its first green run
+        // only because the show it walked to had a setlist with none. Exactly
+        // the house failure: a real number about a wider universe than the
+        // output implies.
+        listRows: [...prev.parentElement.querySelectorAll('.visit-list li')].map((li) => li.textContent.trim()),
+        footRows: foot ? [...foot.querySelectorAll('.visit-list li')].map((li) => li.textContent.trim()) : [],
+        cards: prev.parentElement.querySelectorAll('.card').length,
+        actionsBeforeFoot: !!(foot && card.querySelector('.card-actions') &&
+          card.querySelector('.card-actions').compareDocumentPosition(foot) & Node.DOCUMENT_POSITION_FOLLOWING),
+      };
+    })()`);
+    if (probe && probe.listRows.length) { merged = probe; break; }
+  }
+
+  if (!merged) {
+    skip(`no upcoming show has a previous-visit list (walked ${pickerCount} show(s)) — the merge could not be exercised`);
+  } else if (!merged.hasSetlist) {
+    fail('Home: the Previous shows card renders no setlist — the most recent visit is not expanded');
+  } else if (merged.footRows.length !== merged.listRows.length) {
+    fail(`Home: ${merged.listRows.length - merged.footRows.length} one-liner(s) sit outside the expanded card's foot — the two sections are still two objects`);
+  } else {
+    // The date heading the expanded card, reduced to "Mon D, YYYY" so it can be
+    // compared against the short form the one-liners use.
+    const shortHead = merged.headDate.replace(/^[A-Za-z]{3},\s*/, '');
+    const dupes = merged.footRows.filter((r) => r.includes(shortHead));
+    if (dupes.length) {
+      fail(`Home: ${JSON.stringify(shortHead)} is both the expanded card and a one-liner below it — ${JSON.stringify(dupes)}`);
+    } else pass(`the expanded visit ${JSON.stringify(shortHead)} appears once; ${merged.footRows.length} older visit(s) below it`);
+
+    if (merged.cards !== 1) {
+      fail(`Home: the Previous shows section holds ${merged.cards} cards, expected 1 — the two sections are still two objects`);
+    } else pass(`one card: setlist + ${merged.footRows.length} one-liner(s)`);
+
+    if (!merged.actionsBeforeFoot) {
+      fail('Home: the older visits do not follow the action row — "Show detail" would read as applying to the whole list');
+    } else pass('older visits sit below the action row, behind a rule');
+
+    const stale = merged.sections.filter((t) => /last time at|previous set structures/i.test(t));
+    if (stale.length) fail(`Home: a pre-merge header is still rendering — ${JSON.stringify(stale)}`);
+    else pass(`headers: ${JSON.stringify(merged.sections)}`);
+  }
+  await evaluate(`localStorage.removeItem('dozen.selectedShow.v1');`);
+  await evaluate(`location.hash = '#/home';`);
+  await sleep(1200);
+
   // --- Venue text is one size everywhere it is not in a row -----------------
   //
   // Reported twice: "venue names are too small again", both times about the On
@@ -1756,11 +1926,15 @@ server.listen(PORT, async () => {
   //  2. Headers naming a venue that is also rendered in a venue line on the
   //     same screen are COUNTED, and the count is asserted per route.
   //
-  // Rule 2 has a reviewed expectation rather than a flat zero, because there
-  // is exactly one deliberate instance: Home's "Last time at {venue}". It sits
-  // a full set-structure block below the hero venue line and labels a setlist
-  // card that is otherwise just a date. Anything NEW has to change this number,
-  // which is the point -- the exception is reviewable instead of invisible.
+  // Rule 2's expectation is a reviewed number rather than a flat zero, and as
+  // of 0.1.74 that number is ZERO. The one deliberate instance was Home's
+  // "Last time at {venue}", justified in 0.1.69 by DISTANCE: it sat a full
+  // set-structure block below the hero venue line and labelled a setlist card
+  // that was otherwise just a date. The merge removed the distance -- that
+  // section now follows the hero card directly, with the stat beside it already
+  // reading "MOST RECENT - {the same date}" -- so the header went generic and
+  // the exception went with it. Anything NEW has to change this number back,
+  // which is the point: the exception is reviewable instead of invisible.
   //
   // RAW TEXT OUT, MATCHING IN NODE. No backslash goes inside the evaluate
   // string: a backslash-s in a template literal collapses to a literal "s"
@@ -1768,8 +1942,8 @@ server.listen(PORT, async () => {
   // matched nothing in 0.1.67.
   console.log('\nvenue named in more than one header:');
   const HEADERS_NAMING_A_VENUE = {
-    // route -> how many headers may name an on-screen venue
-    '#/home': 1, // "Last time at {venue}" — see src/views/home.js
+    // route -> how many headers may name an on-screen venue.
+    // Empty on purpose: no route has a reviewed exception any more.
   };
 
   for (const r of ROUTES) {

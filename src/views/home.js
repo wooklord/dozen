@@ -14,7 +14,6 @@ import { el, append, openSheet } from '../ui/dom.js';
 import {
   sectionHead,
   emptyState,
-  setlistBlock,
   setlistCard,
   cartonLink,
   showPermalink,
@@ -90,11 +89,35 @@ export function renderHome(ctx) {
 function renderNextShow(screen, { index, navigate }, show, today) {
   const daysAway = daysBetween(today, show.showdate);
 
-  append(
-    screen,
-    el('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '12px' } }, [
+  const allVenueShows = (index.showsByVenue.get(Number(show.venue_id)) || []).filter(
+    (s) => s.showdate <= today,
+  );
+
+  // --- The upcoming show, as ONE OBJECT (0.1.74) ----------------------------
+  //
+  // Everything in this card belongs to the show: the countdown, the date, the
+  // venue, how often this venue has been played, and the two ways out of here.
+  // It used to be a bare stack -- kicker, h1, venue line, then a .section
+  // holding the stat grid -- and the stat grid ended up equidistant between the
+  // venue line it describes (25px above) and the reference section below it
+  // (23px). The reader had nothing to tell them which side it belonged to.
+  //
+  // A CARD RATHER THAN A RULE OR MORE SPACING. The page's problem was that its
+  // headline and its reference material rendered as peers; spacing makes that
+  // a judgement about gaps, an edge makes it a fact. Everything below this card
+  // is reference, and the card boundary is what says so.
+  //
+  // THE KICKER IS NOT A .section-title ANY MORE, and that was half the flatness
+  // on its own: "IN 81 DAYS", "PREVIOUS SHOWS" and "ON THIS DATE" were the same
+  // element at the same weight, so the page had three headings of equal rank
+  // and no way to say which one was the point. .hero-kicker is a label ON the
+  // date beneath it, so it takes the 11px fine-print size that .section-title
+  // deliberately moved off in 0.1.45 -- it is not a heading and must not read
+  // as one.
+  const hero = el('div.hero', null, [
+    el('div.hero-head', null, [
       el('div', { style: { flex: '1', minWidth: '0' } }, [
-        el('div.section-title', {
+        el('div.hero-kicker', {
           text: daysAway === 0 ? 'Tonight' : daysAway === 1 ? 'Tomorrow' : `In ${daysAway} days`,
         }),
         el('h1.screen-title', { text: formatShowDate(show.showdate) }),
@@ -112,183 +135,166 @@ function renderNextShow(screen, { index, navigate }, show, today) {
           )
         : null,
     ]),
-  );
-
-  // THE CARTON LINK IS NOT APPENDED HERE ANY MORE. It stood alone on its own
-  // line directly under the venue line, and .carton-link carries
-  // `min-height: var(--tap)` -- a 44px box around 10px text, with nothing
-  // beside it to share the height. That was most of the dead space above the
-  // set structure block. It now sits in the action row below, next to Venue
-  // history, where the same 44px is height the row needed anyway.
-  const allVenueShows = (index.showsByVenue.get(Number(show.venue_id)) || []).filter(
-    (s) => s.showdate <= today,
-  );
-  const playedAtVenue = allVenueShows.filter((s) => index.setlistByShow.has(Number(s.show_id)));
-
-  // --- The venue's history at a glance --------------------------------------
-  //
-  // NO SECTION HEADER. This block used to open with sectionHead(venuename),
-  // which repeated the venue name already rendered two lines above it in
-  // "Buffalo Iron Works · Buffalo, NY, USA". Saying it twice inside two inches
-  // is what made the area read as empty: a heading that carries no information
-  // the reader does not already have is spacing with words in it.
-  //
-  // The stat grid is the first thing in the block now, so it sits directly
-  // under the venue line, which is what it is about.
-  append(
-    screen,
-    el('div.section', null, [
-      el('div.stat-grid', null, [
-        el('div.stat', null, [
-          statValue(allVenueShows.length, { accent: true }),
-          el('div.stat-label', {
-            text: allVenueShows.length === 1 ? 'show played here' : 'shows played here',
-          }),
-        ]),
-        el('div.stat', null, [
-          statValue(
-            allVenueShows.length
-              ? formatShowDateShort(allVenueShows[allVenueShows.length - 1].showdate)
-              : '—',
-          ),
-          el('div.stat-label', { text: 'most recent' }),
-        ]),
+    // NO SECTION HEADER, and the reason is unchanged from 0.1.69: a header here
+    // would repeat the venue name rendered two lines above it. The stat grid is
+    // the first thing after the venue line because it is about that venue.
+    //
+    // It bleeds to the card's edges rather than sitting inset -- see .hero
+    // .stat-grid in app.css. A bordered tile inside a bordered card reads as a
+    // second object; a full-width band with hairlines reads as part of this one.
+    el('div.stat-grid', null, [
+      el('div.stat', null, [
+        statValue(allVenueShows.length, { accent: true }),
+        el('div.stat-label', {
+          text: allVenueShows.length === 1 ? 'show played here' : 'shows played here',
+        }),
       ]),
-      el('div.card-actions', null, [
-        el(
-          'button.btn.btn-small',
-          { type: 'button', onclick: () => navigate(`#/venue/${show.venue_id}`) },
-          'Venue history',
+      el('div.stat', null, [
+        statValue(
+          allVenueShows.length
+            ? formatShowDateShort(allVenueShows[allVenueShows.length - 1].showdate)
+            : '—',
         ),
-        // DELIBERATELY UNCHANGED, only moved. Still .carton-link: --t-2xs at
-        // weight 400 in --ink-faint, no border, no button treatment. It sits
-        // BESIDE a control without becoming one -- .card-actions is
-        // `align-items: center`, so it centres against the 36px button without
-        // any rule of its own. Promoting it here would undo the 0.1.45
-        // decision recorded above .carton-link in app.css: attribution must be
-        // present and findable, not prominent.
-        cartonLink(showPermalink(show)),
+        el('div.stat-label', { text: 'most recent' }),
       ]),
     ]),
-  );
+    el('div.card-actions', null, [
+      el(
+        'button.btn.btn-small',
+        { type: 'button', onclick: () => navigate(`#/venue/${show.venue_id}`) },
+        'Venue history',
+      ),
+      // DELIBERATELY UNCHANGED, only moved. Still .carton-link: --t-2xs at
+      // weight 400 in --ink-faint, no border, no button treatment. It sits
+      // BESIDE a control without becoming one -- .card-actions is
+      // `align-items: center`, so it centres against the 36px button without
+      // any rule of its own. Promoting it here would undo the 0.1.45
+      // decision recorded above .carton-link in app.css: attribution must be
+      // present and findable, not prominent.
+      cartonLink(showPermalink(show)),
+    ]),
+  ]);
+  append(screen, hero);
 
-  // --- Set structure: observed history only ---------------------------------
+  // --- Previous shows: ONE section, was two (0.1.74) -------------------------
   //
-  // Both lists, deduped, come from previousSetStructures(). The dedupe
-  // direction and the reasoning for it live in the block above that function
-  // in data/index.js; nothing about which list wins is decided here.
+  // "Previous set structures" and "Last time at {venue}" were two headers over
+  // the same history, and the top row of the structure list WAS the show in the
+  // card below it -- `venueRows[0]` and the old `lastAtVenue` resolve to the
+  // same show by construction, both being the newest show at this venue with a
+  // recorded setlist. Toad's Place rendered "Nov 26, 2025  S1+S2+E" and then,
+  // 250px lower, "Wed, Nov 26, 2025" with SET 1 / SET 2 / ENCORE spelled out.
+  // The same fact, twice, in two typographic registers.
+  //
+  // So it is one card: the most recent visit in full, then a rule, then the
+  // visits before it as one-liners. The expanded visit is the one you read; the
+  // rest are the index you scan.
+  //
+  // THE EXPANDED ROW DROPS ITS STRUCTURE SUMMARY. "S1+S2+E" is a stand-in for a
+  // setlist you cannot see, and this row is the setlist -- printing the summary
+  // above SET 1 / SET 2 / ENCORE would reintroduce, one level down, the exact
+  // duplication this merge exists to remove.
+  //
+  // ONE SOURCE FOR THE LIST. `lastAtVenue` used to be computed here from its own
+  // filter of showsByVenue while the list came from previousSetStructures(); two
+  // derivations of one fact that agreed only because nobody had changed either.
+  // The card reads venueRows[0] now, so they cannot drift apart.
   const { venueRows, runRows } = previousSetStructures(index, show);
+  const lastVisit = venueRows[0] || null;
+  const earlierVisits = venueRows.slice(1);
 
+  // .visit-list, not a bare .fn-list (0.1.74). The merged card contains TWO
+  // fn-lists -- these visit one-liners and the setlist's own footnotes -- and
+  // with nothing to tell them apart, anything reading "the rows in this card"
+  // silently counted footnotes as visits. The smoke check for the merge was
+  // written that way and passed only because the show it happened to walk to
+  // had a setlist with no footnotes. Its own class, so the two are different
+  // things in the DOM as well as in the head.
+  //
+  // The date's colour and weight moved into that class at the same time. They
+  // were an inline style, which is the one place a palette change cannot reach.
   const structureList = (rows) =>
     el(
-      'ul.fn-list',
+      'ul.fn-list.visit-list',
       null,
       rows.map((s) =>
         el('li', null, [
-          el('span', {
-            style: { color: 'var(--yolk)', fontWeight: '700' },
-            text: formatShowDateShort(s.showdate),
-          }),
+          el('span.visit-date', { text: formatShowDateShort(s.showdate) }),
           el('span', { text: showStructure(index, s.show_id) || '—' }),
         ]),
       ),
     );
 
-  append(
-    screen,
-    el('div.section', null, [
-      // "Previous set structures", not "Set structure" (0.1.71).
-      //
-      // Plural and past-tense, and the tense is the part that matters. Every
-      // row in this card is a show that has already been played -- both lists
-      // filter `showdate < show.showdate` and require a recorded setlist --
-      // but the singular header sat directly above the upcoming show's own
-      // block, where it could be read as the structure that show WILL have.
-      // That is the language test in CLAUDE.md: describes what happened, ships;
-      // implies what will happen, does not.
-      sectionHead('Previous set structures'),
-      el('div.card', null, [
-        // THE VENUE LIST, UNLABELLED, FIRST (0.1.72).
-        //
-        // "Previously here" is gone. That label was kept in 0.1.71 for one
-        // reason: the two lists could contain the same show, and unlabelled
-        // that read as a rendering bug rather than as one show qualifying
-        // under two criteria. The dedupe removes the duplication, so the
-        // reason for the label goes with it.
-        //
-        // What is left is previous set structures at the venue the hero line
-        // two blocks above already names, sitting directly under a header that
-        // says "Previous set structures". A label here would repeat both.
-        venueRows.length ? structureList(venueRows) : null,
-        // "EARLIER IN THIS RUN" KEEPS ITS LABEL. It is the named subset --
-        // a different criterion from the list above, at other venues -- and
-        // nothing else on the screen says so.
-        runRows.length
-          ? el('div', { style: { marginTop: venueRows.length ? '12px' : '0' } }, [
-              el('div.section-title', { text: 'Earlier in this run' }),
-              structureList(runRows),
-            ])
-          : null,
-        // The run list is not visible on any upcoming show today: all 18 have
-        // an empty one, because the earlier shows in their runs are upcoming
-        // too and have no setlist yet. It appears mid-tour -- which is exactly
-        // when this app gets opened in a venue, and why the overlap case is
-        // covered by a fixture of real archive rows in tests/ rather than by
-        // looking at the screen.
-        !venueRows.length && !runRows.length
-          ? el('p.note', { text: 'No played shows at this venue or earlier in this run.' })
-          : null,
-      ]),
-    ]),
-  );
+  // "Earlier in this run" KEEPS ITS LABEL. It is the named subset -- a different
+  // criterion from the list above, at other venues -- and nothing else on the
+  // screen says so.
+  //
+  // It is also why this header does NOT name the venue. 0.1.69 gave "Last time
+  // at {venue}" the name because it sat a whole block below the hero venue line
+  // and labelled a card that was otherwise just a date; the merge removed that
+  // distance -- this section now follows the hero card directly, and the stat
+  // beside it already reads "MOST RECENT · Nov 26, 2025", which is the date
+  // heading the card. Naming the venue here would also be wrong for the run
+  // rows, which are at OTHER venues. So the header stays generic, the venue
+  // list stays unlabelled under it (0.1.72's reasoning, unchanged), and the run
+  // list keeps the label that marks it as the exception.
+  const runBlock = runRows.length
+    ? el('div', { style: { marginTop: earlierVisits.length || lastVisit ? '12px' : '0' } }, [
+        el('div.section-title', { text: 'Earlier in this run' }),
+        structureList(runRows),
+      ])
+    : null;
 
-  // --- Last time at this venue ----------------------------------------------
-  const lastAtVenue = playedAtVenue[playedAtVenue.length - 1];
-  const venueSection = el('div.section');
-  // "Last time at {venue}", not "Last time here" (0.1.69).
-  //
-  // This is the one place on Home the venue name earns a header. It sits far
-  // below the hero venue line, with the whole set-structure block between
-  // them, and it labels a setlist card that is otherwise just a date — "here"
-  // required the reader to remember what "here" referred to from the top of
-  // the screen.
-  //
-  // IT WRAPS TO TWO LINES ON 74 OF THE 415 VENUE NAMES (18%), and that was
-  // measured before shipping rather than after. The wrap is cheap: .carton-link
-  // carries `min-height: var(--tap)`, so this row is ALREADY 44px tall for the
-  // tap target, and a second line takes it to 49.4px. Five pixels.
-  //
-  // On exactly the venues that wrap, this change makes the screen SHORTER, not
-  // longer: "Previously at {venue}" above wrapped to two lines too, over a list
-  // of two or three rows, and it is gone. Nothing reaches three lines --
-  // "Everwise Amphitheater at White River State Park", the longest name in the
-  // archive at 47 characters, is two.
-  append(
-    venueSection,
-    sectionHead(
-      `Last time at ${show.venuename}`,
-      lastAtVenue ? cartonLink(showPermalink(lastAtVenue), 'Carton') : null,
-    ),
-  );
-  if (lastAtVenue) {
+  const previous = el('div.section');
+  append(previous, sectionHead('Previous shows'));
+
+  if (lastVisit) {
+    const foot =
+      earlierVisits.length || runBlock
+        ? el('div.card-foot', null, [
+            earlierVisits.length ? structureList(earlierVisits) : null,
+            runBlock,
+          ])
+        : null;
     append(
-      venueSection,
+      previous,
       setlistCard({
         index,
-        rows: index.setlistByShow.get(Number(lastAtVenue.show_id)) || [],
+        rows: index.setlistByShow.get(Number(lastVisit.show_id)) || [],
         onSong: (id) => navigate(`#/song/${id}`),
         head: el('div', {
           style: { fontWeight: '600' },
-          text: formatShowDate(lastAtVenue.showdate),
+          text: formatShowDate(lastVisit.showdate),
         }),
-        showId: lastAtVenue.show_id,
+        showId: lastVisit.show_id,
         navigate,
+        // The Carton link used to sit in the "Last time at {venue}" section
+        // head. That head is gone, and the link belongs to this show rather
+        // than to the section, so it goes where every other per-show Carton
+        // link goes: beside Show detail in the card's own action row.
+        extraActions: [cartonLink(showPermalink(lastVisit), 'Carton')],
+        foot,
       }),
     );
+  } else if (runBlock) {
+    append(previous, el('div.card', null, [runBlock]));
   } else {
-    append(venueSection, emptyState('No previous setlist recorded at this venue.'));
+    // ONE empty state, not two. A venue with no recorded history used to
+    // produce "No played shows at this venue or earlier in this run." and then
+    // "No previous setlist recorded at this venue." -- 154px of two sentences
+    // saying nothing, twice. Five of the seventeen upcoming shows are at a
+    // venue with no prior visit, so this is the common case, not the edge.
+    append(
+      previous,
+      el('div.card', null, [
+        el('p.note', {
+          style: { margin: '0' },
+          text: 'No played shows at this venue or earlier in this run.',
+        }),
+      ]),
+    );
   }
-  append(screen, venueSection);
+  append(screen, previous);
 }
 
 // ------------------------------------------------------- no upcoming show ---

@@ -599,6 +599,7 @@ export function setlistCard({
   extraActions = [],
   empty = null,
   style = null,
+  foot = null,
 } = {}) {
   // THE ACTION SET IS OWNED HERE, not passed in. A setlist card gets ONE
   // button -- Show detail -- and this builds it. Callers each used to supply
@@ -624,10 +625,17 @@ export function setlistCard({
     ...extraActions,
   ].filter(Boolean);
 
+  // `foot` is a CONTENT SLOT, symmetric with `head` -- not an options flag.
+  // It exists for Home's merged venue card, where the most recent visit is
+  // rendered in full and the visits BEFORE it follow as one-liners inside the
+  // same card. It sits below the action row on purpose: those buttons open the
+  // setlist above them, so anything appended after the actions must read as a
+  // separate, quieter thing. .card-foot draws the rule that says so.
   return el('div.card', style ? { style } : null, [
     head,
     rows.length ? el('div.setlist-card-body', null, setlistBlock(rows, { index, onSong })) : empty,
     acts.length ? el('div.card-actions', null, acts) : null,
+    foot,
   ]);
 }
 

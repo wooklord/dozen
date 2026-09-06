@@ -388,8 +388,10 @@ export function renderShows(ctx) {
           ),
           showId: show.show_id,
           navigate,
-          // The Carton link is genuinely specific to this screen -- Home puts
-          // its own in the section head instead.
+          // Home used to put its own in the section head; as of 0.1.74 that
+          // head is generic ("Previous shows") and the link, which belongs to
+          // one show rather than to the section, sits here too. So this is now
+          // the convention rather than the exception it was written as.
           extraActions: [cartonLink(showPermalink(show), 'Carton')],
         }),
       );

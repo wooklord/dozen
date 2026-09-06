@@ -660,10 +660,14 @@ made the wrap worth checking.
 2. **Headers naming a venue also rendered in a venue line on the same screen are counted**, and
    the count is asserted per route against `HEADERS_NAMING_A_VENUE`.
 
-Rule 2 expects **1** on `#/home` and **0** everywhere else. A reviewed number rather than a flat
-zero, because the one instance is deliberate and an invisible exception is how the last one
-survived a sweep. Adding a second venue header now requires editing that number, which is the
-point.
+Rule 2 expects **0 on every route as of 0.1.74**, and the reviewed-number machinery stays because
+the number is what makes an exception visible. It used to expect **1** on `#/home`, for
+`Last time at {venue}` — and the justification quoted above was **distance**: the header sat a full
+set-structure block below the hero venue line, labelling a card whose own heading was just a date.
+The 0.1.74 merge removed the distance. That section now follows the hero card directly, and the
+stat immediately above it reads `MOST RECENT · Nov 26, 2025` — the same date that heads the card.
+So the header went generic (`Previous shows`) and the exception went with it. Adding a venue header
+back now requires editing that number, which is the point.
 
 Both proved red against real defects rather than invented ones: restoring `Previously at {venue}`
 reports *"2 header(s) name an on-screen venue, expected 1"*, and adding `Every show at {venuename}`
@@ -741,6 +745,79 @@ information). Stacked under one header the flip is more visible than it was in 0
 run list came first. Left as is: reversing either one costs more than the inconsistency does, and
 the yolk-coloured dates make each list's own order obvious. Recorded so it reads as a decision
 rather than an oversight.
+
+### Home is one object and then reference (0.1.74)
+
+Home read as a flat stack. Its countdown kicker, `PREVIOUS SET STRUCTURES`, `LAST TIME AT
+{VENUE}` and `ON THIS DATE` were all `.section-title` — the same element, the same 13px, the same
+weight — so the page had four headings of equal rank and nothing saying which one was the point.
+The stat grid made it worse by sitting **25px below the venue line it describes and 23px above the
+section it does not**: equidistant between the thing it belongs to and the thing it doesn't.
+
+**The upcoming show is one card.** Countdown, date, venue, venue stats and the two ways out, inside
+one `.hero`. Not a rule and not more spacing: the complaint was that the page's headline and its
+reference material rendered as peers, and spacing leaves that a judgement about gaps while an edge
+makes it a fact. Everything below the card is reference, and the card boundary says so.
+
+`.hero` is **not an alias for `.card`**, though they share three declarations today. `.card` is the
+repeated unit the app is built from; `.hero` is the one-per-screen headline. Aliasing them would
+mean a future change to card padding silently retuning the headline.
+
+**The kicker stopped being a `.section-title`, and that was half the flatness on its own.** It is a
+label *on* the date beneath it, not a heading *over* a section, so it takes the 11px fine-print size
+that 0.1.45 deliberately moved section titles off — that size is wrong for a heading and exactly
+right here — and `--ink-dim` rather than `--ink-label`, one step quieter than the headers below.
+`scripts/smoke.mjs` asserts it renders **smaller than the smallest section title on the screen**,
+as a comparison and never against 11px, so a type-scale retune has to move both or go red.
+
+**The stat band bleeds to the card's edges.** A bordered tile inside a bordered card reads as a
+second object; hairlines across the full width read as a band belonging to this one.
+
+#### Two sections were telling the same story, and one of them was the other's first row
+
+`Previous set structures` and `Last time at {venue}` were both this venue's history. They were not
+merely adjacent — `venueRows[0]` and the old `lastAtVenue` **resolve to the same show by
+construction**, both being the newest show at this venue with a recorded setlist. Toad's Place
+printed `Nov 26, 2025  S1+S2+E` and then, 250px lower, `Wed, Nov 26, 2025` with SET 1 / SET 2 /
+ENCORE spelled out. One fact, twice, in two typographic registers.
+
+They are one card now: **the most recent visit in full, then a rule, then the visits before it as
+one-liners.** The expanded visit is the one you read; the rest are the index you scan.
+
+**The expanded row drops its structure summary.** `S1+S2+E` is a stand-in for a setlist you cannot
+see. On the row that *is* the setlist, printing the summary above SET 1 / SET 2 / ENCORE would
+reintroduce, one level down, the duplication the merge exists to remove.
+
+**The one-liners sit below the action row, behind a rule.** Those buttons open the setlist above
+them, so anything after them has to read as a separate, quieter thing or `Show detail` looks like it
+applies to the whole list. That ordering is asserted, not just intended.
+
+**One source for the list.** `lastAtVenue` used to be derived here from its own filter of
+`showsByVenue` while the one-liners came from `previousSetStructures()` — two derivations of one
+fact that agreed only because nobody had changed either. The card reads `venueRows[0]`, so they
+cannot drift.
+
+**And one empty state, not two.** A venue with no recorded history used to produce *"No played shows
+at this venue or earlier in this run."* followed by *"No previous setlist recorded at this venue."* —
+154px of two sentences saying nothing, twice. **Five of the seventeen upcoming shows are at a venue
+with no prior visit**, so that was the common case, not the edge. It is one line now.
+
+#### The check counted footnotes as visits, and passed anyway
+
+Worth recording because it is the house failure in miniature and it happened *inside the commit
+that adds the check*. The merged card holds **two** `.fn-list`s — the visit one-liners and the
+setlist's own footnotes — and the first version of the smoke assertion selected `.fn-list li` across
+the section. It went green on its first run only because the show the walk happened to land on had
+a setlist with **no footnotes**. Real numbers about a wider universe than the output implied.
+
+The fix is not a narrower selector bolted on: the visit list got **its own class**, `.visit-list`,
+so the two lists are different things in the DOM as well as in the head. The date's yolk and weight
+moved into `.visit-date` at the same time — they were an inline style at the call site, which is the
+one place a palette audit cannot reach.
+
+**"On this date" was already last** and stayed there; the merge simply removed 73–135px of section
+above it. That the ordering holds is now asserted by position in the rendered document rather than
+assumed from the source.
 
 ### Controls go below the content they act on (0.1.72)
 

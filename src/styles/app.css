@@ -303,6 +303,111 @@ a {
   padding: var(--s-4);
 }
 
+/* HOME'S UPCOMING SHOW IS ONE OBJECT (0.1.74).
+ *
+ * Home read as a flat stack: the countdown kicker, the reference section
+ * headers and "On this date" were all .section-title at the same weight, so
+ * nothing said which of them was the page. The stat grid made it worse by
+ * sitting 25px under the venue line it describes and 23px above the section it
+ * does not -- equidistant between the thing it belongs to and the thing it
+ * does not.
+ *
+ * NOT the same rule as .card, deliberately. They share three declarations
+ * today and mean different things: .card is the repeated unit this app is
+ * built from, .hero is the one-per-screen headline. Aliasing them would make
+ * any future change to card padding silently retune the headline.
+ */
+.hero {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-cell);
+  padding: var(--s-4);
+  /* The stat band bleeds to the card's edges; without this its square corners
+     poke through the card's rounded ones. */
+  overflow: hidden;
+}
+
+.hero-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+}
+
+/* The countdown. NOT a .section-title, which is what it used to be.
+ *
+ * This is a label ON the date below it, not a heading over a section, and at
+ * .section-title's 13px it competed with the page's real headings for rank.
+ * 11px is the size 0.1.45 moved section titles OFF because it "reads as fine
+ * print rather than as a heading" -- which is exactly the property wanted
+ * here. --ink-dim rather than --ink-label for the same reason: one step
+ * quieter than the headers below, so the h1 under it is unambiguously first.
+ */
+.hero-kicker {
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  margin: 0 0 var(--s-1);
+}
+
+/* The stat band spans the card rather than sitting inside it as a tile.
+   A bordered box inside a bordered box reads as a second object; hairlines
+   across the full width read as a band belonging to this one. */
+.hero .stat-grid {
+  margin: var(--s-4) calc(-1 * var(--s-4)) 0;
+  border-left: 0;
+  border-right: 0;
+  border-radius: 0;
+}
+
+/* .card-actions' --s-2 is sized for a gap under a card HEADING. Here it
+   follows a full-bleed band with a hairline of its own, and 8px puts the
+   button on top of the rule. */
+.hero .card-actions {
+  margin-top: var(--s-3);
+}
+
+/* Everything below the hero is reference. The card edge does the separating;
+   this is the breath that stops the first reference header sitting on it. */
+.hero + .section {
+  margin-top: var(--s-6);
+}
+
+/* Content appended BELOW a setlist card's action row (0.1.74).
+ *
+ * Home's merged "Previous shows" card renders the most recent visit in full
+ * and the visits before it as one-liners in the same card. The rule is not
+ * decoration: the buttons above it open the setlist above them, so the rows
+ * after them have to read as a separate, quieter thing or "Show detail" looks
+ * like it applies to the whole list.
+ */
+.card-foot {
+  margin-top: var(--s-4);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line);
+}
+
+/* .fn-list carries its own --s-3 top margin for when it follows body text.
+   As the first thing after the rule, that stacks with .card-foot's padding. */
+.card-foot > .visit-list:first-child {
+  margin-top: 0;
+}
+
+/* One previous visit: a date and the shape of the show.
+ *
+ * A .fn-list by layout -- it is the same two-column flex row -- but its own
+ * class, because the merged card holds a second .fn-list (the setlist's
+ * footnotes) and "the rows in this card" has to be able to mean one of them.
+ *
+ * The date is --yolk on the same grounds as every other figure in this app:
+ * it is the number you scan the list by. This lived in an inline style at the
+ * call site until 0.1.74, where no palette audit could see it. */
+.visit-date {
+  color: var(--yolk);
+  font-weight: 700;
+}
+
 /* ------------------------------------------------------------- song rows --- */
 
 .rows {
