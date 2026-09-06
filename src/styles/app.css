@@ -618,26 +618,6 @@ button.gap-figure:active {
   color: var(--yolk);
 }
 
-/* A figure the list is NOT sorted by.
- *
- * .gap-num is --yolk, and yolk is load-bearing: it marks the number you are
- * meant to scan. When the sort does not order by this column -- A–Z on the
- * Songs list -- accenting it would claim a ranking that is not there. The
- * number stays --ink: fully readable, no longer the focal point.
- *
- * NOTE: gapFigure has taken an `accent` option since 0.1.27 and emitted this
- * class, but no rule ever matched it, so `accent: false` rendered identically
- * to `accent: true` and the option did nothing at all. It does now.
- *
- * No weight treatment: at --t-lg/700 this is large text sitting alone in its
- * own column, and --ink on --surface is 15.43:1 dark / 17.45:1 light. The
- * light-mode weight bump the jam green needed was for 15px body-weight text
- * competing with the prose beside it; nothing here is comparable.
- */
-.gap-num.plain {
-  color: var(--ink);
-}
-
 /* Jam chart entry count, on the Jams tab ONLY.
  *
  * .gap-num is shared by six call sites -- gap chart, Songs, Shows, song detail,

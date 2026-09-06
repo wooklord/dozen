@@ -39,9 +39,14 @@ token is sitting on. A stale palette reads exactly like a current one.
 
 **One accent, and it is load-bearing.** Yolk marks only:
 
-1. gap magnitude on the heat scale,
+1. the figure column and its heat scale,
 2. the active sort or filter,
 3. scratchpad membership.
+
+The first used to read "gap magnitude", which stopped being the whole truth the moment a list could
+be sorted by plays: the figure column is yolk because it is *the number the row is about*, and on
+Songs that number is sometimes times played. Written the narrow way it invited a reader to conclude
+a yolk count of plays was a bug. See "One figure per row" below.
 
 Nothing else is yolk. No yolk buttons for ordinary actions, no yolk headings. The moment a second
 accent appears, the first stops meaning anything — the reason a scanned column works is that the
@@ -785,8 +790,40 @@ These are design rules with a scope consequence, so they are not negotiable:
   Column headers describe what happened: "shows since last played", not "due".
 - **Carton's own text renders verbatim.** Footnotes and setlist notation are quoted, not rewritten.
   `->` and `>` are different marks and both survive to the screen.
-- **Every number states its universe.** The gap column says what it counts, because a bare
+- **Every number states its universe.** The figure column says what it counts, because a bare
   number invites the reader to invent a meaning for it.
+
+### One figure per row, and it is the one the sort is about (0.1.73)
+
+A Songs row used to carry both numbers: gap on the right in its own column, times played squeezed
+onto the meta line as `124×` — or, under "Most played", the two swapped, so the meta line read
+`gap 10`. Two facts, two typographic treatments, and the reader had to work out which of them the
+list was actually ordered by. The row now carries **the date, and the one figure the active sort is
+about**. The other number is one tap away on song detail, where it has room to say what it means.
+
+**"SINCE PLAYED", not "SHOWS".** This is a correctness fix wearing a wording fix's clothes. A song
+played at the most recent counted show has a gap of **0**, and the top row of "Hottest first" was
+rendering that as **0 SHOWS** — which reads as *never played*, the exact opposite of what it means.
+`0 SINCE PLAYED` says the true thing. `scripts/smoke.mjs` asserts that top row reads exactly `0`,
+because a check that only confirmed a number was present would have been green through the whole
+life of the bug.
+
+**A–Z shows times played, and renders identically to "Most played".** A–Z orders by name, so
+neither number ranks the list; it shows plays because that is the one fact about a song that does
+not move when the archive gains a show — what you want when you have *looked a song up* rather than
+scanned a ranking. The two sorts therefore differ in row order and in nothing else, which is
+exactly what the chips claim. The smoke test isolates one song with the search box and compares the
+two figure columns' markup, paint and width, rather than comparing first rows — the two sorts put
+different songs first, so a first-row comparison would pass or fail for reasons unrelated to the
+treatment.
+
+**The `accent` flag is gone with it.** `songRow` took a boolean meaning "the list is sorted by this
+column", off for A–Z, painting `.gap-num.plain` in `--ink` instead of yolk. With one figure per row
+it had nothing left to distinguish: A–Z and "Most played" now show the same fact in the same place,
+so a treatment that differed between them would be asserting a difference that is not there. Yolk
+is what `.gap-num` means on every other screen — the gap chart, Shows, song detail — and Songs was
+the only place it did not. The rule and its CSS were both deleted rather than left dormant; a
+boolean with one reachable value is the shape this repo has been bitten by often enough to name.
 
 ## Attribution
 

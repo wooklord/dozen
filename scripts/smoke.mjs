@@ -1056,17 +1056,28 @@ server.listen(PORT, async () => {
   await sleep(1200);
   await setShowsQuery('');
 
-  // --- The accented figure follows the ACTIVE SORT --------------------------
+  // --- One figure per row, and it follows the ACTIVE SORT -------------------
   //
-  // Asserted as a correspondence, never as "some figure is yolk". A fixed
-  // column rendering yolk regardless of sort would satisfy the weaker check
-  // while being exactly the bug -- the whole point is that the focal point
-  // MOVES. So each sort is clicked and the figure's unit is read back: sort by
-  // gap and the figure must be the gap one, sort by plays and it must be plays.
+  // Asserted as a CORRESPONDENCE, never as "a figure is present". A fixed
+  // column would satisfy the weaker check while being exactly the bug -- the
+  // whole point is that the column says what the chip above it says.
   //
-  // A–Z is included deliberately: it orders by name, so NOTHING may be
-  // accented. That is the case a "some figure is yolk" check would fail on.
-  console.log('\nsort drives the accented figure:');
+  //   A–Z          -> times played
+  //   Coldest      -> shows since played
+  //   Hottest      -> shows since played
+  //   Most played  -> times played
+  //
+  // "SHOWS" became "SINCE PLAYED" in 0.1.73 for a reason the top row of
+  // "Hottest first" demonstrates on its own: the hottest song has a gap of 0,
+  // and "0 SHOWS" reads as never played -- the opposite of the truth. So that
+  // row is asserted to read exactly 0, not merely to exist. A never-played
+  // song renders an em dash there, so this cannot pass by the sort collapsing.
+  //
+  // The meta line is checked NEGATIVELY (no "124×", no "gap 10") and
+  // POSITIVELY (it still leads with the date) in the same pass. Without the
+  // positive half a row that rendered no meta at all would satisfy the
+  // negative one -- an empty string contains neither.
+  console.log('\nsort drives the one figure in the row:');
   await evaluate(`location.hash = '#/songs';`);
   await sleep(1500);
   const yolk = await evaluate(`(() => {
@@ -1076,40 +1087,108 @@ server.listen(PORT, async () => {
     const c = getComputedStyle(probe).color; probe.remove(); return c;
   })()`);
 
-  for (const [label, wantUnit, wantAccent] of [
-    ['A–Z', 'shows', false],
-    ['Coldest first', 'shows', true],
-    ['Most played', 'times', true],
-  ]) {
-    const clicked = await evaluate(`(() => {
+  const clickSort = async (label) =>
+    evaluate(`(() => {
       const c = [...document.querySelectorAll('.sortbar .chip')].find((x) => x.textContent.trim() === ${JSON.stringify(label)});
       if (!c) return false; c.click(); return true;
     })()`);
-    if (!clicked) { fail(`sort: no "${label}" chip`); continue; }
+
+  for (const [label, wantUnit, wantTopNum] of [
+    ['A–Z', 'times', null],
+    ['Coldest first', 'since played', null],
+    ['Hottest first', 'since played', '0'],
+    ['Most played', 'times', null],
+  ]) {
+    if (!(await clickSort(label))) { fail(`sort: no "${label}" chip`); continue; }
     await sleep(900);
     const r = await evaluate(`(() => {
       const active = [...document.querySelectorAll('.sortbar .chip')].find((x) => x.getAttribute('aria-pressed') === 'true');
-      const num = document.querySelector('.rows .gap-num');
-      const unit = document.querySelector('.rows .gap-unit');
+      const li = document.querySelector('.rows li');
+      const num = li && li.querySelector('.gap-num');
+      const unit = li && li.querySelector('.gap-unit');
+      const meta = li && li.querySelector('.row-meta');
       return {
         activeChip: active ? active.textContent.trim() : null,
+        figures: li ? li.querySelectorAll('.gap-figure').length : null,
+        num: num ? num.textContent.trim() : null,
         unit: unit ? unit.textContent.trim().toLowerCase() : null,
         colour: num ? getComputedStyle(num).color : null,
-        plainClass: num ? num.classList.contains('plain') : null,
+        meta: meta ? meta.textContent.trim() : null,
       };
     })()`);
 
     if (r.activeChip !== label) fail(`sort: clicked "${label}" but the pressed chip is ${JSON.stringify(r.activeChip)}`);
-    else if (!r.unit || !r.unit.includes(wantUnit)) {
-      fail(`sort "${label}": figure column shows ${JSON.stringify(r.unit)}, expected ${JSON.stringify(wantUnit)}`);
-    } else if (wantAccent && r.colour !== yolk) {
-      fail(`sort "${label}": the sorted figure is ${r.colour}, not the yolk accent ${yolk}`);
-    } else if (!wantAccent && r.colour === yolk) {
-      fail(`sort "${label}": orders by NAME, so no figure may be accented — but it is ${r.colour}`);
+    else if (r.figures !== 1) fail(`sort "${label}": the row carries ${r.figures} figure column(s), expected exactly 1`);
+    else if (r.unit !== wantUnit) {
+      fail(`sort "${label}": figure column reads ${JSON.stringify(r.unit)}, expected ${JSON.stringify(wantUnit)}`);
+    } else if (r.colour !== yolk) {
+      fail(`sort "${label}": the figure is ${r.colour}, not the yolk accent ${yolk}`);
+    } else if (wantTopNum !== null && r.num !== wantTopNum) {
+      fail(`sort "${label}": top row reads ${JSON.stringify(r.num)}, expected ${JSON.stringify(wantTopNum)} — the smallest gap belongs to a song played at the newest counted show`);
+    } else if (!/^Last [A-Z][a-z]{2} \d{1,2}, \d{4}/.test(r.meta || '')) {
+      fail(`sort "${label}": meta line is ${JSON.stringify(r.meta)}, expected it to lead with the last-played date`);
+    } else if (/×|\bgap \d/.test(r.meta)) {
+      fail(`sort "${label}": meta line repeats the figure — ${JSON.stringify(r.meta)}`);
     } else {
-      pass(`"${label}" -> ${r.unit} figure ${wantAccent ? `accented ${r.colour}` : `plain ${r.colour}`}`);
+      pass(`"${label}" -> one ${r.unit} figure (${r.num}, ${r.colour}), meta ${JSON.stringify(r.meta)}`);
     }
   }
+
+  // --- A–Z and "Most played" show the SAME FACT, so they must RENDER the same
+  //
+  // Both put times played in the figure column as of 0.1.73; they differ in
+  // row ORDER and in nothing else. Compared on ONE song, isolated with the
+  // search box, because the two sorts put different songs at the top -- a
+  // first-row comparison would be comparing two different songs and would pass
+  // or fail for reasons that have nothing to do with the treatment.
+  //
+  // Guarded against the empty case in both directions: exactly one row must
+  // match, it must be the song asked for, and its figure markup must be
+  // non-empty. Two missing figures also compare equal, and that is the failure
+  // this repo keeps rediscovering.
+  console.log('\nA–Z and Most played render the same figure:');
+  const PROBE_SONG = 'Agatha';
+  const setSongQuery = async (v) => {
+    await evaluate(`(() => { const s = document.querySelector('.search'); if (!s) return false;
+      s.value = ${JSON.stringify(v)}; s.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+    await sleep(600);
+  };
+  await setSongQuery(PROBE_SONG);
+  const shots = {};
+  for (const label of ['A–Z', 'Most played']) {
+    if (!(await clickSort(label))) { fail(`figure parity: no "${label}" chip`); continue; }
+    await sleep(700);
+    shots[label] = await evaluate(`(() => {
+      const lis = [...document.querySelectorAll('.rows li')];
+      const f = lis.length === 1 ? lis[0].querySelector('.gap-figure') : null;
+      return {
+        rows: lis.length,
+        title: lis.length === 1 ? lis[0].querySelector('.row-title').textContent.trim() : null,
+        html: f ? f.outerHTML : null,
+        colour: f ? getComputedStyle(f.querySelector('.gap-num')).color : null,
+        width: f ? Math.round(f.getBoundingClientRect().width) : null,
+      };
+    })()`);
+  }
+  const azFig = shots['A–Z'];
+  const mostFig = shots['Most played'];
+  if (!azFig || !mostFig) fail('figure parity: one of the two sorts never reported');
+  else if (azFig.rows !== 1 || mostFig.rows !== 1) {
+    fail(`figure parity: query "${PROBE_SONG}" matched ${azFig.rows}/${mostFig.rows} rows, expected exactly 1 each`);
+  } else if (azFig.title !== PROBE_SONG || mostFig.title !== PROBE_SONG) {
+    fail(`figure parity: the isolated row is ${JSON.stringify(azFig.title)}/${JSON.stringify(mostFig.title)}, not ${JSON.stringify(PROBE_SONG)}`);
+  } else if (!azFig.html || !mostFig.html) {
+    fail('figure parity: a row rendered no figure column at all');
+  } else if (azFig.html !== mostFig.html) {
+    fail(`figure parity: A–Z renders ${azFig.html} but Most played renders ${mostFig.html}`);
+  } else if (azFig.colour !== mostFig.colour || azFig.width !== mostFig.width) {
+    fail(`figure parity: same markup, different paint — ${azFig.colour}/${azFig.width}px vs ${mostFig.colour}/${mostFig.width}px`);
+  } else {
+    pass(`"${PROBE_SONG}" renders identically under both: ${azFig.html}`);
+  }
+  await setSongQuery('');
+  await clickSort('A–Z');
+  await sleep(600);
 
   // --- Jams tab: the COUNT is green, the title is not -----------------------
   //

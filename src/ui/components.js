@@ -213,20 +213,28 @@ export function openGapExplainer(index, { withFootnoteNote = true, atShow = fals
   );
 }
 
-/** A gap figure that opens the explainer when tapped. */
-export function gapFigure(value, unit, index, { accent = true } = {}) {
+/**
+ * A gap figure that opens the explainer when tapped.
+ *
+ * `spoken` is what a screen reader gets. It defaults to the visible text,
+ * which is right whenever the unit reads as a noun ("12 shows"), and is passed
+ * in where the unit is a compressed phrase instead: "SINCE PLAYED" fits a 58px
+ * column and says nothing aloud.
+ */
+export function gapFigure(value, unit, index, { spoken } = {}) {
+  const said = spoken || `${value === null ? 'no' : value} ${unit}`;
   return el(
     'button.gap-figure',
     {
       type: 'button',
-      'aria-label': `${value === null ? 'no' : value} ${unit}. How gap is counted`,
+      'aria-label': `${said}. How gap is counted`,
       onclick: (e) => {
         e.stopPropagation();
         openGapExplainer(index);
       },
     },
     [
-      el(`div.gap-num${accent ? '' : '.plain'}.num`, { text: value === null ? '—' : String(value) }),
+      el('div.gap-num.num', { text: value === null ? '—' : String(value) }),
       el('div.gap-unit', { text: unit }),
     ],
   );
@@ -271,12 +279,18 @@ export function heatFor(value, max) {
 /**
  * A song row. `figure` chooses which number sits on the right.
  * Every label describes what HAS happened -- never what will.
- */
-/**
+ *
+ * ONE FIGURE PER ROW, AND THE META LINE NEVER REPEATS IT (0.1.73). The row
+ * used to carry gap AND times played -- one on the right, the other crammed
+ * onto the meta line as "124×" or "gap 10" -- so the reader had to work out
+ * which of the two numbers the list was actually ordered by. The meta line is
+ * the date now, and the figure column carries whichever fact the caller's sort
+ * is about. Nothing is lost: the other number is one tap away on song detail.
+ *
  * @param {object} opts
  * @param {boolean} [opts.jamBadge=false]  Show a "Jam" badge on the meta line.
  *   OFF by default. On the Songs list it crowded the second line -- which is
- *   where gap and cover credit are scanned -- and it duplicated the "Jam
+ *   where the date and cover credit are scanned -- and it duplicated the "Jam
  *   charts" filter chip sitting directly above the list. The fact stays
  *   reachable through that filter, through the Jams tab, and through the jam
  *   chart entries on song detail, where it does real work rather than acting
@@ -285,40 +299,34 @@ export function heatFor(value, max) {
  */
 export function songRow(
   song,
-  { figure = 'gap', maxGap = 1, onOpen, index, jamBadge = false, accent = true } = {},
+  { figure = 'gap', maxGap = 1, onOpen, index, jamBadge = false } = {},
 ) {
   const picked = isPicked(song.song_id);
 
   let value;
   let unit;
+  let spoken;
   if (figure === 'times') {
     value = song.timesPlayed;
     unit = song.timesPlayed === 1 ? 'time' : 'times';
+    spoken = `played ${value} ${unit}`;
   } else {
+    // "SINCE PLAYED", not "SHOWS". A song played at the most recent counted
+    // show has a gap of 0, and "0 SHOWS" reads as never played -- the opposite
+    // of what it means. "0 SINCE PLAYED" says the true thing.
     value = song.showsSinceLastPlayed;
-    unit = 'shows';
+    unit = 'since played';
+    spoken = value === null ? 'never played' : `${value} shows since last played`;
   }
 
-  // Every row carries name, gap and times played, whichever number is in the
-  // figure column, so a row can be judged without tapping through.
+  // The date, and nothing that duplicates the figure column.
   const meta = el('div.row-meta');
-  if (song.lastPlayed) {
-    append(meta, el('span', { text: `Last ${formatShowDateShort(song.lastPlayed)}` }));
-    append(meta, el('span.sep', { text: '·' }));
-    append(
-      meta,
-      el('span', {
-        text:
-          figure === 'times'
-            ? song.showsSinceLastPlayed === null
-              ? `${song.timesPlayed}×`
-              : `gap ${song.showsSinceLastPlayed}`
-            : `${song.timesPlayed}×`,
-      }),
-    );
-  } else {
-    append(meta, el('span', { text: 'Never played' }));
-  }
+  append(
+    meta,
+    el('span', {
+      text: song.lastPlayed ? `Last ${formatShowDateShort(song.lastPlayed)}` : 'Never played',
+    }),
+  );
   // Cover attribution is plain text, not a bordered badge: a badge wraps onto
   // its own line and costs a row of density on the app's busiest list.
   if (!song.isOriginal) {
@@ -360,16 +368,20 @@ export function songRow(
     [el('div.row-main', null, [el('div.row-title', { text: song.name }), meta])],
   );
 
-  // The gap figure is a SIBLING of the row button, not a child: a button
-  // cannot legally nest inside another button, and the figure needs its own
-  // tap target so it can explain how the number was counted.
-  // `accent` marks this figure as the one the list is SORTED BY. Turned off,
-  // the number stays fully readable but stops claiming the eye -- see
-  // .gap-num.plain, which until 0.1.58 was a class with no rule behind it.
+  // The figure is a SIBLING of the row button, not a child: a button cannot
+  // legally nest inside another button, and the figure needs its own tap
+  // target so it can explain how the number was counted.
+  //
+  // ALWAYS --yolk, with no per-caller opt-out (0.1.73). There used to be an
+  // `accent` flag meaning "the list is sorted by this column", off for A–Z.
+  // With one figure per row it had nothing left to distinguish -- A–Z and
+  // "Most played" now show the same fact in the same place, so a treatment
+  // that differed between them would be claiming a difference that is not
+  // there. Yolk is what .gap-num means on every other screen: the figure.
   const figureNode = index
-    ? gapFigure(value, unit, index, { accent })
+    ? gapFigure(value, unit, index, { spoken })
     : el('div.gap-figure', null, [
-        el(`div.gap-num${accent ? '' : '.plain'}.num`, { text: value === null ? '—' : String(value) }),
+        el('div.gap-num.num', { text: value === null ? '—' : String(value) }),
         el('div.gap-unit', { text: unit }),
       ]);
 
