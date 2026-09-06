@@ -10,7 +10,7 @@
 // file no longer renders a glyph. An unused import is not free -- it is the
 // kind of leftover that makes the next reader look for a control that is not
 // there.
-import { el, append, debounce } from '../ui/dom.js';
+import { el, append, debounce, openSheet } from '../ui/dom.js';
 import {
   setlistBlock,
   setlistCard,
@@ -42,8 +42,32 @@ const state = {
   limit: PAGE,
 };
 
+// Routes you can only reach FROM Shows, and therefore come back from rather
+// than arrive at. Returning from one of these keeps the query; anything else --
+// the tab bar, Home, a reload -- is a fresh entry and resets to the landing.
+const RETURNS_FROM = /^#\/(show|venue)\//;
+
 export function renderShows(ctx) {
-  const { index, navigate } = ctx;
+  const { index, navigate, previousHash } = ctx;
+
+  // THE TAB OPENS ON ITS LANDING STATE (0.1.75).
+  //
+  // `state` is module-level so the screen keeps its place, and that was doing
+  // two different jobs with one variable. Keeping your place while you tap into
+  // a show and step back is right. Keeping a year filter from twenty minutes
+  // ago, so that opening the Shows tab lands you inside "2026" with the search
+  // box pre-filled and a month bar you did not ask for, is not -- and it is why
+  // the two-bar state read as the default state of this screen rather than as
+  // a drill-down. Reaching for Shows means "show me shows".
+  //
+  // Split by WHERE YOU CAME FROM rather than by a timer or a flag the view sets
+  // on the way out: the router knows the previous route, and "did I step back
+  // out of a result" is exactly what it answers.
+  if (!RETURNS_FROM.test(previousHash || '')) {
+    state.query = '';
+    state.limit = PAGE;
+  }
+
   const screen = el('div.screen');
 
   append(screen, el('h1.screen-title', { text: 'Shows' }));
@@ -149,17 +173,22 @@ export function renderShows(ctx) {
       .sort((a, b) => b - a);
   }
 
+  /**
+   * The LANDING bar: every year in the archive. Drilling into one replaces this
+   * bar rather than stacking a second one under it -- see periodBar.
+   *
+   * SHOWS HAS HAD FOUR ARRANGEMENTS AND THIS IS THE FOURTH. Before 0.1.62 both
+   * bars were sticky at the same 52px offset and overlapped on scroll, because
+   * .sortbar-secondary was a dead rule. Making it apply left both bars
+   * secondary, so NEITHER pinned and the year switcher scrolled away inside a
+   * long year. 0.1.64 pinned the year bar and left the month bar secondary --
+   * coherent, and still two horizontal scrollers stacked under a sticky header,
+   * styled identically, with one label between them and different scroll
+   * behaviour that only showed itself 330px down. As of 0.1.75 there is exactly
+   * ONE bar in every state, so none of that can be true again.
+   */
   function yearBar(activeYear = null) {
     let activeChip = null;
-    // A PLAIN .sortbar, so this one PINS. The month bar below stays secondary
-    // and scrolls away with the content.
-    //
-    // Both bars were secondary from 0.1.62, when .sortbar-secondary stopped
-    // being a dead rule and started actually applying -- which left Shows with
-    // no pinned control at all, so scrolling into a long year lost the year
-    // switcher entirely. Before that both were sticky at the same 52px offset
-    // and overlapped each other, which was worse. This is the third state and
-    // the intended one: exactly one pinned control, the same shape Songs has.
     const bar = el('div.sortbar', null, [
       // Backs out of a drill-down without clearing the field by hand, AND
       // carries the unfiltered state. It used to render only during a
@@ -202,44 +231,118 @@ export function renderShows(ctx) {
   }
 
   /**
-   * Months that have shows in this year, in calendar order.
+   * Every year in the archive at once, in a sheet.
+   *
+   * A 15-chip horizontal scroller shows FIVE of them in 390px and gives no hint
+   * that the other ten exist -- measured, not estimated: 993px of chips in a
+   * 390px bar. That is the part of the old design that read as broken. A grid
+   * has no hidden state: every year is on screen, and the one you are in is
+   * painted with the same selected treatment every other chip bar uses.
+   *
+   * "All shows" leads, so the way out of a drill-down is the first thing here
+   * and not something you have to know to clear the search box for.
+   */
+  function openYearSheet(activeYear = null) {
+    openSheet('Browse by year', (close) => {
+      const grid = el('div.year-grid', null, [
+        el(
+          'button.chip.year-all',
+          {
+            type: 'button',
+            'aria-pressed': String(!activeYear),
+            onclick: () => { close(); browseTo(''); },
+          },
+          'All shows',
+        ),
+        ...archiveYears().map((y) =>
+          el(
+            'button.chip',
+            {
+              type: 'button',
+              'aria-pressed': String(activeYear === y),
+              onclick: () => { close(); browseTo(String(y)); },
+            },
+            String(y),
+          ),
+        ),
+      ]);
+      return grid;
+    });
+  }
+
+  /**
+   * Inside a year: the SAME single bar, now holding that year's months.
    *
    * `aria-pressed` is what DRAWS the selection -- `.chip[aria-pressed="true"]`
    * in app.css is the only rule that paints a chip as chosen. This bar shipped
    * without the attribute: the filter applied correctly and the chip that
    * applied it looked untouched, so the control disagreed with the screen it
-   * had just changed. Every other chip bar in the app -- Songs sort, Songs
-   * filter, Jams sort, the year bar above -- sets it; this one was the only
-   * omission, which is why nothing else looked wrong.
+   * had just changed.
+   *
+   * THE BACK CHIP IS ALWAYS RENDERED, INCLUDING WHEN THERE ARE NO MONTHS. A
+   * year with no shows still parses as kind 'year', and a bar built only from
+   * months would be empty -- leaving the reader inside a filter with no control
+   * on screen to leave it by. The way out cannot be conditional on there being
+   * anything to browse.
+   *
+   * It carries the year rather than the word "Back", so the bar still states
+   * its own state, which is the property every other chip bar in this app has.
+   * The chevron is what makes it a way OUT and not merely a label; tapping it
+   * opens the year sheet, whose first row is "All shows".
+   *
+   * IT SITS OUTSIDE THE SCROLLER. The bar is ~764px wide in a 390px viewport,
+   * so a back chip inside it scrolls away and the way out goes with it. The
+   * first attempt made it `position: sticky` and that half-worked: it stayed
+   * put, but the months then slid UNDER it and rendered as clipped half-pills
+   * against its edge, which reads as a rendering fault rather than as scrolling.
+   * Splitting the bar -- fixed chip, scrolling months beside it -- makes the
+   * overlap impossible instead of tidying it up.
    */
-  function monthBar(year, activeMonth = null) {
+  function periodBar(year, activeMonth = null) {
     const months = [...new Set(
       index.shows
         .filter((s) => Number(String(s.showdate).slice(0, 4)) === year)
         .map((s) => Number(String(s.showdate).slice(5, 7))),
     )].sort((a, b) => a - b);
-    if (!months.length) return null;
 
     let activeChip = null;
-    const bar = el('div.sortbar.sortbar-secondary', null, months.map((m) => {
-      const chip = el(
-        'button.chip',
-        {
-          type: 'button',
-          'aria-pressed': String(activeMonth === m),
-          onclick: () => browseTo(`${MONTH_NAMES[m - 1]} ${year}`),
-        },
-        MONTH_NAMES[m - 1].slice(0, 3),
-      );
-      if (activeMonth === m) activeChip = chip;
-      return chip;
-    }));
+    const back = el(
+      'button.chip.chip-back',
+      {
+        type: 'button',
+        'aria-label': `Browsing ${year}. Choose a different year, or all shows`,
+        onclick: () => openYearSheet(year),
+      },
+      `\u2039 ${year}`,
+    );
 
-    // Twelve chips overflow a 390px bar, so the selected month can repaint
-    // off-screen exactly as the selected year could. Same treatment, same
-    // reason -- see yearBar.
+    const bar = el('div.sortbar.sortbar-lead', null, [
+      back,
+      el(
+        'div.sortbar-scroll',
+        null,
+        months.map((m) => {
+          const chip = el(
+            'button.chip',
+            {
+              type: 'button',
+              'aria-pressed': String(activeMonth === m),
+              onclick: () => browseTo(`${MONTH_NAMES[m - 1]} ${year}`),
+            },
+            MONTH_NAMES[m - 1].slice(0, 3),
+          );
+          if (activeMonth === m) activeChip = chip;
+          return chip;
+        }),
+      ),
+    ]);
+
+    // Twelve months overflow the 312px left beside the back chip, so the
+    // selected month can repaint off-screen exactly as the selected year could.
+    // Same treatment, same reason -- see yearBar. This scrolls .sortbar-scroll
+    // rather than the bar itself now, which is what `inline: 'nearest'` acts on.
     if (activeChip) {
-      queueMicrotask(() => activeChip.scrollIntoView({ inline: 'center', block: 'nearest' }));
+      queueMicrotask(() => activeChip.scrollIntoView({ inline: 'nearest', block: 'nearest' }));
     }
     return bar;
   }
@@ -257,13 +360,12 @@ export function renderShows(ctx) {
 
     const parsed = parseDateQuery(q);
 
-    // Drilling in: a year shows its months, a month keeps the year bar so you
-    // can step sideways without going back to the top.
+    // Drilling in REPLACES the bar, it does not stack a second one under it.
+    // The label changes with it, so the heading always names what the row below
+    // it contains -- "Browse by year" over years, "Browse by month" over months.
     if (parsed?.kind === 'year' || parsed?.kind === 'month') {
-      append(results, el('h2.section-title', { text: 'Browse by year' }));
-      append(results, yearBar(parsed.year));
-      const months = monthBar(parsed.year, parsed.kind === 'month' ? parsed.month : null);
-      if (months) append(results, months);
+      append(results, el('h2.section-title', { text: 'Browse by month' }));
+      append(results, periodBar(parsed.year, parsed.kind === 'month' ? parsed.month : null));
     }
     const dateHits = parsed ? matchShowsByDate(index.shows, parsed, index.today) : [];
     const venueHits = matchVenues(index.venues, q).sort((a, b) =>

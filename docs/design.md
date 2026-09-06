@@ -746,6 +746,80 @@ run list came first. Left as is: reversing either one costs more than the incons
 the yolk-coloured dates make each list's own order obvious. Recorded so it reads as a decision
 rather than an oversight.
 
+### Shows browses with one chip bar, not two (0.1.75)
+
+Shows spent four builds arranging **two horizontal scrollers under a sticky header**, and the fourth
+was still wrong. Measured at 390×844; the two themes are geometrically identical:
+
+| | landing | year selected |
+|---|---|---|
+| chrome above the first result | 302px (36% of the viewport) | **357px (42%)** |
+| chip bars | 1 | 2 |
+| year chips visible / total | 5 / 15 — 993px of chips in a 390px bar | 5 / 15 |
+| month chips visible / total | — | 6 / 12 |
+
+Four things were wrong at once and only the first was obvious:
+
+1. **The two bars looked identical** — same chip, same border, same pill — with **one label above
+   both**. Nothing said the month row belonged to the year row rather than sat beside it.
+2. **They behaved differently, invisibly.** The year bar was sticky; the month bar was not. At 600px
+   of scroll the month row sat at −329 and the year row was still pinned at 52, so you could change
+   year from anywhere inside 2026 while changing month meant scrolling back to the top.
+3. **Both clipped mid-chip** with no scroll affordance, stacked one on the other.
+4. **The tab remembered the drill-down.** `state.query` is module-level, so tapping 2026, going to
+   Home and coming back landed you *inside* 2026 with the search box pre-filled. The two-bar state
+   was the state you lived in, and you never re-asked for it.
+
+**Drilling in REPLACES the bar.** `Browse by year` over the years; `Browse by month` over that
+year's months, led by a fixed `‹ 2026`. One bar in every state, and the year state loses 54px of
+chrome (357 → 303), which is the landing state's own height.
+
+**The way out sits OUTSIDE the scroller.** The months run to ~700px in a 390px viewport, so a back
+chip inside the row scrolls away with them — the old month bar's defect rotated ninety degrees.
+`position: sticky` was tried first and half-worked: it held the chip in place, and then the month
+pills slid *under* it and rendered as bisected half-shapes against its edge. A pill cut vertically
+shows only its round cap and reads as a rendering fault, not as scrolling. Two elements make the
+overlap impossible rather than tidying it up afterwards. `scripts/smoke.mjs` scrolls the row to its
+end and asserts the chip has not moved, is still inside the bar, **and is what `elementFromPoint`
+returns** — the sticky version passed the first two and failed the third.
+
+**The lead chip carries the year and wears the selected paint**, because it *is* the current
+selection and this bar would otherwise have no pressed chip at all until you also picked a month.
+The paint comes from the class, never from `aria-pressed`: that attribute means a toggle's state and
+would be a lie on a button that opens a sheet.
+
+#### The years moved into a sheet, because the bar was hiding two thirds of them
+
+A 15-chip scroller showed **five**, with no hint the other ten existed. The sheet shows every year at
+once in a three-column grid, 264px tall, with `All shows` leading it so the way out of a drill-down
+is the first thing in it. The smoke check asserts the sheet's years **equal the landing bar's
+years** — two renderings of one source, so adding a year to the archive moves both together — plus
+that nothing in it scrolls horizontally and every item is on screen. Those are the claims that make
+it better than what it replaced; "a sheet opened" is not.
+
+Its row gap is `--s-3` and not the `--s-2` the horizontal bars use, and that is not taste. `.chip`'s
+hit region is a 44px `::after` centred on a 34px box, so it overhangs 5px each way; two stacked rows
+at 8px would overlap by 2px. The check measures the rendered gap rather than trusting the token.
+
+#### Re-entry resets, stepping back does not
+
+`state.query` was doing two jobs with one variable. Keeping your place while you tap into a show and
+step back is right; keeping a year filter across a visit to Home is what made a drill-down read as
+this screen's default state. The router records the previous route now, and Shows resets unless it
+was `#/show/*` or `#/venue/*`.
+
+**Both halves are asserted**, because either alone is satisfied by the wrong thing: always resetting
+passes the first and throws away a search every time you look at one of its own results.
+
+That change surfaced a check that had never run against half a route. The header sweep's Rule 1 had
+been green on `#/shows` for fourteen builds while **never seeing its landing state** — earlier
+sections of the smoke run leave a query behind, so the sweep always arrived at a *filtered* Shows
+rendering `Shows (63)`, which the count-header allowance covers. With the reset it started seeing
+`Recent shows (15 of 786)` and went red. The header is fine — "recent" is information the `h1` does
+not carry, the same shape as the count — so it became a reviewed entry in
+`SECTION_TITLE_ECHOES_ALLOWED` rather than a widened rule. The check was right; its inputs had been
+narrower than its output implied.
+
 ### Home is one object and then reference (0.1.74)
 
 Home read as a flat stack. Its countdown kicker, `PREVIOUS SET STRUCTURES`, `LAST TIME AT

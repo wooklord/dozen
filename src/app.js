@@ -560,9 +560,17 @@ function navigate(hash, replace = false) {
   }
 }
 
+// The route rendered before this one, so a view can tell "the user tapped into
+// this tab" from "the user stepped back out of something inside it". Shows is
+// the only consumer today: it resets to its landing state on re-entry, but must
+// not throw away a search because you looked at one of its results. Set on the
+// render path only -- the redirects above return through route() recursively,
+// and it is the destination that a view should see, never the alias.
+let previousHash = null;
+
 function route() {
   if (!app.index) return;
-  const ctx = { index: app.index, navigate };
+  const ctx = { index: app.index, navigate, previousHash };
   const hash = location.hash || '#/';
 
   // #/gap was the old Rotation route. It is kept as a redirect so bookmarks
@@ -608,6 +616,7 @@ function route() {
     view = renderViewError(err, hash);
   }
 
+  previousHash = hash;
   clear(main);
   append(main, view);
   renderTabs();

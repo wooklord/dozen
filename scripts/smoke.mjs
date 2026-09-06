@@ -792,6 +792,14 @@ server.listen(PORT, async () => {
   // the affordance has grown its own implementation, which is the thing it was
   // built to avoid.
   console.log('\nShows: browse by year and month:');
+  const clickChip = async (label) => {
+    const ok = await evaluate(`(() => {
+      const c = [...document.querySelectorAll('.screen .sortbar .chip')].find((x) => x.textContent.trim() === ${JSON.stringify(label)});
+      if (!c) return false; c.click(); return true;
+    })()`);
+    await sleep(1200);
+    return ok;
+  };
   await evaluate(`location.hash = '#/shows';`);
   await sleep(1600);
   // Reset any query a previous section left behind.
@@ -830,7 +838,13 @@ server.listen(PORT, async () => {
       head: h.find((t) => /^Shows \\(/.test(t)) || null,
       rows: document.querySelectorAll('.rows li').length,
       searchValue: document.querySelector('.search').value,
-      months: [...document.querySelectorAll('.sortbar')].length,
+      // ONE bar, and it must hold the months. This used to count bars and
+      // require TWO -- the old layout stacked a month bar under the year bar.
+      // As of 0.1.75 drilling in replaces the bar, so the same defect ("the
+      // months are not reachable from here") now shows up as a bar with no
+      // month chips in it rather than as a missing second bar.
+      bars: [...document.querySelectorAll('.screen .sortbar')].length,
+      monthChips: [...document.querySelectorAll('.screen .sortbar-scroll .chip')].map((c) => c.textContent.trim()),
     };
   })()`);
 
@@ -841,14 +855,18 @@ server.listen(PORT, async () => {
 
   if (chipped.searchValue !== YEAR) fail(`Shows: chip left the search box showing ${JSON.stringify(chipped.searchValue)}`);
   else pass('the search box reflects the drill-down');
-  if (chipped.months < 2) fail('Shows: no month bar inside a year');
-  else pass('a year exposes its months');
+  if (chipped.bars !== 1) fail(`Shows: ${chipped.bars} chip bar(s) inside a year, expected exactly 1`);
+  else if (chipped.monthChips.length < 2) {
+    fail(`Shows: the bar inside a year holds ${chipped.monthChips.length} month chip(s) — ${JSON.stringify(chipped.monthChips)}`);
+  } else pass(`a year exposes its months in the same bar (${chipped.monthChips.length})`);
 
   // A month chip must narrow further, still through the same path.
+  // FROM .sortbar-scroll, NOT from the bar. The first .chip in the bar is the
+  // back chip now, and clicking that opens the year sheet -- this check would
+  // then measure a sheet against a month's rows and fail for a reason that has
+  // nothing to do with the search path it exists to verify.
   const monthed = await evaluate(`(() => {
-    const bars = [...document.querySelectorAll('.sortbar')];
-    const monthBar = bars[bars.length - 1];
-    const c = monthBar && monthBar.querySelector('.chip');
+    const c = document.querySelector('.screen .sortbar-scroll .chip');
     if (!c) return null;
     const label = c.textContent.trim();
     c.click();
@@ -867,6 +885,230 @@ server.listen(PORT, async () => {
   // Back to the default landing state.
   await evaluate(`(() => { const s = document.querySelector('.search'); s.value = ''; s.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   await sleep(1000);
+
+  // --- ONE chip bar on Shows, in every state (0.1.75) -----------------------
+  //
+  // Shows spent four builds arranging two horizontal scrollers under a sticky
+  // header. They were styled identically, shared one label, and behaved
+  // differently in a way nothing on screen disclosed: the year bar pinned at
+  // 52px and the month bar did not, so 330px into a long year the months were
+  // gone and the years were still there.
+  //
+  // Drilling in REPLACES the bar now. Asserted per state and as a COUNT, not as
+  // "a bar exists": the whole claim is that a second one can never appear, and
+  // a check that only looked for the right chips would pass with two bars on
+  // screen.
+  console.log('\nShows: one chip bar per state:');
+  const barState = async (label) =>
+    evaluate(`(() => {
+      const bars = [...document.querySelectorAll('.screen .sortbar')];
+      const heads = [...document.querySelectorAll('.screen .section-title')].map((n) => n.textContent.trim());
+      const back = document.querySelector('.screen .chip-back');
+      return {
+        bars: bars.length,
+        chips: bars.length === 1 ? [...bars[0].querySelectorAll('.chip')].map((c) => c.textContent.trim()) : null,
+        browseHead: heads.find((t) => /^browse/i.test(t)) || null,
+        back: back ? back.textContent.trim() : null,
+        search: document.querySelector('.search').value,
+      };
+    })()`);
+
+  const gotoShows = async () => {
+    await evaluate(`location.hash = '#/home';`);
+    await sleep(700);
+    await evaluate(`location.hash = '#/shows';`);
+    await sleep(1500);
+  };
+
+  await gotoShows();
+  const sLanding = await barState('landing');
+  await clickChip('2026');
+  const sYear = await barState('year');
+  await clickChip('Jul');
+  const sMonth = await barState('month');
+
+  for (const [name, st, wantHead, wantBack] of [
+    ['landing', sLanding, 'Browse by year', false],
+    ['year', sYear, 'Browse by month', true],
+    ['month', sMonth, 'Browse by month', true],
+  ]) {
+    if (st.bars !== 1) {
+      fail(`Shows (${name}): ${st.bars} chip bar(s) on screen, expected exactly 1`);
+    } else if (st.browseHead !== wantHead) {
+      fail(`Shows (${name}): the bar's heading reads ${JSON.stringify(st.browseHead)}, expected ${JSON.stringify(wantHead)}`);
+    } else if (wantBack && !st.back) {
+      fail(`Shows (${name}): no way out of the drill-down in the bar`);
+    } else if (!wantBack && st.back) {
+      fail(`Shows (${name}): a back chip (${JSON.stringify(st.back)}) renders with nothing to go back from`);
+    } else if (wantBack && !st.back.includes('2026')) {
+      fail(`Shows (${name}): the back chip reads ${JSON.stringify(st.back)} and does not name the year it leaves`);
+    } else {
+      pass(`${name}: 1 bar, "${st.browseHead}", ${st.chips.length} chips${st.back ? `, out via ${JSON.stringify(st.back)}` : ''}`);
+    }
+  }
+
+  // --- The way out cannot be scrolled away ----------------------------------
+  //
+  // The months run to ~700px in a 390px viewport. A back chip inside that
+  // scroller scrolls off with them, which is the old month bar's defect rotated
+  // ninety degrees. MEASURED by scrolling the row to its end and reading the
+  // chip's box against the bar's, because "it is outside the scroller" is a
+  // claim about the DOM and "you can still reach it" is a claim about pixels.
+  const reach = await evaluate(`(() => {
+    const bar = document.querySelector('.screen .sortbar');
+    const scroller = bar.querySelector('.sortbar-scroll');
+    const back = bar.querySelector('.chip-back');
+    if (!scroller || !back) return { scroller: !!scroller, back: !!back };
+    const before = Math.round(back.getBoundingClientRect().left);
+    scroller.scrollLeft = scroller.scrollWidth;
+    const br = bar.getBoundingClientRect(), kr = back.getBoundingClientRect();
+    return {
+      scroller: true, back: true,
+      scrolled: Math.round(scroller.scrollLeft),
+      moved: Math.round(kr.left) - before,
+      inside: kr.left >= br.left - 1 && kr.right <= br.right + 1,
+      // Nothing may sit on top of it: the sticky version failed here, with
+      // month pills rendering as bisected half-shapes against its edge.
+      hitsBack: document.elementFromPoint(Math.round(kr.left + kr.width / 2), Math.round(kr.top + kr.height / 2)) === back,
+    };
+  })()`);
+  if (!reach.scroller) fail('Shows: the month row is not its own scroller — the back chip is inside it');
+  else if (!reach.scrolled) fail('Shows: the month row did not scroll, so this proved nothing');
+  else if (!reach.inside) fail(`Shows: the back chip left the bar when the months were scrolled (${reach.moved}px)`);
+  else if (reach.moved !== 0) fail(`Shows: the back chip moved ${reach.moved}px when the months scrolled`);
+  else if (!reach.hitsBack) fail('Shows: something renders on top of the back chip — a tap there does not hit it');
+  else pass(`back chip is immovable and hittable with the months scrolled to ${reach.scrolled}px`);
+
+  // --- The year sheet shows EVERY year, with nothing hidden -----------------
+  //
+  // This is the whole reason the year bar became a sheet. The bar held fifteen
+  // chips in 993px of a 390px viewport and showed FIVE, with no hint the other
+  // ten existed. So the assertions are "all of them" and "none of them requires
+  // scrolling" -- not "a sheet opened".
+  //
+  // The list is compared against the LANDING BAR's years rather than a literal
+  // or against archiveYears() re-derived here: two renderings of the same
+  // source, so a year appearing in one and not the other fails, and adding a
+  // year to the archive changes both together.
+  console.log('\nShows: the year sheet:');
+  const sheetProbe = await evaluate(`(() => {
+    const back = document.querySelector('.screen .chip-back');
+    if (!back) return null;
+    back.click();
+    const grid = document.querySelector('.sheet .year-grid');
+    if (!grid) return { opened: false };
+    const chips = [...grid.querySelectorAll('.chip')];
+    const rows = new Set(chips.map((c) => Math.round(c.getBoundingClientRect().top)));
+    return {
+      opened: true,
+      items: chips.map((c) => c.textContent.trim()),
+      pressed: chips.filter((c) => c.getAttribute('aria-pressed') === 'true').map((c) => c.textContent.trim()),
+      overflowsX: grid.scrollWidth > grid.clientWidth + 1,
+      allOnScreen: chips.every((c) => { const b = c.getBoundingClientRect(); return b.top >= 0 && b.bottom <= window.innerHeight; }),
+      // .chip's hit region is a 44px ::after on a 34px box, so it overhangs 5px
+      // each way. Stacked rows need >= 10px between boxes or two targets
+      // overlap -- the reason this grid's row gap is --s-3 and not the --s-2
+      // the horizontal bars use.
+      minRowGap: (() => {
+        const tops = [...rows].sort((a, b) => a - b);
+        if (tops.length < 2) return null;
+        const h = chips[0].getBoundingClientRect().height;
+        return Math.round(Math.min(...tops.slice(1).map((t, i) => t - tops[i] - h)));
+      })(),
+    };
+  })()`);
+  await sleep(400);
+
+  if (!sheetProbe) fail('Shows: no back chip to open the year sheet with');
+  else if (!sheetProbe.opened) fail('Shows: the back chip did not open a year sheet');
+  else {
+    const sheetYears = sheetProbe.items.filter((t) => /^\d{4}$/.test(t));
+    const barYears = sLanding.chips.filter((t) => /^\d{4}$/.test(t));
+    const missing = barYears.filter((y) => !sheetYears.includes(y));
+    const extra = sheetYears.filter((y) => !barYears.includes(y));
+    if (!barYears.length) fail('Shows: the landing bar rendered no years to compare the sheet against');
+    else if (missing.length || extra.length) {
+      fail(`Shows: the sheet and the landing bar disagree — missing ${JSON.stringify(missing)}, extra ${JSON.stringify(extra)}`);
+    } else if (sheetProbe.overflowsX) {
+      fail('Shows: the year sheet scrolls horizontally — it is a scroller in a sheet, which is what it replaced');
+    } else if (!sheetProbe.allOnScreen) {
+      fail(`Shows: not every year in the sheet is on screen (${sheetYears.length} years)`);
+    } else if (!sheetProbe.items.includes('All shows')) {
+      fail(`Shows: the year sheet has no "All shows" row — ${JSON.stringify(sheetProbe.items.slice(0, 3))}`);
+    } else if (sheetProbe.pressed.join() !== '2026') {
+      fail(`Shows: the sheet marks ${JSON.stringify(sheetProbe.pressed)} as current, expected exactly ["2026"]`);
+    } else if (sheetProbe.minRowGap !== null && sheetProbe.minRowGap < 10) {
+      fail(`Shows: the year grid's rows are ${sheetProbe.minRowGap}px apart — .chip's 44px hit regions overlap below 10px`);
+    } else {
+      pass(`all ${sheetYears.length} years + "All shows" on screen at once, 2026 marked, rows ${sheetProbe.minRowGap}px apart`);
+    }
+  }
+
+  // "All shows" is the way out, and it has to actually land on the landing.
+  const escaped = await evaluate(`(() => {
+    const a = [...document.querySelectorAll('.sheet .year-grid .chip')].find((c) => c.textContent.trim() === 'All shows');
+    if (!a) return null; a.click(); return true;
+  })()`);
+  await sleep(1200);
+  const back = await barState('after All shows');
+  if (!escaped) fail('Shows: no "All shows" row in the year sheet');
+  else if (back.search !== '') fail(`Shows: "All shows" left the search box reading ${JSON.stringify(back.search)}`);
+  else if (back.back) fail(`Shows: "All shows" left a back chip on screen (${JSON.stringify(back.back)})`);
+  else if (back.bars !== 1) fail(`Shows: ${back.bars} bars after "All shows"`);
+  else pass(`"All shows" returns to the landing bar (${back.chips.length} chips, empty query)`);
+
+  // --- The tab opens on its landing state, but stepping back does not reset --
+  //
+  // BOTH HALVES, because either alone is satisfied by the wrong thing. Always
+  // resetting passes the first and throws away a search every time you look at
+  // one of its results; never resetting passes the second and is the behaviour
+  // that made the drill-down read as this screen's default state.
+  console.log('\nShows: re-entry resets, stepping back does not:');
+  await gotoShows();
+  await clickChip('2019');
+  const drilled = await barState('drilled');
+  if (drilled.search !== '2019') {
+    fail(`Shows: could not drill into 2019 (search reads ${JSON.stringify(drilled.search)})`);
+  } else {
+    // Re-entering from another tab.
+    await evaluate(`location.hash = '#/home';`);
+    await sleep(900);
+    await evaluate(`location.hash = '#/shows';`);
+    await sleep(1500);
+    const reentered = await barState('re-entered');
+    if (reentered.search !== '') {
+      fail(`Shows: re-entering the tab kept the query ${JSON.stringify(reentered.search)} — it must open on the landing state`);
+    } else if (reentered.back) {
+      fail(`Shows: re-entering the tab kept the drill-down bar (${JSON.stringify(reentered.back)})`);
+    } else pass('entering from another tab opens the landing state');
+
+    // Stepping back out of a result the screen produced.
+    await clickChip('2019');
+    const rowOpened = await evaluate(`(() => {
+      const r = document.querySelector('.screen .rows li .row');
+      if (!r) return null;
+      r.click();
+      return true;
+    })()`);
+    await sleep(1400);
+    const onShow = await evaluate(`location.hash`);
+    if (!rowOpened) fail('Shows: no result row to open');
+    else if (!/^#\/show\//.test(onShow)) fail(`Shows: a result row went to ${JSON.stringify(onShow)}, not a show`);
+    else {
+      await evaluate(`location.hash = '#/shows';`);
+      await sleep(1500);
+      const returned = await barState('returned');
+      if (returned.search !== '2019') {
+        fail(`Shows: stepping back from ${onShow} threw away the query — reads ${JSON.stringify(returned.search)}, expected "2019"`);
+      } else if (!returned.back) {
+        fail('Shows: stepping back from a show lost the drill-down bar');
+      } else pass(`stepping back from ${onShow} keeps "2019" and its bar`);
+    }
+  }
+  await evaluate(`location.hash = '#/home';`);
+  await sleep(700);
+  await evaluate(`location.hash = '#/shows';`);
+  await sleep(1400);
 
   // --- A selected chip must LOOK selected, in both themes -------------------
   //
@@ -896,31 +1138,40 @@ server.listen(PORT, async () => {
   // that rendered one theme twice cannot report both as covered.
   console.log('\nselected chips carry the selected paint:');
 
-  // Every .sortbar on screen, its chips, and the resolved selected fill.
-  // .chip is also used for things that are not toggles -- the Back chips, and
-  // Home's "Change" -- and none of those live in a .sortbar, so scoping to the
-  // bars is what keeps this check about chosen state.
+  // Every .sortbar on screen, split into its LEAD chip and its scrolling
+  // chips. Shows' drill-down bar is two parts as of 0.1.75 -- a fixed way out
+  // beside a scroller of months -- and "the bar's chips" is no longer one list.
+  // .chip is also used for things that are not toggles (Home's "Change"), and
+  // none of those live in a .sortbar, so scoping to the bars is what keeps this
+  // check about chosen state.
   const CHIP_PROBE = `(() => {
     const probe = document.createElement('span');
     probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--chip-sel-fill').trim();
     document.body.appendChild(probe);
     const selFill = getComputedStyle(probe).color;
     probe.remove();
+    const read = (c) => ({ text: c.textContent.trim(), bg: getComputedStyle(c).backgroundColor });
     return {
       theme: document.documentElement.getAttribute('data-theme'),
       selFill,
-      bars: [...document.querySelectorAll('.sortbar')].map((bar) =>
-        [...bar.querySelectorAll('.chip')].map((c) => ({
-          text: c.textContent.trim(),
-          bg: getComputedStyle(c).backgroundColor,
-        })),
-      ),
+      bars: [...document.querySelectorAll('.sortbar')].map((bar) => {
+        const scroller = bar.querySelector('.sortbar-scroll');
+        const lead = bar.querySelector('.chip-back');
+        return {
+          lead: lead ? read(lead) : null,
+          // The scrolling half when the bar has one, the whole bar when it does
+          // not -- Songs, Jams and the Shows landing bar are all single-part.
+          chips: [...(scroller || bar).querySelectorAll('.chip')].filter((c) => c !== lead).map(read),
+        };
+      }),
     };
   })()`;
 
   // Labels in bar N whose background is the selected fill.
-  const painted = (snap, i) => (snap.bars[i] || []).filter((c) => c.bg === snap.selFill).map((c) => c.text);
-  const chipLabels = (snap, i) => (snap.bars[i] || []).map((c) => c.text);
+  const painted = (snap, i) => ((snap.bars[i] || {}).chips || []).filter((c) => c.bg === snap.selFill).map((c) => c.text);
+  const chipLabels = (snap, i) => ((snap.bars[i] || {}).chips || []).map((c) => c.text);
+  const leadOf = (snap, i) => (snap.bars[i] || {}).lead || null;
+  const leadPainted = (snap, i) => { const l = leadOf(snap, i); return !!l && l.bg === snap.selFill; };
   const sameList = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
 
   const setShowsQuery = async (v) => {
@@ -942,6 +1193,22 @@ server.listen(PORT, async () => {
     await sleep(1100);
     return ok;
   };
+  // Switch years from inside a year: the lead chip opens the sheet, the sheet
+  // carries the years. Two taps, and the check walks both of them rather than
+  // reaching for a chip that is no longer on screen.
+  const pickYearFromSheet = async (label) => {
+    const ok = await evaluate(`(() => {
+      const back = document.querySelector('.screen .chip-back');
+      if (!back) return false;
+      back.click();
+      const c = [...document.querySelectorAll('.sheet .year-grid .chip')].find((x) => x.textContent.trim() === ${JSON.stringify(label)});
+      if (!c) { const b = document.querySelector('.sheet-backdrop'); if (b) b.click(); return false; }
+      c.click();
+      return true;
+    })()`);
+    await sleep(1200);
+    return ok;
+  };
 
   const selFills = {};
   for (const theme of ['dark', 'light']) {
@@ -958,62 +1225,77 @@ server.listen(PORT, async () => {
       continue;
     }
     if (!snap.bars.length) { fail(`chip paint (${theme}): no .sortbar on Shows`); continue; }
+    if (leadOf(snap, 0)) {
+      fail(`chip paint (${theme}): the landing bar has a lead chip (${JSON.stringify(leadOf(snap, 0).text)}) with nothing to lead out of`);
+      continue;
+    }
     let got = painted(snap, 0);
     if (!sameList(got, ['All shows'])) {
-      fail(`chip paint (${theme}): landing year bar paints ${JSON.stringify(got)}, expected ["All shows"] (chips: ${JSON.stringify(chipLabels(snap, 0))})`);
+      fail(`chip paint (${theme}): landing bar paints ${JSON.stringify(got)}, expected ["All shows"] (chips: ${JSON.stringify(chipLabels(snap, 0))})`);
     } else pass(`${theme}: landing shows "All shows" selected (${snap.selFill})`);
 
-    // 2. A year: that year lit, "All shows" released, no month claimed.
+    // 2. A year: the bar becomes that year's months, the lead chip carries the
+    //    year and wears the selected paint, and no month claims to be applied.
+    //
+    //    THE LEAD CHIP IS CHECKED FOR PAINT, not just presence. It is the only
+    //    thing on this bar saying which year you are in -- the year chips are
+    //    gone -- so an unpainted lead is the 0.1.63 defect (correct filtering,
+    //    invisible control) in its new location.
     const Y1 = '2019';
     if (!(await clickChipIn(0, Y1))) { fail(`chip paint (${theme}): no ${Y1} chip`); continue; }
     snap = await evaluate(CHIP_PROBE);
+    if (snap.bars.length !== 1) { fail(`chip paint (${theme}): ${snap.bars.length} bars inside ${Y1}, expected 1`); continue; }
+    const lead1 = leadOf(snap, 0);
+    if (!lead1) { fail(`chip paint (${theme}): ${Y1} rendered no lead chip`); continue; }
+    if (!lead1.text.includes(Y1)) {
+      fail(`chip paint (${theme}): the lead chip reads ${JSON.stringify(lead1.text)} and does not name ${Y1}`);
+    } else if (!leadPainted(snap, 0)) {
+      fail(`chip paint (${theme}): the lead chip ${JSON.stringify(lead1.text)} is ${lead1.bg}, not the selected fill ${snap.selFill}`);
+    } else pass(`${theme}: ${Y1} carried by the lead chip ${JSON.stringify(lead1.text)}, selected`);
+    if (chipLabels(snap, 0).length < 2) {
+      fail(`chip paint (${theme}): ${Y1} exposed ${chipLabels(snap, 0).length} month chip(s)`);
+      continue;
+    }
     got = painted(snap, 0);
-    if (!sameList(got, [Y1])) {
-      fail(`chip paint (${theme}): year bar paints ${JSON.stringify(got)}, expected ["${Y1}"]`);
-    } else pass(`${theme}: ${Y1} selected, "All shows" released`);
-    if (snap.bars.length < 2) { fail(`chip paint (${theme}): ${Y1} exposed no month bar`); continue; }
-    got = painted(snap, 1);
     if (got.length) {
-      fail(`chip paint (${theme}): a whole year is selected but the month bar paints ${JSON.stringify(got)}`);
+      fail(`chip paint (${theme}): a whole year is selected but a month is painted — ${JSON.stringify(got)}`);
     } else pass(`${theme}: a year selects no single month`);
 
     // 3. A month: THE BUG. The month lights, and its year stays lit.
-    const M1 = chipLabels(snap, 1)[1] || chipLabels(snap, 1)[0];
-    if (!(await clickChipIn(1, M1))) { fail(`chip paint (${theme}): no ${M1} chip`); continue; }
+    const M1 = chipLabels(snap, 0)[1] || chipLabels(snap, 0)[0];
+    if (!(await clickChipIn(0, M1))) { fail(`chip paint (${theme}): no ${M1} chip`); continue; }
     snap = await evaluate(CHIP_PROBE);
-    got = painted(snap, 1);
-    if (!sameList(got, [M1])) {
-      fail(`chip paint (${theme}): "${M1}" is the applied filter but the month bar paints ${JSON.stringify(got)} (chips: ${JSON.stringify(chipLabels(snap, 1))})`);
-    } else pass(`${theme}: month "${M1}" selected`);
     got = painted(snap, 0);
-    if (!sameList(got, [Y1])) {
-      fail(`chip paint (${theme}): inside "${M1}" the year bar paints ${JSON.stringify(got)}, expected ["${Y1}"]`);
+    if (!sameList(got, [M1])) {
+      fail(`chip paint (${theme}): "${M1}" is the applied filter but the bar paints ${JSON.stringify(got)} (chips: ${JSON.stringify(chipLabels(snap, 0))})`);
+    } else pass(`${theme}: month "${M1}" selected`);
+    if (!leadPainted(snap, 0) || !leadOf(snap, 0).text.includes(Y1)) {
+      fail(`chip paint (${theme}): inside "${M1}" the lead chip is ${JSON.stringify(leadOf(snap, 0))}, expected ${Y1} selected`);
     } else pass(`${theme}: the year stays selected inside a month`);
 
-    // 4. Step sideways to another year WHILE a month is applied. The months
-    //    are rebuilt for the new year, and nothing in the new bar may stay
-    //    lit -- the filter is now the whole of that year, and a chip left on
-    //    would describe a filter that is not applied.
+    // 4. Step sideways to another year WHILE a month is applied, through the
+    //    sheet. The months are rebuilt for the new year, and nothing in the new
+    //    bar may stay lit -- the filter is now the whole of that year, and a
+    //    chip left on would describe a filter that is not applied.
     const Y2 = '2018';
-    if (!(await clickChipIn(0, Y2))) { fail(`chip paint (${theme}): no ${Y2} chip`); continue; }
+    if (!(await pickYearFromSheet(Y2))) { fail(`chip paint (${theme}): no ${Y2} in the year sheet`); continue; }
     snap = await evaluate(CHIP_PROBE);
-    got = painted(snap, 0);
-    if (!sameList(got, [Y2])) {
-      fail(`chip paint (${theme}): after switching years the year bar paints ${JSON.stringify(got)}, expected ["${Y2}"]`);
+    if (!leadPainted(snap, 0) || !leadOf(snap, 0).text.includes(Y2)) {
+      fail(`chip paint (${theme}): after switching years the lead chip is ${JSON.stringify(leadOf(snap, 0))}, expected ${Y2} selected`);
     } else pass(`${theme}: switching years moves the selection to ${Y2}`);
-    got = painted(snap, 1);
+    got = painted(snap, 0);
     if (got.length) {
-      fail(`chip paint (${theme}): the ${Y2} month bar still paints ${JSON.stringify(got)} — a month survived the year switch`);
+      fail(`chip paint (${theme}): the ${Y2} bar still paints ${JSON.stringify(got)} — a month survived the year switch`);
     } else pass(`${theme}: no month survives a year switch`);
 
     // 5. A month inside the NEW year still lights -- so step 4 cannot be
     //    satisfied by selection being broken altogether.
-    const M2 = chipLabels(snap, 1)[0];
+    const M2 = chipLabels(snap, 0)[0];
     if (M2) {
-      if (!(await clickChipIn(1, M2))) fail(`chip paint (${theme}): no "${M2}" chip in ${Y2}`);
+      if (!(await clickChipIn(0, M2))) fail(`chip paint (${theme}): no "${M2}" chip in ${Y2}`);
       else {
         snap = await evaluate(CHIP_PROBE);
-        got = painted(snap, 1);
+        got = painted(snap, 0);
         if (!sameList(got, [M2])) {
           fail(`chip paint (${theme}): "${M2}" in ${Y2} paints ${JSON.stringify(got)}`);
         } else pass(`${theme}: months still select after a year switch ("${M2}" in ${Y2})`);
@@ -1941,6 +2223,30 @@ server.listen(PORT, async () => {
   // before the page sees it, which is how the "On this date" probe silently
   // matched nothing in 0.1.67.
   console.log('\nvenue named in more than one header:');
+  // Section titles that may contain the screen title, per route, normalised and
+  // with any trailing count stripped -- the same reviewed-exception shape Rule 2
+  // uses, and for the same reason: an invisible exception is how the last one
+  // survived a sweep.
+  //
+  // ONE ENTRY, AND IT WAS FOUND BY A CHANGE ELSEWHERE. Shows' landing header is
+  // "Recent shows (15 of 786)" under an h1 reading "Shows". That is a count
+  // header with a qualifier -- "recent" is information the h1 does not carry,
+  // exactly like the "(63)" the rule already allows -- and not the defect Rule 1
+  // is for, which is a proper noun repeated in a longer phrase ("Every show at
+  // {venue}" under an h1 already reading {venue}).
+  //
+  // It had never fired because THE SWEEP HAD NEVER SEEN THIS SCREEN'S LANDING
+  // STATE. Shows keeps its query in module state, earlier sections of this file
+  // leave a year or a search behind, and the sweep therefore always arrived at
+  // a filtered Shows rendering "Shows (63)" -- which passes the exact-match
+  // allowance. 0.1.75 made the tab reset on re-entry, the sweep started seeing
+  // the header it had been missing, and a rule that had looked green for
+  // fourteen builds turned out never to have been run against half of one
+  // route. The check was right; its inputs were narrower than its output said.
+  const SECTION_TITLE_ECHOES_ALLOWED = {
+    '#/shows': ['recent shows'],
+  };
+
   const HEADERS_NAMING_A_VENUE = {
     // route -> how many headers may name an on-screen venue.
     // Empty on purpose: no route has a reviewed exception any more.
@@ -1986,11 +2292,12 @@ server.listen(PORT, async () => {
     // is the echo. Found by the check going red on #/shows, which is the right
     // way round: narrowed, not switched off.
     const stripCount = (s) => s.replace(/\s*\([^)]*\)\s*$/, '').trim();
+    const allowed = SECTION_TITLE_ECHOES_ALLOWED[r.hash] || [];
     const echoes = [];
     for (const t of titles) {
       for (const s of sections) {
         const bare = stripCount(s);
-        if (bare !== t && bare.includes(t)) echoes.push({ t, s });
+        if (bare !== t && bare.includes(t) && !allowed.includes(bare)) echoes.push({ t, s });
       }
     }
     if (echoes.length) {

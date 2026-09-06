@@ -681,21 +681,122 @@ button.gap-figure:active {
  * Order would fix it too and would be the fragile fix -- someone moves a block
  * and it silently dies again. Specificity survives reordering.
  *
- * SHOWS WENT THROUGH THREE STATES AND IS NOW IN THE INTENDED ONE. Before
- * 0.1.62 both its bars were sticky at the same 52px offset and overlapped on
- * scroll, because this rule was dead. Making the rule apply left both of them
- * secondary, so NEITHER pinned and the year switcher scrolled away inside a
- * long year -- coherent, better than overlapping, and still wrong. As of
- * 0.1.64 the YEAR bar is a plain .sortbar and pins; only the month bar is
- * secondary. Exactly one pinned control per screen, the same shape Songs has.
+ * SHOWS NO LONGER USES THIS CLASS AT ALL, AS OF 0.1.75, and the four
+ * arrangements it went through are why. Before 0.1.62 both its bars were
+ * sticky at the same 52px offset and overlapped on scroll, because this rule
+ * was dead. Making the rule apply left both of them secondary, so NEITHER
+ * pinned and the year switcher scrolled away inside a long year. 0.1.64 pinned
+ * the year bar and left the month bar secondary -- one pinned control, and
+ * still two identical horizontal scrollers under a sticky header with a single
+ * label between them. Shows drills down by REPLACING its bar now, so it has
+ * exactly one in every state and nothing to mark as secondary.
  *
- * So this class means precisely "a bar that is NOT the pinned control", and a
- * screen with two bars should carry it on exactly one of them. */
+ * SONGS IS THE ONLY CALLER LEFT, which is what this rule was written for: a
+ * filter row under a sort row, on a screen where sort is the primary control.
+ * The class still means "a bar that is NOT the pinned control", and a screen
+ * with two bars should carry it on exactly one of them -- but note what Shows
+ * concluded, which is that a screen is usually better off not having two. */
 .sortbar.sortbar-secondary {
   top: auto;
   position: static;
   padding-top: 0;
   margin-bottom: var(--s-2);
+}
+
+/* A BAR WITH A FIXED LEAD CHIP AND A SCROLLING REMAINDER (0.1.75).
+ *
+ * Shows drills down by REPLACING its one chip bar rather than stacking a second
+ * one under it, so the only route back to the years is the lead chip -- and the
+ * months beside it run to ~700px in a 390px viewport. A lead chip inside the
+ * scroller scrolls away with them and the way out goes with it, which is the
+ * old month bar's defect rotated ninety degrees: there, scrolling 330px DOWN
+ * left the months behind while the years stayed pinned.
+ *
+ * STICKY WAS TRIED FIRST AND IS NOT WHAT SHIPPED. It held the chip in place and
+ * then the months slid underneath it, rendering as clipped half-pills against
+ * its edge -- legible as scrolling for text, but a pill is a discrete shape and
+ * a bisected one reads as a rendering fault. Two elements make the overlap
+ * impossible rather than tidying it up afterwards.
+ *
+ * The doubled class is not decoration: .sortbar declares overflow-x later at
+ * EQUAL specificity, and this file has already been bitten twice by exactly
+ * that -- .sortbar-secondary and .chip-quiet were both written single and
+ * neither applied a single declaration for its whole life.
+ */
+.sortbar.sortbar-lead {
+  overflow-x: visible;
+}
+
+.sortbar-scroll {
+  display: flex;
+  gap: var(--s-2);
+  /* min-width lets the flex item shrink below its content width; without it
+     the row refuses to be narrower than twelve chips and pushes the bar wide. */
+  min-width: 0;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* Fade the first 10px. A chip scrolled against this boundary is bisected,
+     and a pill cut vertically shows only its round cap -- beside the lead chip
+     that reads as a stray glyph rather than as scrolling. Measured at 390px in
+     July 2026, where the auto-scroll to "Jul" left exactly that.
+     THE RIGHT EDGE IS DELIBERATELY LEFT HARD: a chip cut off there is the
+     standard "there is more this way" affordance, and the year bar has always
+     had it. Softening both would remove a cue to fix a defect that is only on
+     one side. */
+  mask-image: linear-gradient(to right, transparent 0, #000 10px);
+  /* The fade softens a bisected chip; snapping stops one COMING TO REST there
+     at all. `proximity`, not `mandatory`: this is a row you flick past, and
+     mandatory would fight a deliberate half-scroll. */
+  scroll-snap-type: x proximity;
+}
+.sortbar-scroll > .chip {
+  scroll-snap-align: start;
+}
+.sortbar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* The lead chip IS the current selection -- you are in 2026 -- and this bar
+ * would otherwise have no pressed chip at all until you also picked a month.
+ *
+ * The paint comes from the class rather than from aria-pressed, which means a
+ * toggle's state and would be a lie on a button that opens a sheet. Same three
+ * tokens as .chip[aria-pressed="true"], so the two cannot drift apart.
+ *
+ * SELECTOR IS `.chip.chip-back` for the reason above, and tests/deadcss.test.mjs
+ * caught it when it was not -- four declarations "beaten by .chip". Third time
+ * that trap has been sprung here, first time something other than a person
+ * found it.
+ */
+.chip.chip-back {
+  background: var(--chip-sel-fill);
+  color: var(--chip-sel-ink);
+  border-color: var(--chip-sel-line);
+}
+
+/* Every year at once. The bar it replaces showed 5 of 15.
+ *
+ * ROW GAP IS --s-3, NOT --s-2, AND THAT IS NOT A TASTE DECISION. .chip's hit
+ * region is a 44px ::after centred on a 34px box, so it overhangs 5px above and
+ * below; at the 8px gap the horizontal bars use, two stacked rows' targets
+ * would overlap by 2px. 12px leaves 2px of clearance. The column gap can stay
+ * at 8px because the expansion is vertical only.
+ */
+.year-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-3) var(--s-2);
+}
+
+.year-grid .chip {
+  justify-content: center;
+}
+
+/* The way out leads, and spans the row so it reads as the escape rather than as
+   a fourth year in the first line. */
+.year-all {
+  grid-column: 1 / -1;
 }
 
 /* Same trap, same fix: `.chip` sets font-weight 600 later at equal
