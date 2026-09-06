@@ -470,6 +470,17 @@ button.gap-figure:active {
   margin-top: var(--s-2);
 }
 
+/* The show-detail action row, which is NOT inside a card (0.1.72).
+   .card-actions' --s-2 is the gap between a card's heading and its own
+   controls; this row sits at screen level under the last section, so it takes
+   a section-sized gap instead. Without it the buttons crowd whatever section
+   ended above them -- the jam entries card, or the Carton source link when a
+   show has no jam entries, and that link is the one thing on this screen that
+   must not be crowded. */
+.screen-actions {
+  margin-top: var(--s-5);
+}
+
 /* NOTE: setlistCard's action row uses plain .card-actions and its --s-2 top
    margin. A dedicated footer class at --s-3 was tried and reverted: it made
    every Shows card 4px taller, and the Shows tab is the screen Home is being

@@ -609,6 +609,14 @@ request and would have introduced a different bug: the card holds two sibling li
 this run" and this one, and an unlabelled second list reads as a continuation of the first with a
 12px gap. `Previously here` keeps the distinction and drops the repetition.
 
+> **The label is gone as of 0.1.72, and the paragraph above is the record of why it survived two
+> attempts to remove it.** 0.1.69 kept it on the reasoning quoted here; 0.1.71 re-examined that
+> reasoning, found it wrong — a plural past-tense section header *would* have separated two
+> unlabelled lists — and kept the label anyway for a different and better reason: the two lists
+> can contain the same show, and unlabelled that duplication reads as a rendering bug. See
+> "Two lists, one order, one direction" below for how 0.1.72 removed the duplication instead, and
+> with it the last thing the label was doing.
+
 #### The wrap was measured before shipping, not after
 
 `Last time at {venue}` is a `.section-title`: 13px, weight 700, uppercase, 0.08em tracking, sharing
@@ -655,6 +663,105 @@ point.
 Both proved red against real defects rather than invented ones: restoring `Previously at {venue}`
 reports *"2 header(s) name an on-screen venue, expected 1"*, and adding `Every show at {venuename}`
 to the venue screen reports *"section title repeats the screen title"*.
+
+### Two lists, one order, one direction (0.1.72)
+
+Home's `Previous set structures` card holds two lists that are **different criteria, not different
+periods**: the venue list is this venue at any time, `Earlier in this run` is any venue inside a
+consecutive-date run. A two-night stand or a festival's second day satisfies both.
+
+Two things changed together, and neither works without the other.
+
+**The venue list comes first, and unlabelled.** It sits directly under `PREVIOUS SET STRUCTURES`,
+which is what the header is read as being about — the hero venue line is two blocks above it, and
+a label here would repeat the header and the venue line at once. `Earlier in this run` moves below
+it and **keeps** its label: it is the named subset, a narrower criterion at other venues, and
+nothing else on the screen says so.
+
+**A show in both lists renders in the VENUE list and is suppressed from the run list.** The
+direction is not arbitrary and not reversible. The venue list is the unlabelled one directly under
+the header; a date disappearing from *it* is the confusing outcome, because there is no label there
+to explain an absence. The run list has one, so a show missing from it reads as "not part of this
+run" rather than as a gap.
+
+That dedupe is what makes the unlabelled list safe. Measured across all 610 played shows treated as
+anchors: both lists render for **119**, **36** of those (30%) share at least one show, and in **9**
+the two lists are **identical** — every row printed twice, a 12px gap apart. 0.1.71 kept
+`Previously here` precisely because two labels are what explain that duplication. Removing the
+duplication removes the need for the label; removing the label without the dedupe would have
+shipped the rendering bug the label was covering.
+
+**The dedupe runs against the rows that RENDER, not the whole venue history.** The venue list is
+capped at five. Filtering the run list against the uncapped history would let a show cut by that
+cap vanish from *both* lists at once — visible nowhere, on a card that has it twice over. No real
+anchor can reach that branch (a run-mate is within days of the anchor, so it is always among the
+newest venue visits), which is exactly why the code is written so the branch cannot exist rather
+than trusted not to be reached.
+
+#### The case is not on screen, so the test constructs it
+
+**No upcoming show renders a run list today.** All 17 have an empty one, because the earlier shows
+in their runs are upcoming too and have no setlist yet. The card only splits in two mid-tour —
+which is when this app gets opened in a venue, and never when it is being worked on.
+
+`tests/runoverlap.test.mjs` covers it from `tests/fixtures/run-overlap.json`: **73 rows copied
+verbatim out of the live archive** and run through the real `buildIndex()`. Anchor 2022-06-12,
+Charleston Pour House, whose run contains both a show that overlaps the venue list (2022-06-11,
+same venue) and two that do not (2022-06-09, 2022-06-10, other venues) — so a dedupe has to remove
+some rows and keep others, and a filter that emptied the run list wholesale cannot pass.
+
+Nothing in the fixture is hand-shaped. A hand-written venue row of a shape the API does not produce
+(`{ city: 'Somewhere' }`) has already cost this repo a wrong conclusion once.
+`scripts/make-run-overlap-fixture.mjs` regenerates it and **refuses to write a fixture whose lists
+differ from the ones the full archive produces** — trimming the shows table can invent a run
+boundary that does not exist, so the trim is checked rather than assumed.
+
+The one synthesised thing is dates, in the last test, and only as a constant offset applied to
+every date at once: it moves the anchor onto **tomorrow**, which makes it an upcoming show while
+leaving its run-mates behind today. Three weeks out was tried first and is wrong — the run is four
+days wide and the anchor is its last night, so a larger offset carries the whole run into the
+future, empties the run list, and the test then compares one empty list against another and passes.
+It went green that way until the "these rows must be in the past" assertion caught it.
+
+**Proved red three ways before being trusted:** reversing the dedupe direction fails 2 tests;
+filtering against the uncapped venue history fails the render-cap test; and restoring
+`slice(-limit)` for a zero cap fails it too. That last one is not hypothetical — `slice(-0)` is
+`slice(0)` and returns *everything*, which is a live bug this test found on its first run.
+
+#### Known, deliberate: the two lists read in opposite directions
+
+The venue list is **newest first** (it is a history, and the most recent visit is the one being
+compared against tonight). The run list reads **forwards** (it is a run, and the sequence is the
+information). Stacked under one header the flip is more visible than it was in 0.1.71, where the
+run list came first. Left as is: reversing either one costs more than the inconsistency does, and
+the yolk-coloured dates make each list's own order obvious. Recorded so it reads as a decision
+rather than an oversight.
+
+### Controls go below the content they act on (0.1.72)
+
+Show detail opened with `Gap chart · Venue history · Venue info` between the venue line and the
+`SETLIST` heading — three controls in front of the one thing the screen exists to show. They now
+sit at the foot of the screen, above the attribution. Same reasoning as the Home cards: the setlist
+is what the screen is opened to read.
+
+**They did not take the Carton link's place, and that is the decision worth recording.** The
+obvious spot — directly under the setlist card, where `View on The Carton` sits — is occupied twice
+over:
+
+- `.setlist-source` is a **source note for the card above it**, hanging off it at 2px, and it is
+  deliberately quiet: 10px, weight 400, `--ink-faint`, receded in 0.1.45 and not to be promoted.
+  It is untouched — same place, same treatment, same section. Nothing crowds it either: the button
+  row is not its neighbour, the jam section or the section gap is.
+- The **jam chart entries read against the setlist**, in played order — a green title above, its
+  note right here. A button row between them breaks the correspondence that section is built on.
+
+So the row goes after all of it: every control on the screen follows every piece of content on it.
+`.screen-actions` gives it `--s-5` rather than `.card-actions`' `--s-2`, because it is no longer a
+card's own footer but a screen-level row under the last section.
+
+`scripts/layout-diff.mjs` at 390px, both themes: `#/show/1728657865` changes, every other route
+byte-identical. Within that route every box keeps its width and height and moves up by exactly the
+44px the row vacated.
 
 ## The carton motif, used once
 

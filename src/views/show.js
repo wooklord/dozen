@@ -34,38 +34,6 @@ export function renderShow(ctx, showId) {
 
   append(screen, el('h1.screen-title', { text: formatShowDate(show.showdate) }));
   append(screen, venueLine(show));
-  // Three controls in one row: Gap chart, Venue history, Venue info. Venue
-  // info used to sit above this row as a lone .info-link; it is the same
-  // outbound Maps link, now wearing the small-button treatment so the row
-  // reads as one set rather than a button row with a link floating over it.
-  //
-  // The Carton link is NOT in this row and is not affected. It sits under the
-  // setlist card as a source note, deliberately small and receded since
-  // 0.1.45. It was a third child here once, in 0.1.36, and wrapped onto its
-  // own line on a narrow phone -- which is why the wrapping headroom of this
-  // row is measured rather than assumed whenever something joins it.
-  //
-  // Venue info drops out entirely when the venue has no usable Maps query --
-  // no empty control, no disabled one. Same guard as before.
-  append(
-    screen,
-    el('div.card-actions', null, [
-      index.setlistByShow.has(Number(show.show_id))
-        ? el(
-            'button.btn.btn-small',
-            { type: 'button', onclick: () => navigate(`#/gapchart/${show.show_id}`) },
-            'Gap chart',
-          )
-        : null,
-      el(
-        'button.btn.btn-small',
-        { type: 'button', onclick: () => navigate(`#/venue/${show.venue_id}`) },
-        'Venue history',
-      ),
-      venueInfoButton(show),
-    ]),
-  );
-
   const rows = index.setlistByShow.get(Number(show.show_id)) || [];
 
   // ONE condition for both jam-related things on this screen: the key inside
@@ -167,6 +135,50 @@ export function renderShow(ctx, showId) {
     }
     append(screen, jamSection);
   }
+
+  // --- Actions, BELOW the content ------------------------------------------
+  //
+  // Gap chart, Venue history, Venue info. These sat between the venue line and
+  // the SETLIST heading until 0.1.72, which put three controls in front of the
+  // one thing this screen exists to show. Same reasoning as the Home cards:
+  // the setlist is what the screen is opened to read.
+  //
+  // BELOW THE JAM SECTION, NOT DIRECTLY UNDER THE SETLIST CARD. Two things
+  // already own that spot and neither should be pushed off it:
+  //
+  //  - The Carton link is a source note for the setlist card, hanging off it
+  //    at 2px (.setlist-source). It is UNTOUCHED -- same place, same 10px/400
+  //    --ink-faint, still inside the setlist section. Nothing was promoted and
+  //    nothing crowds it: the button row is not its neighbour, the jam section
+  //    or the section gap is.
+  //  - The jam chart entries read AGAINST the setlist, in played order -- a
+  //    green title above, its note right here. A button row between them would
+  //    break the correspondence that section is built on.
+  //
+  // So the row goes after all of it, before the attribution: every control on
+  // this screen follows every piece of content on it.
+  //
+  // Venue info wears the small-button treatment (0.1.36) so the row reads as
+  // one set, and drops out entirely when the venue has no usable Maps query --
+  // no empty control, no disabled one.
+  append(
+    screen,
+    el('div.card-actions.screen-actions', null, [
+      index.setlistByShow.has(Number(show.show_id))
+        ? el(
+            'button.btn.btn-small',
+            { type: 'button', onclick: () => navigate(`#/gapchart/${show.show_id}`) },
+            'Gap chart',
+          )
+        : null,
+      el(
+        'button.btn.btn-small',
+        { type: 'button', onclick: () => navigate(`#/venue/${show.venue_id}`) },
+        'Venue history',
+      ),
+      venueInfoButton(show),
+    ]),
+  );
 
   append(screen, attribution());
   return screen;

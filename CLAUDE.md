@@ -812,6 +812,11 @@ between runs.
 |  `node scripts/layout-diff.mjs [ref] [width] [theme]` | ~3 min | Carton (two cold boots) | after a deliberate layout change, to see what else moved |
 | `node scripts/verify-deploy.mjs` | ~1 min | live host | **after every push** |
 
+`scripts/make-run-overlap-fixture.mjs` is in that directory and is **not** a check — it regenerates
+`tests/fixtures/run-overlap.json`, the real archive rows behind `tests/runoverlap.test.mjs`. Run it
+only when the fixture needs rebuilding; it refuses to write one whose lists disagree with the full
+archive, so a bad trim fails loudly rather than quietly narrowing what the test covers.
+
 `scripts/routes.mjs` holds the route list and its markers, shared by the smoke
 test, the deploy check and the layout diff. Three copies would drift, and the
 copy that drifted would be the one checking production.

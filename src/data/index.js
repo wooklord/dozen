@@ -804,3 +804,63 @@ export function consecutiveRun(index, showdate, maxGapDays = 2) {
   }
   return run;
 }
+
+/**
+ * The two lists behind Home's "Previous set structures" card, deduped.
+ *
+ * ORDER (0.1.72): the venue list comes FIRST and unlabelled, directly under
+ * the section header; "Earlier in this run" is labelled below it as the named
+ * subset. The unlabelled list is the one the header is read as being about,
+ * and on Home that is this venue -- the hero venue line is two lines above it.
+ *
+ * DEDUPE DIRECTION: a show qualifying for both renders in the VENUE list and
+ * is suppressed from the run list. Never the reverse. The venue list is the
+ * unlabelled one sitting directly under the header, so a show dropping out of
+ * IT is the confusing outcome -- the reader would see a date under "Earlier in
+ * this run" and no corresponding row in the list that has no label to explain
+ * its absence.
+ *
+ * These are different CRITERIA, not different periods -- "earlier in this run"
+ * is any venue inside a consecutive-date run, the venue list is this venue at
+ * any time -- so a two-night stand or a festival's second day qualifies twice.
+ * Measured across all 610 played shows treated as anchors: both lists render
+ * for 119, 36 of those share at least one show, and in 9 the two lists were
+ * IDENTICAL. That duplication is what 0.1.71's two labels existed to explain.
+ * With it removed, the labels are no longer load-bearing and "Previously here"
+ * comes out.
+ *
+ * THE DEDUPE IS AGAINST THE ROWS THAT ACTUALLY RENDER, not against the whole
+ * venue history. `limit` caps the venue list, and a show cut by that cap has
+ * not been shown anywhere -- filtering the run list against the uncapped set
+ * would make it vanish from both lists at once, which is the one failure this
+ * ordering was chosen to avoid. `limit` exists so that property can be proved
+ * rather than asserted: no real anchor can push a run-mate past the cap (a
+ * run-mate is within days of the anchor, so it is always among the newest
+ * venue shows), so the only way to exercise the branch is to shrink the cap.
+ * The view never passes it.
+ */
+export const VENUE_STRUCTURE_LIMIT = 5;
+
+export function previousSetStructures(index, show, limit = VENUE_STRUCTURE_LIMIT) {
+  const played = (s) => s.showdate < show.showdate && index.setlistByShow.has(Number(s.show_id));
+
+  const venueShows = (index.showsByVenue.get(Number(show.venue_id)) || []).filter(played);
+  const runShows = consecutiveRun(index, show.showdate).filter(played);
+
+  // Newest first, capped. showsByVenue is ascending, so the cap takes the most
+  // recent visits and the reverse puts the latest at the top.
+  //
+  // THE ZERO CASE IS SPELLED OUT because `slice(-0)` is `slice(0)`: a cap of
+  // none returns EVERYTHING. Only the test reaches it, and it caught this --
+  // the assertion "a zero cap renders no venue rows" went red with three rows
+  // in the list, which is the whole reason that assertion is written as a
+  // count rather than as "the shared show survived".
+  const venueRows = limit > 0 ? venueShows.slice(-limit).reverse() : [];
+  const rendered = new Set(venueRows.map((s) => Number(s.show_id)));
+
+  // Run rows stay in date order: it is a run, and reading it forwards is what
+  // makes it one.
+  const runRows = runShows.filter((s) => !rendered.has(Number(s.show_id)));
+
+  return { venueRows, runRows };
+}

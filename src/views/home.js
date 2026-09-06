@@ -22,7 +22,7 @@ import {
   statValue,
   attribution,
 } from '../ui/components.js';
-import { showStructure, onThisDate, consecutiveRun } from '../data/index.js';
+import { showStructure, onThisDate, previousSetStructures } from '../data/index.js';
 import {
   formatShowDate,
   formatShowDateShort,
@@ -173,12 +173,26 @@ function renderNextShow(screen, { index, navigate }, show, today) {
   );
 
   // --- Set structure: observed history only ---------------------------------
-  const venueShows = (index.showsByVenue.get(Number(show.venue_id)) || []).filter(
-    (s) => s.showdate < show.showdate && index.setlistByShow.has(Number(s.show_id)),
-  );
-  const runShows = consecutiveRun(index, show.showdate).filter(
-    (s) => s.showdate < show.showdate && index.setlistByShow.has(Number(s.show_id)),
-  );
+  //
+  // Both lists, deduped, come from previousSetStructures(). The dedupe
+  // direction and the reasoning for it live in the block above that function
+  // in data/index.js; nothing about which list wins is decided here.
+  const { venueRows, runRows } = previousSetStructures(index, show);
+
+  const structureList = (rows) =>
+    el(
+      'ul.fn-list',
+      null,
+      rows.map((s) =>
+        el('li', null, [
+          el('span', {
+            style: { color: 'var(--yolk)', fontWeight: '700' },
+            text: formatShowDateShort(s.showdate),
+          }),
+          el('span', { text: showStructure(index, s.show_id) || '—' }),
+        ]),
+      ),
+    );
 
   append(
     screen,
@@ -194,88 +208,34 @@ function renderNextShow(screen, { index, navigate }, show, today) {
       // implies what will happen, does not.
       sectionHead('Previous set structures'),
       el('div.card', null, [
-        runShows.length
-          ? el('div', null, [
+        // THE VENUE LIST, UNLABELLED, FIRST (0.1.72).
+        //
+        // "Previously here" is gone. That label was kept in 0.1.71 for one
+        // reason: the two lists could contain the same show, and unlabelled
+        // that read as a rendering bug rather than as one show qualifying
+        // under two criteria. The dedupe removes the duplication, so the
+        // reason for the label goes with it.
+        //
+        // What is left is previous set structures at the venue the hero line
+        // two blocks above already names, sitting directly under a header that
+        // says "Previous set structures". A label here would repeat both.
+        venueRows.length ? structureList(venueRows) : null,
+        // "EARLIER IN THIS RUN" KEEPS ITS LABEL. It is the named subset --
+        // a different criterion from the list above, at other venues -- and
+        // nothing else on the screen says so.
+        runRows.length
+          ? el('div', { style: { marginTop: venueRows.length ? '12px' : '0' } }, [
               el('div.section-title', { text: 'Earlier in this run' }),
-              el(
-                'ul.fn-list',
-                null,
-                runShows.map((s) =>
-                  el('li', null, [
-                    el('span', {
-                      style: { color: 'var(--yolk)', fontWeight: '700' },
-                      text: formatShowDateShort(s.showdate),
-                    }),
-                    el('span', { text: showStructure(index, s.show_id) || '—' }),
-                  ]),
-                ),
-              ),
+              structureList(runRows),
             ])
           : null,
-        venueShows.length
-          ? el('div', { style: { marginTop: runShows.length ? '12px' : '0' } }, [
-              // "Previously here", NOT "Previously at {venue}" (0.1.69).
-              //
-              // The venue name was rendered three times on this screen: the
-              // hero venue line, this header, and — since this build — the
-              // "Last time at {venue}" header one section below. Two of those
-              // are headers naming the same room within a screen-height of
-              // each other, which is the doubled-header problem 0.1.66 removed
-              // from the block above and did not finish.
-              //
-              // THE LABEL STAYS, ONLY THE NAME GOES. "here" carries the
-              // distinction the header exists for; the name it was repeating
-              // did not.
-              //
-              // REMOVING THIS LABEL WAS TRIED AND REJECTED IN 0.1.71, on
-              // measurement rather than taste, and the reason is not the one
-              // written here in 0.1.69. That reasoning said an unlabelled list
-              // reads as a continuation of the one above it, which a plural
-              // past-tense section header would in fact have answered.
-              //
-              // The real blocker is that THESE TWO LISTS CAN CONTAIN THE SAME
-              // SHOW. They are different criteria, not different periods:
-              // "earlier in this run" is any venue within a consecutive-date
-              // run, "previously here" is this venue at any time. A show that
-              // is both -- a two-night stand, a festival's second day --
-              // qualifies twice and renders twice.
-              //
-              // Measured across all 610 played shows, treating each as the
-              // anchor: both lists render for 119 of them, 36 of those (30%)
-              // share at least one show, and in 9 cases the two lists are
-              // IDENTICAL -- every row printed twice. Anchor 2021-09-18
-              // renders "Sep 16, 2021  S1", a 12px gap, then "Sep 16, 2021
-              // S1" again.
-              //
-              // The labels are what explain that duplication: the same show
-              // qualifying under two criteria is information. Unlabelled it is
-              // a rendering bug, and a section header cannot fix it because
-              // the ambiguity is not about what the lists ARE.
-              //
-              // Not currently visible: all 18 upcoming shows have an empty run
-              // list, because the earlier shows in their runs are upcoming too
-              // and have no setlist yet. It appears mid-tour -- which is
-              // exactly when this app gets opened in a venue.
-              el('div.section-title', { text: 'Previously here' }),
-              el(
-                'ul.fn-list',
-                null,
-                venueShows
-                  .slice(-5)
-                  .reverse()
-                  .map((s) =>
-                    el('li', null, [
-                      el('span', {
-                        style: { color: 'var(--yolk)', fontWeight: '700' },
-                        text: formatShowDateShort(s.showdate),
-                      }),
-                      el('span', { text: showStructure(index, s.show_id) || '—' }),
-                    ]),
-                  ),
-              ),
-            ])
-          : null,
-        !runShows.length && !venueShows.length
+        // The run list is not visible on any upcoming show today: all 18 have
+        // an empty one, because the earlier shows in their runs are upcoming
+        // too and have no setlist yet. It appears mid-tour -- which is exactly
+        // when this app gets opened in a venue, and why the overlap case is
+        // covered by a fixture of real archive rows in tests/ rather than by
+        // looking at the screen.
+        !venueRows.length && !runRows.length
           ? el('p.note', { text: 'No played shows at this venue or earlier in this run.' })
           : null,
       ]),
