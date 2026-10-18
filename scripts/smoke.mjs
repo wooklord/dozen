@@ -237,12 +237,38 @@ server.listen(PORT, async () => {
     await evaluate(`location.hash = ${JSON.stringify(at)};`);
     await sleep(1000);
     if (!ep.at) {
-      // show detail: reach it from a Shows card first
+      // show detail: reach it from a Shows card first -- the first card WHOSE
+      // SHOW HAS SETLIST ROWS, not the first card.
+      //
+      // WHAT THIS CHECK IS FOR: the gap chart button on a PLAYED show. Show
+      // detail renders that button only when the show has setlist rows (there
+      // is nothing to chart otherwise), and the Shows landing lists every show
+      // dated on or before today, newest first. On a show day the first card
+      // is today's show, in `shows` with no setlist yet, and it carries no
+      // Gap chart button BY DESIGN. Clicking the first card failed this check
+      // on 2026-10-18 for exactly that reason, with nothing wrong in the app.
+      //
+      // So walk the cards in order and open the first whose body renders a
+      // setlist. .setlist-card-body is emitted only when rows.length > 0,
+      // which is the same condition show detail uses for the button, so the
+      // card chosen here is one the button is REQUIRED on. Do not "simplify"
+      // this back to the first card: it would go red every show day and teach
+      // the reader to ignore it.
       const opened = await evaluate(
-        `(() => { const b = [...document.querySelectorAll('.btn-small')].find(x => x.textContent.trim() === 'Show detail');
-           if (!b) return false; b.click(); return true; })()`,
+        `(() => {
+           const cards = [...document.querySelectorAll('.screen .card')];
+           const i = cards.findIndex((c) => c.querySelector('.setlist-card-body'));
+           if (i < 0) return { ok: false, skipped: cards.length };
+           const b = [...cards[i].querySelectorAll('.btn-small')].find((x) => x.textContent.trim() === 'Show detail');
+           if (!b) return { ok: false, skipped: i, noButton: true };
+           b.click(); return { ok: true, skipped: i };
+         })()`,
       );
-      if (!opened) { fail(`${ep.name}: could not open show detail`); continue; }
+      if (!opened || !opened.ok) {
+        fail(`${ep.name}: could not open a played show's detail (${opened ? opened.skipped : '?'} card(s) without a setlist${opened && opened.noButton ? ', then a card with no Show detail button' : ''})`);
+        continue;
+      }
+      if (opened.skipped) console.log(`        (skipped ${opened.skipped} card(s) with no setlist -- unplayed show(s) at the top of the list)`);
       await sleep(900);
     }
     if (ep.setup) {
