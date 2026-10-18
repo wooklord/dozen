@@ -279,6 +279,12 @@ bump is an incomplete change.
 Format: `BUILD 0.1.7` — a single incrementing patch integer, defined in exactly one place
 (`src/version.js`) and rendered from there.
 
+**What counts as a change that ships — ruled 2026-10-18.** The marker exists to confirm a deploy
+from the UI, so the test is observability from the UI. Anything that changes rendered behaviour or
+visible bytes bumps. A comment-only edit to a served file, and tests- or docs-only commits, are not
+observable from the UI and do **not** bump. Ruled for the commits that followed 0.1.75: a comment
+correction in `src/version.js` and a `scripts/smoke.mjs` change both shipped under 0.1.75.
+
 ---
 
 ## Song name normalization
