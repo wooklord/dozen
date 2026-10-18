@@ -37,6 +37,11 @@ Three findings move real weight:
 
 Static files, no build. Native ES modules, plain CSS, plain HTML.
 
+> **Pre-build sketch, superseded by the repo.** The tree below is what was planned on 2026-08-17.
+> Views and tests have since been renamed, split and multiplied, and this file is not kept in step
+> with them: `src/` and `tests/` are canonical, and this block is kept only as the record of what
+> was intended. Do not treat a name here as the name of a file.
+
 ```
 index.html            single page, hash routing
 CNAME                 placeholder for dozen.wooklord.net
@@ -83,9 +88,13 @@ invariant is an **independent recount**, which is the check that found the bug i
 replacing it with something subtly wrong, surface it in the UI, and log the exact URL alongside
 both counts (expected vs received).
 
-The cheap tripwires stay as a first line — an exactly-round row count (4000/5000) or a max
-`showdate` older than the newest show in `shows` fails immediately without spending 14 requests.
-They are the fast path, **not** the only check.
+The cheap tripwire stays as a first line — an exactly-round row count (4000/5000) fails immediately
+without spending 14 requests. It is the fast path, **not** the only check.
+
+A second tripwire was planned here and is **not** in the code: failing when the newest setlist row
+is older than the newest show in `shows`. `shows` carries upcoming shows with no setlist, so it
+failed on healthy data. `CLAUDE.md`, *Dead code is not always safe to simply switch on*, records
+the removal and why no tolerance fixes it.
 
 Cost control: the per-year recount is 14 extra requests, so it runs on **full rebuilds only**, not
 on the incremental fast path. That's the trade — the expensive pull is the one that gets verified.
@@ -231,7 +240,7 @@ Full treatment goes in `docs/design.md` at step 0. Committed direction:
 
 ## Upcoming show — settled
 
-- **Picker across all 18 future shows**, defaulting to the nearest.
+- **Picker across all future shows**, defaulting to the nearest.
 - **The selection persists** (`localStorage`). During a run the user is looking at tomorrow's show;
   it must not snap forward to the next one on reload. The stored selection is cleared only when
   that show's date has passed.

@@ -146,14 +146,18 @@ We are a user-initiated app, not a crawler, but we behave accordingly:
 
 ## The 4000-row trap (read this before touching the data layer)
 
-`GET /api/v2/setlists.json` returns **exactly 4000 rows and reports no error.** The real archive is
-**6361 rows**. The default response silently stops at `2024-10-10`.
+`GET /api/v2/setlists.json` returns **exactly 4000 rows and reports no error.** When this was
+measured, on 2026-08-17, the real archive was **6361 rows** and the default response silently
+stopped at `2024-10-10`. **Those are dated figures, kept as the illustration — not the expected
+count.** The archive grows after every show, so any number written here is stale by the next one;
+the expected count comes from the per-year recount described below, never from this file.
 
 This is the most dangerous behavior in the API, because the truncated response is well-formed and
 plausible. Every gap, times-played, and last-played number computed from it would be **wrong for
 every song**, and nothing would look broken.
 
 ```
+# measured 2026-08-17 — the "complete" row grows with every show
 /setlists.json              -> 4000 rows, 2013-02-23 .. 2024-10-10   (SILENTLY TRUNCATED)
 /setlists.json?limit=5000   -> 5000 rows, 2013-02-23 .. 2025-06-30   (still truncated)
 /setlists.json?limit=20000  -> 6361 rows, 2013-02-23 .. 2026-08-14   (complete)
@@ -161,8 +165,9 @@ every song**, and nothing would look broken.
 
 **Rules:** always pass an explicit oversized `limit` on full-table pulls, and always assert the
 result count and max `showdate` against an independent source (the per-year sum via
-`/setlists/showyear/YYYY.json`, which totals 6361 and agrees). A full-table pull whose row count is
-a suspiciously round number must be treated as truncated until proven otherwise.
+`/setlists/showyear/YYYY.json`, which agreed with the full pull on the day it was measured). A
+full-table pull whose row count is a suspiciously round number must be treated as truncated until
+proven otherwise.
 
 More generally: **empty or short data is suspicious, never benign.** Typos in column names or wrong
 case produce empty `data` rather than an HTTP error. Every fetch logs the exact URL that produced a
@@ -196,9 +201,11 @@ wrong prefix returns 404 rather than redirecting. These were shipped broken in 0
 | Venue | `/venues/{slug}` (**plural**) | `/venue/{slug}` |
 
 `jamcharts.permalink` is the same bare filename as `shows.permalink` and needs `/setlists/` too.
-Song and venue slugs from the API match the live URLs exactly (verified against the sitemap: 366/366
-songs, 441/441 venues — **the venue figure was 441 when that check ran; the table now returns 440**,
-and the sweep has not been re-run against the sitemap since).
+Song and venue slugs from the API match the live URLs exactly (verified against the sitemap on
+2026-08-17: every song and every venue the API returned that day had a live page — 366 songs,
+441 venues at the time). **Both tables have moved since** — `venues` returns 440 after a merge and
+`songs` has grown — and the sweep has not been re-run against the sitemap, so those two counts
+describe that day, not the current tables.
 
 **`/gap-chart/` is robots-disallowed — link to it, never fetch it.** The same applies to `/stats/`.
 URL shapes are discoverable from `sitemap-shows.xml`, `sitemap-songs.xml`, `sitemap-venues.xml` and
@@ -262,9 +269,12 @@ and types. Notable corrections to the published docs already captured there:
 
 ## BUILD marker rule
 
-A visible `BUILD` version marker renders in the page header. **Bump it on every change that
-touches anything shipped to the browser.** The marker is how deploys get confirmed — dev tools are
-not used. A change without a bump is an incomplete change.
+A visible `BUILD` version marker renders in the **Settings & data sheet** — the header's cache
+button, then the `BUILD` entry, two taps in. It was a header chip until 0.1.33; the header now
+shows cache age (`.status-chip`), and reading that for a BUILD number is the trap recorded under
+*The recurring failure* below. **Bump it on every change that touches anything shipped to the
+browser.** The marker is how deploys get confirmed — dev tools are not used. A change without a
+bump is an incomplete change.
 
 Format: `BUILD 0.1.7` — a single incrementing patch integer, defined in exactly one place
 (`src/version.js`) and rendered from there.
@@ -809,6 +819,7 @@ between runs.
 | `node --test` | instant | none | always, before anything else |
 | `node scripts/smoke.mjs` | ~1 min | Carton (cold pull) | **before every push** |
 | `node scripts/contrast.mjs` | instant | none | when eyeballing a colour; the assertions already run in `node --test` |
+| `node scripts/deadcss.mjs` | instant | none | when a CSS rule looks inert; lists every declaration the cascade can never let win. The assertions already run in `node --test` (`tests/deadcss.test.mjs`) |
 |  `node scripts/layout-diff.mjs [ref] [width] [theme]` | ~3 min | Carton (two cold boots) | after a deliberate layout change, to see what else moved |
 | `node scripts/verify-deploy.mjs` | ~1 min | live host | **after every push** |
 
