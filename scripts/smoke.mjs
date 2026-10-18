@@ -1847,12 +1847,34 @@ server.listen(PORT, async () => {
   // below it: Toad's Place printed "Nov 26, 2025  S1+S2+E" and then, 250px
   // lower, "Wed, Nov 26, 2025" with SET 1 / SET 2 / ENCORE spelled out.
   //
+  // WHAT THIS CHECK IS FOR: the merged card on a venue WITH a prior visit --
+  // the most recent visit expanded as a setlist, the visits before it as
+  // one-liners in the same card's foot, each show printed once.
+  //
   // THIS NEEDS A SHOW THAT ACTUALLY HAS VENUE HISTORY. The default selection is
-  // whichever upcoming show is next, and today that is a festival with none --
-  // the merged card renders one empty line and every assertion below would pass
-  // without touching the case it exists for. So the picker is walked until a
-  // Home render has BOTH an expanded setlist and older one-liners under it, and
-  // if no upcoming show has that, this reports SKIP rather than a green tick.
+  // whichever upcoming show is next, and that is often a venue with none: Home
+  // then renders the run-only card ("Earlier in this run" over one-liners) or
+  // the empty state, and there is no visit to expand. The first version of this
+  // walk broke on "the section has one-liners", which run rows also satisfy, and
+  // then asserted a setlist body -- so on 2026-10-18, with the next show at a
+  // never-played venue inside a three-show run, it reported the app broken when
+  // the app was right. Same shape as every other failure in CLAUDE.md: a
+  // condition wider than the thing asserted.
+  //
+  // WHETHER THE VENUE HAS HISTORY IS READ FROM THE VENUE SCREEN, not from the
+  // card being tested and not from the hero's "shows played here" count. The
+  // card is the thing under test, so it cannot be its own witness; the hero
+  // count includes visits WITHOUT a setlist (Toad's Place: 12 played, 3 with
+  // setlists), and the card expands the newest visit WITH one. The venue screen
+  // puts .badge-set on exactly the rows that have setlist rows, so its count is
+  // the same universe. The walk hops there via the hero's "Venue history" button
+  // and back; the picked show survives the hop in localStorage.
+  //
+  // Three outcomes per picked show, and the first two are asserted:
+  //   venue has setlist shows, card has no setlist body  -> FAIL (the bug)
+  //   venue has none, section has run one-liners         -> run-only shape
+  //   venue has setlist shows, body AND one-liners        -> the merge, below
+  // If no upcoming show reaches the merge, that reports SKIP, not a green tick.
   console.log('\nHome merges the venue history into one card:');
   await evaluate(`location.hash = '#/home';`);
   await sleep(1400);
@@ -1867,6 +1889,8 @@ server.listen(PORT, async () => {
   })()`);
 
   let merged = null;
+  let runOnly = null;
+  let notExpanded = null;
   for (let i = 0; i < pickerCount; i++) {
     await evaluate(`(() => {
       const c = [...document.querySelectorAll('.screen .chip')].find((x) => x.textContent.trim() === 'Change');
@@ -1901,17 +1925,57 @@ server.listen(PORT, async () => {
         listRows: [...prev.parentElement.querySelectorAll('.visit-list li')].map((li) => li.textContent.trim()),
         footRows: foot ? [...foot.querySelectorAll('.visit-list li')].map((li) => li.textContent.trim()) : [],
         cards: prev.parentElement.querySelectorAll('.card').length,
+        hasFoot: !!foot,
+        runTitle: [...prev.parentElement.querySelectorAll('.section-title')].some((n) => /earlier in this run/i.test(n.textContent)),
         actionsBeforeFoot: !!(foot && card.querySelector('.card-actions') &&
           card.querySelector('.card-actions').compareDocumentPosition(foot) & Node.DOCUMENT_POSITION_FOLLOWING),
       };
     })()`);
-    if (probe && probe.listRows.length) { merged = probe; break; }
+    if (!probe) continue; // no Previous shows card at all -- nothing to say about this show
+
+    // Independent witness: how many shows WITH a setlist the venue screen lists.
+    const hopped = await evaluate(`(() => {
+      const b = [...document.querySelectorAll('.hero .card-actions .btn-small')].find((x) => x.textContent.trim() === 'Venue history');
+      if (!b) return false; b.click(); return true;
+    })()`);
+    if (!hopped) { fail(`Home: picker item ${i} renders no "Venue history" button on the hero`); break; }
+    await sleep(1000);
+    const venue = await evaluate(`(() => {
+      const head = [...document.querySelectorAll('.screen .section-head')].find((n) => /every show/i.test(n.textContent));
+      if (!head) return null;
+      return { hash: location.hash, setlistShows: head.parentElement.querySelectorAll('.badge-set').length };
+    })()`);
+    await evaluate(`location.hash = '#/home';`);
+    await sleep(1400);
+    if (!venue || !String(venue.hash).startsWith('#/venue/')) {
+      fail(`Home: picker item ${i}: "Venue history" did not land on a venue screen (${venue ? venue.hash : 'no Every show section'})`);
+      break;
+    }
+
+    if (venue.setlistShows > 0 && !probe.hasSetlist) {
+      notExpanded = { i, venue, probe };
+      break;
+    }
+    if (venue.setlistShows === 0 && probe.listRows.length && !runOnly) runOnly = { i, probe };
+    if (venue.setlistShows > 0 && probe.hasSetlist && probe.listRows.length) { merged = probe; break; }
   }
 
-  if (!merged) {
-    skip(`no upcoming show has a previous-visit list (walked ${pickerCount} show(s)) — the merge could not be exercised`);
-  } else if (!merged.hasSetlist) {
-    fail('Home: the Previous shows card renders no setlist — the most recent visit is not expanded');
+  if (runOnly) {
+    const p = runOnly.probe;
+    const wrong = [
+      p.hasSetlist ? 'a setlist body' : null,
+      p.hasFoot ? 'a .card-foot' : null,
+      !p.runTitle ? 'no "Earlier in this run" title' : null,
+      p.cards !== 1 ? `${p.cards} cards` : null,
+    ].filter(Boolean);
+    if (wrong.length) fail(`Home: a venue with no prior visit renders ${wrong.join(', ')} -- expected one run-only card`);
+    else pass(`run-only shape: one card, "Earlier in this run" over ${p.listRows.length} one-liner(s), no setlist, no foot (picker item ${runOnly.i})`);
+  }
+
+  if (notExpanded) {
+    fail(`Home: the venue screen lists ${notExpanded.venue.setlistShows} show(s) with a setlist, but the Previous shows card renders no setlist -- the most recent visit is not expanded (picker item ${notExpanded.i})`);
+  } else if (!merged) {
+    skip(`no upcoming show has a prior visit with a setlist AND older one-liners (walked ${pickerCount} show(s)) -- the merge could not be exercised`);
   } else if (merged.footRows.length !== merged.listRows.length) {
     fail(`Home: ${merged.listRows.length - merged.footRows.length} one-liner(s) sit outside the expanded card's foot — the two sections are still two objects`);
   } else {
