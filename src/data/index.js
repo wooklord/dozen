@@ -482,6 +482,13 @@ export function buildIndex(raw) {
     });
   }
 
+  // Longest gap, once per load. gapAtShow needs only songsById and showOrdinal,
+  // both of which exist now, so this is computed here rather than in the sort
+  // comparator -- the Songs list re-sorts on every debounced keystroke and
+  // would otherwise walk every performance of every song each time.
+  const gapView = { songsById: bySong, showOrdinal };
+  for (const entry of bySong.values()) entry.longestGap = longestGap(gapView, entry.song_id);
+
   // --- Per-show setlists -----------------------------------------------------
   const setlistByShow = new Map();
   for (const row of setlists) {
@@ -718,6 +725,64 @@ export function longestObservedGap(index, songId) {
     if (!best || gap > best.gap) best = { gap, at: p, previous };
   }
   return best;
+}
+
+/**
+ * The longest gap a song has been through INCLUDING the one it is in now.
+ *
+ * Wraps longestObservedGap() -- the closed gaps are that walk, not a second
+ * one -- and compares its maximum against the current gap, showsSinceLastPlayed,
+ * which is the same computation evaluated at the newest counted show and still
+ * growing. Whichever is larger is the answer, and the result says which it was:
+ *
+ *   { gap, fromDate, toDate, isOpen }
+ *
+ * Closed: fromDate and toDate are the two performances that bound the span.
+ * Open: fromDate is the last performance, toDate is null, isOpen is true.
+ *
+ * AN EXACT TIE READS AS OPEN. The open gap is the same length and has not
+ * ended, so "still open" is the truer of the two descriptions; ruled in
+ * docs/plan.md, pinned in tests/gap.test.mjs. A one-play song has no closed
+ * gap and is the open case by construction. Never played returns null.
+ *
+ * Every figure here is a max over numbers Carton renders on its own gap
+ * charts. It describes what has happened, never what will.
+ */
+export function longestGap(index, songId) {
+  const song = index.songsById.get(Number(songId));
+  if (!song) return null;
+  const closed = longestObservedGap(index, songId);
+  const open = song.showsSinceLastPlayed;
+  if (open === null || open === undefined) {
+    if (!closed) return null;
+    return { gap: closed.gap, fromDate: closed.previous.showdate, toDate: closed.at.showdate, isOpen: false };
+  }
+  if (closed && closed.gap > open) {
+    return { gap: closed.gap, fromDate: closed.previous.showdate, toDate: closed.at.showdate, isOpen: false };
+  }
+  return { gap: open, fromDate: song.lastPlayed, toDate: null, isOpen: true };
+}
+
+/**
+ * Sort for the Songs "Longest gap" mode: longest gap descending, then the
+ * current gap descending, then the shared name order. Songs that have never
+ * been played have no gap and sort last, as under the other gap sorts.
+ *
+ * Exported so the tie-break is unit-tested rather than living inline in the
+ * view; 53 adjacent pairs in the live archive tie on both numbers, so the name
+ * fallback is not a theoretical branch.
+ */
+export function compareByLongestGap(a, b) {
+  const av = a.longestGap ? a.longestGap.gap : null;
+  const bv = b.longestGap ? b.longestGap.gap : null;
+  if (av === null && bv === null) return compareSongsByName(a, b);
+  if (av === null) return 1;
+  if (bv === null) return -1;
+  return (
+    bv - av ||
+    (b.showsSinceLastPlayed ?? -1) - (a.showsSinceLastPlayed ?? -1) ||
+    compareSongsByName(a, b)
+  );
 }
 
 /**

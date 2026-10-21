@@ -8,10 +8,10 @@
 // Everything here is sorting, filtering and counting. The list is never
 // labelled with what is likely to happen next.
 
-import { el, append, debounce } from '../ui/dom.js';
+import { el, append, debounce, openSheet } from '../ui/dom.js';
 import { songRow, attribution, emptyState, gapExplainerLink } from '../ui/components.js';
 import { normalizeQuery, matchesQuery } from '../data/normalize.js';
-import { compareSongsByName } from '../data/index.js';
+import { compareSongsByName, compareByLongestGap } from '../data/index.js';
 
 // Module-level so the screen remembers its state across navigation.
 //
@@ -36,11 +36,17 @@ const state = {
 // same value, same unit, same yolk. They differ in row order and nothing else,
 // which is exactly what the chips say they do. There is no longer an "is this
 // the sorted column" treatment to get wrong; see songRow in ui/components.js.
+//
+// "Longest gap" (0.1.76) is the fifth: the longest gap a song has been through,
+// closed or still open, descending. The figure IS that gap, and the row's date
+// line becomes the span that bounds it -- see songRow. It is a max over the
+// per-show gaps the gap charts already render; ruled in scope in docs/plan.md.
 const SORTS = [
   ['alpha', 'A–Z', 'times'],
   ['gap-desc', 'Coldest first', 'gap'],
   ['gap-asc', 'Hottest first', 'gap'],
   ['times', 'Most played', 'times'],
+  ['longest', 'Longest gap', 'longest'],
 ];
 
 const FILTERS = [
@@ -81,23 +87,53 @@ export function renderSongs(ctx) {
   });
   append(screen, el('div', { style: { marginBottom: '10px' } }, search));
 
-  // --- Sort + filter chips -------------------------------------------------
-  const sortChips = SORTS.map(([key, label]) =>
-    el(
-      'button.chip',
-      {
-        type: 'button',
-        'data-key': key,
-        'aria-pressed': String(state.sort === key),
-        onclick: () => {
-          state.sort = key;
-          for (const c of sortChips) c.setAttribute('aria-pressed', String(c.dataset.key === key));
-          paint();
-        },
-      },
-      label,
-    ),
-  );
+  // --- Sort: one lead chip, and a sheet ------------------------------------
+  //
+  // The five sorts do not fit as chips at phone width. Measured headless at
+  // 390px: the four-chip bar already overflowed by 7px (397px of chips, with
+  // the scrollbar hidden, so "Most played" was clipped and nothing said so),
+  // and a fifth took it to 504px -- a chip entirely off-screen with no
+  // affordance, which is the 0.1.75 Shows defect. Same fix: the bar holds ONE
+  // chip that reads the active sort and opens a sheet with all of them.
+  //
+  // The lead chip wears the selected paint from its class (.chip-lead), not
+  // from aria-pressed: that attribute means a toggle's state and would be a
+  // lie on a button that opens a sheet. Same reasoning as .chip-back on Shows.
+  const labelOf = (key) => (SORTS.find(([k]) => k === key) || SORTS[0])[1];
+  const sortLead = el('button.chip.chip-lead', {
+    type: 'button',
+    onclick: () => openSortSheet(),
+  });
+  function paintLead() {
+    sortLead.textContent = `${labelOf(state.sort)} ▾`;
+    sortLead.setAttribute('aria-label', `Sorted by ${labelOf(state.sort)}. Change sort`);
+  }
+  paintLead();
+
+  function openSortSheet() {
+    openSheet('Sort by', (close) =>
+      el(
+        'div.chip-grid',
+        null,
+        SORTS.map(([key, label]) =>
+          el(
+            'button.chip',
+            {
+              type: 'button',
+              'aria-pressed': String(state.sort === key),
+              onclick: () => {
+                state.sort = key;
+                close();
+                paintLead();
+                paint();
+              },
+            },
+            label,
+          ),
+        ),
+      ),
+    );
+  }
 
   const filterChips = FILTERS.map(([key, label]) =>
     el(
@@ -116,7 +152,7 @@ export function renderSongs(ctx) {
     ),
   );
 
-  append(screen, el('div.sortbar', null, sortChips));
+  append(screen, el('div.sortbar.sortbar-lead', null, [sortLead]));
   append(screen, el('div.sortbar.sortbar-secondary', null, filterChips));
 
   const countLine = el('p.note', { style: { margin: '4px 0 8px' } });
@@ -161,6 +197,8 @@ export function renderSongs(ctx) {
           if (bv === null) return -1;
           return bv - av || compareSongsByName(a, b);
         }
+        case 'longest':
+          return compareByLongestGap(a, b);
         case 'alpha':
         default:
           return compareSongsByName(a, b);
@@ -171,6 +209,8 @@ export function renderSongs(ctx) {
     const figure = active?.[2] || 'gap';
     const maxGap = songs.reduce((m, s) => Math.max(m, s.showsSinceLastPlayed ?? 0), 1);
     const maxTimes = songs.reduce((m, s) => Math.max(m, s.timesPlayed), 1);
+    const maxLongest = songs.reduce((m, s) => Math.max(m, s.longestGap ? s.longestGap.gap : 0), 1);
+    const heatMax = figure === 'times' ? maxTimes : figure === 'longest' ? maxLongest : maxGap;
 
     countLine.textContent =
       `${songs.length} song${songs.length === 1 ? '' : 's'}` +
@@ -187,7 +227,7 @@ export function renderSongs(ctx) {
         listWrap,
         songRow(s, {
           figure,
-          maxGap: figure === 'times' ? maxTimes : maxGap,
+          maxGap: heatMax,
           index,
           onOpen: (song) => navigate(`#/song/${song.song_id}`),
         }),

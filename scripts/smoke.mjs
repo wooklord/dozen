@@ -1021,7 +1021,7 @@ server.listen(PORT, async () => {
     const back = document.querySelector('.screen .chip-back');
     if (!back) return null;
     back.click();
-    const grid = document.querySelector('.sheet .year-grid');
+    const grid = document.querySelector('.sheet .chip-grid');
     if (!grid) return { opened: false };
     const chips = [...grid.querySelectorAll('.chip')];
     const rows = new Set(chips.map((c) => Math.round(c.getBoundingClientRect().top)));
@@ -1072,7 +1072,7 @@ server.listen(PORT, async () => {
 
   // "All shows" is the way out, and it has to actually land on the landing.
   const escaped = await evaluate(`(() => {
-    const a = [...document.querySelectorAll('.sheet .year-grid .chip')].find((c) => c.textContent.trim() === 'All shows');
+    const a = [...document.querySelectorAll('.sheet .chip-grid .chip')].find((c) => c.textContent.trim() === 'All shows');
     if (!a) return null; a.click(); return true;
   })()`);
   await sleep(1200);
@@ -1167,6 +1167,8 @@ server.listen(PORT, async () => {
   // Every .sortbar on screen, split into its LEAD chip and its scrolling
   // chips. Shows' drill-down bar is two parts as of 0.1.75 -- a fixed way out
   // beside a scroller of months -- and "the bar's chips" is no longer one list.
+  // Songs' sort bar is a lead chip ALONE as of 0.1.76 (.chip-lead, opening the
+  // sort sheet), so a bar can also be a lead with no chips beside it.
   // .chip is also used for things that are not toggles (Home's "Change"), and
   // none of those live in a .sortbar, so scoping to the bars is what keeps this
   // check about chosen state.
@@ -1182,11 +1184,12 @@ server.listen(PORT, async () => {
       selFill,
       bars: [...document.querySelectorAll('.sortbar')].map((bar) => {
         const scroller = bar.querySelector('.sortbar-scroll');
-        const lead = bar.querySelector('.chip-back');
+        const lead = bar.querySelector('.chip-back, .chip-lead');
         return {
           lead: lead ? read(lead) : null,
           // The scrolling half when the bar has one, the whole bar when it does
-          // not -- Songs, Jams and the Shows landing bar are all single-part.
+          // not -- Songs' filter bar, Jams and the Shows landing bar are all
+          // single-part; Songs' sort bar is a lead and nothing else.
           chips: [...(scroller || bar).querySelectorAll('.chip')].filter((c) => c !== lead).map(read),
         };
       }),
@@ -1227,7 +1230,7 @@ server.listen(PORT, async () => {
       const back = document.querySelector('.screen .chip-back');
       if (!back) return false;
       back.click();
-      const c = [...document.querySelectorAll('.sheet .year-grid .chip')].find((x) => x.textContent.trim() === ${JSON.stringify(label)});
+      const c = [...document.querySelectorAll('.sheet .chip-grid .chip')].find((x) => x.textContent.trim() === ${JSON.stringify(label)});
       if (!c) { const b = document.querySelector('.sheet-backdrop'); if (b) b.click(); return false; }
       c.click();
       return true;
@@ -1332,7 +1335,12 @@ server.listen(PORT, async () => {
     //    Songs carries two (sort + filter) and Jams one, and each has a
     //    default, so exactly one chip per bar is painted at rest. This is what
     //    makes the check about the CLASS of bug rather than this one bar.
-    for (const [where, hash, wantBars] of [['Songs', '#/songs', 2], ['Jams', '#/jams', 1]]) {
+    //
+    //    A bar that is a LEAD CHIP ALONE (Songs' sort bar, 0.1.76) is asserted
+    //    on the lead: painted, and naming the default sort. "Exactly one chip
+    //    painted" would be satisfied there by the lead being miscounted as a
+    //    chip, which is the proxy shape this file keeps finding.
+    for (const [where, hash, wantBars, wantLead] of [['Songs', '#/songs', 2, 'A–Z'], ['Jams', '#/jams', 1, null]]) {
       await evaluate(`location.hash = ${JSON.stringify(hash)};`);
       await sleep(1400);
       const s2 = await evaluate(CHIP_PROBE);
@@ -1340,11 +1348,25 @@ server.listen(PORT, async () => {
         fail(`chip paint (${theme}): ${where} rendered ${s2.bars.length} chip bar(s), expected ${wantBars}`);
         continue;
       }
-      const bad = s2.bars.map((_, i) => [i, painted(s2, i)]).filter(([, p]) => p.length !== 1);
+      const leads = s2.bars.map((_, i) => i).filter((i) => leadOf(s2, i));
+      if (wantLead && leads.length !== 1) {
+        fail(`chip paint (${theme}): ${where} has ${leads.length} lead-chip bar(s), expected 1 (the sort selector)`);
+        continue;
+      }
+      if (!wantLead && leads.length) {
+        fail(`chip paint (${theme}): ${where} has a lead chip (${JSON.stringify(leadOf(s2, leads[0]).text)}) and no sheet to lead to`);
+        continue;
+      }
+      const bad = s2.bars
+        .map((_, i) => [i, painted(s2, i)])
+        .filter(([i, p]) => (leadOf(s2, i) ? p.length !== 0 : p.length !== 1));
+      const leadBad = leads.filter((i) => !leadPainted(s2, i) || !leadOf(s2, i).text.startsWith(wantLead));
       if (bad.length) {
-        fail(`chip paint (${theme}): ${where} ${bad.map(([i, p]) => `bar #${i} paints ${JSON.stringify(p)}`).join(', ')} — expected exactly one selected chip`);
+        fail(`chip paint (${theme}): ${where} ${bad.map(([i, p]) => `bar #${i} paints ${JSON.stringify(p)}`).join(', ')} — expected exactly one selected chip (none beside a lead)`);
+      } else if (leadBad.length) {
+        fail(`chip paint (${theme}): ${where} lead chip is ${JSON.stringify(leadOf(s2, leadBad[0]))}, expected "${wantLead}" in the selected fill ${s2.selFill}`);
       } else {
-        pass(`${theme}: ${where} — ${s2.bars.map((_, i) => JSON.stringify(painted(s2, i)[0])).join(' + ')} selected`);
+        pass(`${theme}: ${where} — ${s2.bars.map((_, i) => JSON.stringify(leadOf(s2, i) ? leadOf(s2, i).text : painted(s2, i)[0])).join(' + ')} selected`);
       }
     }
   }
@@ -1370,10 +1392,15 @@ server.listen(PORT, async () => {
   // column would satisfy the weaker check while being exactly the bug -- the
   // whole point is that the column says what the chip above it says.
   //
-  //   A–Z          -> times played
-  //   Coldest      -> shows since played
-  //   Hottest      -> shows since played
-  //   Most played  -> times played
+  //   A–Z          -> times played        meta: Last {date}
+  //   Coldest      -> shows since played  meta: Last {date}
+  //   Hottest      -> shows since played  meta: Last {date}
+  //   Most played  -> times played        meta: Last {date}
+  //   Longest gap  -> longest gap         meta: {date} → {date} | still open
+  //
+  // The sort is picked through the LEAD CHIP AND THE SHEET (0.1.76), the same
+  // two taps a thumb makes. The pressed state is read from the lead chip's
+  // text, because the chip that was tapped is gone with the sheet.
   //
   // "SHOWS" became "SINCE PLAYED" in 0.1.73 for a reason the top row of
   // "Hottest first" demonstrates on its own: the hottest song has a gap of 0,
@@ -1382,9 +1409,11 @@ server.listen(PORT, async () => {
   // song renders an em dash there, so this cannot pass by the sort collapsing.
   //
   // The meta line is checked NEGATIVELY (no "124×", no "gap 10") and
-  // POSITIVELY (it still leads with the date) in the same pass. Without the
-  // positive half a row that rendered no meta at all would satisfy the
-  // negative one -- an empty string contains neither.
+  // POSITIVELY (it still leads with the date, or under "Longest gap" is the
+  // span) in the same pass. Without the positive half a row that rendered no
+  // meta at all would satisfy the negative one -- an empty string contains
+  // neither. The span regex requires BOTH ends, so a row that printed only the
+  // from-date would fail it.
   console.log('\nsort drives the one figure in the row:');
   await evaluate(`location.hash = '#/songs';`);
   await sleep(1500);
@@ -1395,28 +1424,43 @@ server.listen(PORT, async () => {
     const c = getComputedStyle(probe).color; probe.remove(); return c;
   })()`);
 
+  // Open the sheet from the lead chip, tap the named sort, and report whether
+  // both existed. A missing sheet closes nothing; a missing chip closes the
+  // sheet it opened so the next step does not run under a backdrop.
   const clickSort = async (label) =>
     evaluate(`(() => {
-      const c = [...document.querySelectorAll('.sortbar .chip')].find((x) => x.textContent.trim() === ${JSON.stringify(label)});
-      if (!c) return false; c.click(); return true;
+      const lead = document.querySelector('.screen .sortbar .chip-lead');
+      if (!lead) return false;
+      lead.click();
+      const c = [...document.querySelectorAll('.sheet .chip-grid .chip')].find((x) => x.textContent.trim() === ${JSON.stringify(label)});
+      if (!c) { const b = document.querySelector('.sheet-backdrop'); if (b) b.click(); return false; }
+      c.click();
+      return true;
     })()`);
 
-  for (const [label, wantUnit, wantTopNum] of [
-    ['A–Z', 'times', null],
-    ['Coldest first', 'since played', null],
-    ['Hottest first', 'since played', '0'],
-    ['Most played', 'times', null],
+  const DATE = '[A-Z][a-z]{2} \\d{1,2}, \\d{4}';
+  const META_LAST = new RegExp(`^Last ${DATE}`);
+  const META_SPAN = new RegExp(`^${DATE} → (${DATE}|still open)`);
+  for (const [label, wantUnit, wantTopNum, wantMeta] of [
+    ['A–Z', 'times', null, META_LAST],
+    ['Coldest first', 'since played', null, META_LAST],
+    ['Hottest first', 'since played', '0', META_LAST],
+    ['Most played', 'times', null, META_LAST],
+    ['Longest gap', 'longest gap', null, META_SPAN],
   ]) {
-    if (!(await clickSort(label))) { fail(`sort: no "${label}" chip`); continue; }
+    if (!(await clickSort(label))) { fail(`sort: no "${label}" in the sort sheet`); continue; }
     await sleep(900);
     const r = await evaluate(`(() => {
-      const active = [...document.querySelectorAll('.sortbar .chip')].find((x) => x.getAttribute('aria-pressed') === 'true');
+      const lead = document.querySelector('.screen .sortbar .chip-lead');
+      const sheetOpen = !!document.querySelector('.sheet');
       const li = document.querySelector('.rows li');
       const num = li && li.querySelector('.gap-num');
       const unit = li && li.querySelector('.gap-unit');
       const meta = li && li.querySelector('.row-meta');
       return {
-        activeChip: active ? active.textContent.trim() : null,
+        // The caret is presentation; the label before it is the state.
+        activeChip: lead ? lead.textContent.replace(/\\s*\\u25BE\\s*$/, '').trim() : null,
+        sheetOpen,
         figures: li ? li.querySelectorAll('.gap-figure').length : null,
         num: num ? num.textContent.trim() : null,
         unit: unit ? unit.textContent.trim().toLowerCase() : null,
@@ -1425,7 +1469,8 @@ server.listen(PORT, async () => {
       };
     })()`);
 
-    if (r.activeChip !== label) fail(`sort: clicked "${label}" but the pressed chip is ${JSON.stringify(r.activeChip)}`);
+    if (r.activeChip !== label) fail(`sort: picked "${label}" but the lead chip reads ${JSON.stringify(r.activeChip)}`);
+    else if (r.sheetOpen) fail(`sort: picking "${label}" left the sort sheet open`);
     else if (r.figures !== 1) fail(`sort "${label}": the row carries ${r.figures} figure column(s), expected exactly 1`);
     else if (r.unit !== wantUnit) {
       fail(`sort "${label}": figure column reads ${JSON.stringify(r.unit)}, expected ${JSON.stringify(wantUnit)}`);
@@ -1433,13 +1478,52 @@ server.listen(PORT, async () => {
       fail(`sort "${label}": the figure is ${r.colour}, not the yolk accent ${yolk}`);
     } else if (wantTopNum !== null && r.num !== wantTopNum) {
       fail(`sort "${label}": top row reads ${JSON.stringify(r.num)}, expected ${JSON.stringify(wantTopNum)} — the smallest gap belongs to a song played at the newest counted show`);
-    } else if (!/^Last [A-Z][a-z]{2} \d{1,2}, \d{4}/.test(r.meta || '')) {
-      fail(`sort "${label}": meta line is ${JSON.stringify(r.meta)}, expected it to lead with the last-played date`);
+    } else if (!wantMeta.test(r.meta || '')) {
+      fail(`sort "${label}": meta line is ${JSON.stringify(r.meta)}, expected ${wantMeta}`);
     } else if (/×|\bgap \d/.test(r.meta)) {
       fail(`sort "${label}": meta line repeats the figure — ${JSON.stringify(r.meta)}`);
     } else {
       pass(`"${label}" -> one ${r.unit} figure (${r.num}, ${r.colour}), meta ${JSON.stringify(r.meta)}`);
     }
+  }
+
+  // --- "Longest gap": the rendered figures ARE the order --------------------
+  //
+  // Read from the chips on screen, every row, not from the index: the claim is
+  // that what the reader sees descends, and a comparator with the wrong sign
+  // would render a perfectly numeric list that climbs. Never-played songs have
+  // no gap and render an em dash; those may appear only at the tail. And both
+  // kinds of span must be present -- the open "still open" and a closed
+  // "date → date" -- or the marker branch was never rendered and this check
+  // would be green on a list that printed every span one way.
+  console.log('\n"Longest gap" renders in descending order:');
+  if (!(await clickSort('Longest gap'))) fail('longest gap: no "Longest gap" in the sort sheet');
+  else {
+    await sleep(900);
+    const rows = await evaluate(`[...document.querySelectorAll('.rows li')].map((li) => ({
+      num: (li.querySelector('.gap-num') || {}).textContent,
+      unit: (li.querySelector('.gap-unit') || {}).textContent,
+      meta: (li.querySelector('.row-meta') || {}).textContent,
+    }))`);
+    const nums = rows.map((r) => (r.num || '').trim());
+    const firstDash = nums.indexOf('—');
+    const dashOnlyAtTail = firstDash === -1 || nums.slice(firstDash).every((n) => n === '—');
+    const values = nums.filter((n) => n !== '—').map(Number);
+    let firstClimb = -1;
+    for (let i = 1; i < values.length; i++) if (values[i] > values[i - 1]) { firstClimb = i; break; }
+    // Start-anchored, both: the meta line goes on to a cover note after the
+    // span on cover songs, so an end anchor would miss every one of those.
+    const open = rows.filter((r) => new RegExp(`^${DATE} → still open`).test((r.meta || '').trim())).length;
+    const closed = rows.filter((r) => new RegExp(`^${DATE} → ${DATE}`).test((r.meta || '').trim())).length;
+    const units = new Set(rows.map((r) => ((r.unit || '').trim().toLowerCase())));
+    if (rows.length < 2) fail(`longest gap: ${rows.length} row(s) rendered -- nothing to order`);
+    else if (values.some((v) => !Number.isFinite(v))) fail(`longest gap: a figure is not a number: ${JSON.stringify(nums.find((n) => n !== '—' && !Number.isFinite(Number(n))))}`);
+    else if (!dashOnlyAtTail) fail(`longest gap: a never-played dash at row ${firstDash + 1} has numbered rows after it`);
+    else if (firstClimb !== -1) fail(`longest gap: row ${firstClimb + 1} reads ${values[firstClimb]} after ${values[firstClimb - 1]} -- the list climbs`);
+    else if (units.size !== 1 || !units.has('longest gap')) fail(`longest gap: units on screen are ${JSON.stringify([...units])}, expected only "longest gap"`);
+    else if (!open || !closed) fail(`longest gap: ${open} open span(s) and ${closed} closed span(s) rendered -- both kinds must appear`);
+    else if (open + closed !== values.length) fail(`longest gap: ${values.length} numbered rows but ${open + closed} spans -- a row carries a figure with no dates under it`);
+    else pass(`${values.length} figures non-increasing (${values[0]} … ${values[values.length - 1]}), ${nums.length - values.length} never-played at the tail, ${open} open + ${closed} closed spans`);
   }
 
   // --- A–Z and "Most played" show the SAME FACT, so they must RENDER the same
@@ -1464,7 +1548,7 @@ server.listen(PORT, async () => {
   await setSongQuery(PROBE_SONG);
   const shots = {};
   for (const label of ['A–Z', 'Most played']) {
-    if (!(await clickSort(label))) { fail(`figure parity: no "${label}" chip`); continue; }
+    if (!(await clickSort(label))) { fail(`figure parity: no "${label}" in the sort sheet`); continue; }
     await sleep(700);
     shots[label] = await evaluate(`(() => {
       const lis = [...document.querySelectorAll('.rows li')];

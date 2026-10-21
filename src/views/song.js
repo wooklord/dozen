@@ -20,7 +20,7 @@ import {
   venueLine,
   heatFor,
 } from '../ui/components.js';
-import { SLOT_LABELS, SLOTS, setLabel, longestObservedGap } from '../data/index.js';
+import { SLOT_LABELS, SLOTS, setLabel } from '../data/index.js';
 import { formatShowDate, formatShowDateShort } from '../util/dates.js';
 import { isPicked, togglePick } from '../scratchpad.js';
 
@@ -75,7 +75,9 @@ export function renderSong(ctx, songId) {
 
   append(screen, el('div', { style: { marginTop: '4px' } }, cartonLink(songPermalink(song))));
 
-  const longest = longestObservedGap(index, song.song_id);
+  // Precomputed in buildIndex; the same value the Songs list ranks by under
+  // "Longest gap", so a figure seen there never changes on tap.
+  const longest = song.longestGap;
 
   // --- Headline stats -------------------------------------------------------
   append(
@@ -105,8 +107,12 @@ export function renderSong(ctx, songId) {
       ]),
 
       // Longest OBSERVED gap: a max over per-performance gaps, each of which
-      // Carton renders individually on its own gap charts. It describes
-      // something that happened -- never a "record", never a due-status.
+      // Carton renders individually on its own gap charts, compared against the
+      // current gap. It describes something that happened -- never a "record",
+      // never a due-status. Rendered for every played song, one-play songs
+      // included (their only gap is the open one), and labelled with the span
+      // that bounds it: both dates, or "still open since" when the gap is the
+      // current one.
       longest
         ? el('div', { style: { marginTop: '12px' } }, [
             el(
@@ -119,7 +125,9 @@ export function renderSong(ctx, songId) {
               [
                 statValue(longest.gap),
                 el('div.stat-label', {
-                  text: `longest observed gap — ended ${formatShowDateShort(longest.at.showdate)}`,
+                  text: longest.isOpen
+                    ? `longest observed gap — still open since ${formatShowDateShort(longest.fromDate)}`
+                    : `longest observed gap — ${formatShowDateShort(longest.fromDate)} → ${formatShowDateShort(longest.toDate)}`,
                 }),
               ],
             ),

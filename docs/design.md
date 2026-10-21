@@ -949,8 +949,10 @@ These are design rules with a scope consequence, so they are not negotiable:
 A Songs row used to carry both numbers: gap on the right in its own column, times played squeezed
 onto the meta line as `124×` — or, under "Most played", the two swapped, so the meta line read
 `gap 10`. Two facts, two typographic treatments, and the reader had to work out which of them the
-list was actually ordered by. The row now carries **the date, and the one figure the active sort is
-about**. The other number is one tap away on song detail, where it has room to say what it means.
+list was actually ordered by. The row now carries **one date line, and the one figure the active sort
+is about**. The other number is one tap away on song detail, where it has room to say what it means.
+(Under "Longest gap", added in 0.1.76, the date line is the span that bounds the figure — see below.
+Still one figure, still one line.)
 
 **"SINCE PLAYED", not "SHOWS".** This is a correctness fix wearing a wording fix's clothes. A song
 played at the most recent counted show has a gap of **0**, and the top row of "Hottest first" was
@@ -975,6 +977,45 @@ so a treatment that differed between them would be asserting a difference that i
 is what `.gap-num` means on every other screen — the gap chart, Shows, song detail — and Songs was
 the only place it did not. The rule and its CSS were both deleted rather than left dormant; a
 boolean with one reachable value is the shape this repo has been bitten by often enough to name.
+
+### "Longest gap" is a fifth sort, and the sort moved into a sheet (0.1.76)
+
+The longest gap a song has been through — the maximum of the per-show gaps the gap charts already
+render, compared against the current gap, which is the same computation at the newest counted show
+and still growing. Ruled in scope in `plan.md` on 2026-10-21 as a max over displayed figures. The
+word is **observed**, and the open case is **still open**: both describe what has happened.
+
+**Under this sort the figure is the longest gap and the date line is its span.** `Feb 7, 2025 →
+Oct 17, 2026` for a closed gap, `Feb 7, 2025 → still open` when the current gap is the longest.
+That is the 0.1.73 rule kept, not bent: one figure, one date line, and the line states the figure's
+dates rather than repeating its value. The first version of this decision put a chip carrying the
+number and both dates **on every row under every sort** — made without 0.1.73 in view, and recorded
+in `plan.md` as the original and the amendment rather than rewritten. The from-date of an open span
+is the last-played date, so the line loses nothing it used to say. The other four sorts render
+exactly what they did; song detail carries the span under every sort, for every played song
+including one-play songs — a figure of 614 seen in the list must not vanish on tap.
+
+**An exact tie between the open gap and a closed one reads as open.** The open one is the same
+length and has not ended. Pinned in `tests/gap.test.mjs`; the live archive had no such tie on the
+day this shipped (178 songs open-longest, 184 closed-longest, 0 equal), so the test is the only
+place the rule is exercised.
+
+**The sort selector is one lead chip and a sheet, because five chips do not fit.** Measured
+headless at 390px: the four-chip bar was already **397px of content in a 390px bar**, scrollbar
+hidden, so "Most played" was clipped and nothing said so; a fifth chip took it to **504px**, an
+option entirely off-screen with no affordance. That is the 0.1.75 Shows defect, and it gets the
+0.1.75 fix: the bar holds one chip reading the active sort (`A–Z ▾`), painted selected from its
+class `.chip-lead` — never `aria-pressed`, which would claim a toggle's state on a button that
+opens a sheet — and the sheet lists all five in the same three-column chip grid the years use. The
+grid's class is `.chip-grid` now rather than `.year-grid`, because a check reading a name should
+find the thing the name says. The filter bar is unchanged and still the secondary bar.
+
+`scripts/smoke.mjs` picks sorts through the two taps a thumb makes, reads the pressed state from
+the lead chip's text, asserts the meta line per sort (the four `Last {date}` sorts, the one span
+sort, with the span regex requiring both ends), and under "Longest gap" reads every rendered
+`.gap-num` down the list and asserts it never climbs, that never-played dashes sit only at the
+tail, and that at least one open and one closed span are on screen. Proved red by flipping the
+comparator's sign before it was trusted green.
 
 ## Attribution
 

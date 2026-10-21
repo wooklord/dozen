@@ -757,25 +757,32 @@ button.gap-figure:active {
   display: none;
 }
 
-/* The lead chip IS the current selection -- you are in 2026 -- and this bar
- * would otherwise have no pressed chip at all until you also picked a month.
+/* The lead chip IS the current selection -- you are in 2026, or the list is
+ * sorted A–Z -- and this bar would otherwise have no pressed chip at all.
  *
  * The paint comes from the class rather than from aria-pressed, which means a
  * toggle's state and would be a lie on a button that opens a sheet. Same three
  * tokens as .chip[aria-pressed="true"], so the two cannot drift apart.
+ *
+ * Two classes, one rule. .chip-back is Shows' way out of a year and carries a
+ * chevron; .chip-lead (0.1.76) is Songs' sort selector and carries a caret.
+ * They are named for what they do, not for how they paint, so a check reading
+ * one is not satisfied by the other.
  *
  * SELECTOR IS `.chip.chip-back` for the reason above, and tests/deadcss.test.mjs
  * caught it when it was not -- four declarations "beaten by .chip". Third time
  * that trap has been sprung here, first time something other than a person
  * found it.
  */
-.chip.chip-back {
+.chip.chip-back,
+.chip.chip-lead {
   background: var(--chip-sel-fill);
   color: var(--chip-sel-ink);
   border-color: var(--chip-sel-line);
 }
 
-/* Every year at once. The bar it replaces showed 5 of 15.
+/* Every option at once, in a sheet: the years on Shows, the five sorts on
+ * Songs (0.1.76). The year bar it first replaced showed 5 of 15.
  *
  * ROW GAP IS --s-3, NOT --s-2, AND THAT IS NOT A TASTE DECISION. .chip's hit
  * region is a 44px ::after centred on a 34px box, so it overhangs 5px above and
@@ -783,13 +790,13 @@ button.gap-figure:active {
  * would overlap by 2px. 12px leaves 2px of clearance. The column gap can stay
  * at 8px because the expansion is vertical only.
  */
-.year-grid {
+.chip-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--s-3) var(--s-2);
 }
 
-.year-grid .chip {
+.chip-grid .chip {
   justify-content: center;
 }
 

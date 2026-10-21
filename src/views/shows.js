@@ -244,7 +244,7 @@ export function renderShows(ctx) {
    */
   function openYearSheet(activeYear = null) {
     openSheet('Browse by year', (close) => {
-      const grid = el('div.year-grid', null, [
+      const grid = el('div.chip-grid', null, [
         el(
           'button.chip.year-all',
           {

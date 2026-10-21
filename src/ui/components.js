@@ -284,8 +284,15 @@ export function heatFor(value, max) {
  * used to carry gap AND times played -- one on the right, the other crammed
  * onto the meta line as "124×" or "gap 10" -- so the reader had to work out
  * which of the two numbers the list was actually ordered by. The meta line is
- * the date now, and the figure column carries whichever fact the caller's sort
- * is about. Nothing is lost: the other number is one tap away on song detail.
+ * the date line, and the figure column carries whichever fact the caller's
+ * sort is about. Nothing is lost: the other number is one tap away on song
+ * detail.
+ *
+ * Under figure 'longest' (0.1.76) the date line is the SPAN the figure bounds
+ * -- "Feb 7, 2025 → Oct 17, 2026", or "Feb 7, 2025 → still open" when the gap
+ * is the current one -- because a longest gap without its dates is a number
+ * with no universe. That is still one figure and one date line; the span
+ * states the figure's dates and does not repeat its value.
  *
  * @param {object} opts
  * @param {boolean} [opts.jamBadge=false]  Show a "Jam" badge on the meta line.
@@ -310,6 +317,15 @@ export function songRow(
     value = song.timesPlayed;
     unit = song.timesPlayed === 1 ? 'time' : 'times';
     spoken = `played ${value} ${unit}`;
+  } else if (figure === 'longest') {
+    // The longest gap the song has been through, closed or still open. A max
+    // over per-show gaps the gap charts already render -- see longestGap().
+    value = song.longestGap ? song.longestGap.gap : null;
+    unit = 'longest gap';
+    spoken =
+      value === null
+        ? 'never played'
+        : `longest observed gap of ${value} shows${song.longestGap.isOpen ? ', still open' : ''}`;
   } else {
     // "SINCE PLAYED", not "SHOWS". A song played at the most recent counted
     // show has a gap of 0, and "0 SHOWS" reads as never played -- the opposite
@@ -319,14 +335,19 @@ export function songRow(
     spoken = value === null ? 'never played' : `${value} shows since last played`;
   }
 
-  // The date, and nothing that duplicates the figure column.
+  // The date line, and nothing that duplicates the figure column. Under the
+  // longest figure it is the span: both bounding dates, or the from-date and
+  // "still open" when the open gap is the longest. The from-date of an open
+  // span IS the last-played date, so nothing the line used to say is lost.
   const meta = el('div.row-meta');
-  append(
-    meta,
-    el('span', {
-      text: song.lastPlayed ? `Last ${formatShowDateShort(song.lastPlayed)}` : 'Never played',
-    }),
-  );
+  let dateText;
+  if (figure === 'longest' && song.longestGap) {
+    const { fromDate, toDate, isOpen } = song.longestGap;
+    dateText = `${formatShowDateShort(fromDate)} → ${isOpen ? 'still open' : formatShowDateShort(toDate)}`;
+  } else {
+    dateText = song.lastPlayed ? `Last ${formatShowDateShort(song.lastPlayed)}` : 'Never played';
+  }
+  append(meta, el('span', { text: dateText }));
   // Cover attribution is plain text, not a bordered badge: a badge wraps onto
   // its own line and costs a row of density on the app's busiest list.
   if (!song.isOriginal) {
