@@ -308,13 +308,30 @@ not "bustout", no language that implies what will happen.
 
 Design decisions recorded with the ruling:
 
-1. **A sort mode, not a threshold filter.** "Longest gap" joins the Songs chip bar as a sort,
+1. **A sort mode, not a threshold filter.** "Longest gap" joins the Songs sort modes,
    descending. No cut-off that would need a number invented to set it.
-2. **Longest = max(closed gaps, current open gap)**, and the chip is flagged when the open gap —
+2. **Longest = max(closed gaps, current open gap)**, and the figure is flagged when the open gap —
    shows since the last performance, still growing — is the longest. A one-play song has only
-   its open gap.
-3. **The card chip shows the number plus the two bounding show dates**, from and to; when the
-   span is open the "to" end is an open marker rather than a date.
+   its open gap. An exact tie between the open and a closed gap reads as open: the open one is
+   the same length and still counting.
+3. **The row shows the number plus the two bounding show dates**, from and to; when the span is
+   open the "to" end is an open marker rather than a date.
+
+   **As originally decided (2026-10-21): a chip on every song row, under every sort.** That was
+   made in chat without the 0.1.73 one-figure-per-row rule in view (`design.md`, 0.1.73: each
+   Songs row carries exactly one figure column and the meta line is the date), and it would have
+   reversed that rule unknowingly — a second number on every row under every sort.
+
+   **Amended the same day:** the longest gap is the row **figure** under the "Longest gap" sort
+   only, with the span (`from → to`) replacing the date line on that sort. The other four sorts
+   render exactly what they did. Song detail carries the longest span under every sort, for every
+   played song including one-play songs, so a figure seen in the list never vanishes on tap.
+4. **Sort selector: the 0.1.75 lead-chip + bottom-sheet pattern**, not a fifth chip. Measured
+   headless at 390px: five chips need 504px of content width against 390px visible, and the
+   four-chip bar already overflowed by 7px (397px) with the scrollbar hidden. The lead chip reads
+   the active sort and opens the sheet with the five modes.
+5. **Open-span marker text is "still open"** — it describes the present state (not played again
+   as of the newest counted show) in the ruling's own word.
 
 ## Out of scope — parked
 
