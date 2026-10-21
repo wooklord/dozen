@@ -1,0 +1,6 @@
+# LF in the working copy for every text file, on every machine. core.autocrlf=true
+# on Windows was rewriting checked-out files to CRLF, which broke exact-text edit
+# anchors and fed layout-diff CRLF on one side (see CLAUDE.md, the 0.1.60 and
+# 0.1.65 fixes). Binary files are listed so autodetection never touches them.
+* text=auto eol=lf
+*.png binary
