@@ -291,6 +291,31 @@ reads 608 rather than 783).
 The UI states the convention and shows the counted-show total, so the number is never a bare
 figure the user has to take on faith.
 
+## Scope rulings
+
+Decisions on where a specific feature sits against the hard scope rule in `CLAUDE.md`, dated,
+so they are not re-argued.
+
+### "Longest observed gap" per song — IN scope (2026-10-21)
+
+It is the **maximum of the per-show historical gaps the app already renders** through
+`gapAtShow()`: every gap chart lists, for every song in a show, how many counted shows had passed
+since that song was last played. Taking the largest of those figures for one song is a max over
+displayed, Carton-derived numbers — sorting and counting, not a statistic The Carton never shows.
+
+**The word "observed" is deliberate and stays.** It describes what has happened. Not "record gap",
+not "bustout", no language that implies what will happen.
+
+Design decisions recorded with the ruling:
+
+1. **A sort mode, not a threshold filter.** "Longest gap" joins the Songs chip bar as a sort,
+   descending. No cut-off that would need a number invented to set it.
+2. **Longest = max(closed gaps, current open gap)**, and the chip is flagged when the open gap —
+   shows since the last performance, still growing — is the longest. A one-play song has only
+   its open gap.
+3. **The card chip shows the number plus the two bounding show dates**, from and to; when the
+   span is open the "to" end is an open marker rather than a date.
+
 ## Out of scope — parked
 
 Anything crossing the scope rule goes to [`phase3_ideas.md`](phase3_ideas.md), not into the app.
