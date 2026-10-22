@@ -332,6 +332,12 @@ Design decisions recorded with the ruling:
    the active sort and opens the sheet with the five modes.
 5. **Open-span marker text is "still open"** — it describes the present state (not played again
    as of the newest counted show) in the ruling's own word.
+6. **The list is sectioned by whether the longest gap is still open (2026-10-21).** Under the
+   "Longest gap" sort the rows are grouped: **Still open** first, then **Closed**, then **Never
+   played**, each under a header carrying that section's count, each sorted descending within
+   itself. Asked for after seeing 0.1.76 on the phone: an interleaved list made it hard to tell
+   which gaps were still running and which had ended. Grouping by a Carton-derived flag is grouping,
+   which the scope rule allows, and the header words are this ruling's own.
 
 ## Out of scope — parked
 
