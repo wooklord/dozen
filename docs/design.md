@@ -1012,10 +1012,43 @@ find the thing the name says. The filter bar is unchanged and still the secondar
 
 `scripts/smoke.mjs` picks sorts through the two taps a thumb makes, reads the pressed state from
 the lead chip's text, asserts the meta line per sort (the four `Last {date}` sorts, the one span
-sort, with the span regex requiring both ends), and under "Longest gap" reads every rendered
-`.gap-num` down the list and asserts it never climbs, that never-played dashes sit only at the
-tail, and that at least one open and one closed span are on screen. Proved red by flipping the
-comparator's sign before it was trusted green.
+sort, with the span regex requiring both ends), and under "Longest gap" read every rendered
+`.gap-num` down the list and asserted it never climbed, with never-played dashes only at the tail.
+Proved red by flipping the comparator's sign before it was trusted green. **That flat list lasted
+one build**; 0.1.77 below sections it, and the check became per-section.
+
+### The longest-gap list is sectioned: still open, closed, never played (0.1.77)
+
+Seen on the phone the day 0.1.76 shipped: a 300-show gap that ended in 2019 and a 300-show gap still
+running today sat on adjacent rows, and the span text — `→ Oct 17, 2026` against `→ still open` —
+was the only thing telling them apart. At 13px on a scrolling list it did not. So under "Longest
+gap" the rows are grouped: **Still open (175)**, then **Closed (188)**, then **Never played (7)**,
+each under a counted header, each descending within itself. Grouping by a flag the index already
+carries is grouping, which the scope rule allows; recorded as decision 6 in `plan.md`.
+
+**The partition happens after one sort, not inside the comparator.** A stable split of a sorted
+array leaves each part sorted, so `compareByLongestGap` and its tests are untouched and the sections
+inherit its order. **The heat max stays list-wide** across the divider, so a 300-show open gap and a
+300-show closed one paint the same bar. **Empty sections render nothing**, header included — a
+search matching one song gets one header, not three. The count line above the sections is
+unchanged. Under the other four sorts nothing changes; the section logic is scoped to that figure.
+
+**The headers use the house parenthetical**, `Still open (175)`, not the middot form the chat first
+suggested: "Every show (12)", "Every performance (125)" and "Shows (63)" already count that way, and
+the header sweep's Rule 1 already strips a trailing `(N)` before testing a title for an echo. The
+middot was proposed without that convention in view. They are `sectionHead()` inside `.section`,
+exactly what the gap chart does under each set label, so no new class and no new CSS.
+
+The smoke check reads every section and every row from the screen and asserts four things: (a) the
+headers present are in that order and the first two exist; (b) each header's count equals its own
+rows, the counts sum to every row on screen, and that total is the count line's number; (c) within a
+section the figures never climb; (d) **every row matches its section's kind** — an open span under
+Still open, a closed span under Closed, a dash under Never played. (d) is the one that catches a row
+under the wrong header; (a)–(c) are all satisfied by two well-ordered sections whose titles were
+swapped, and that is exactly the sabotage used to prove it red. A second check isolates one song
+with the search box and asserts a single section with a single header. The header sweep arrives at
+Songs on the A–Z default and never sees these headers, so their not echoing the h1 is by inspection.
+`layout-diff` probes the same default and does not cover the sectioned view.
 
 ## Attribution
 

@@ -9,7 +9,7 @@
 // labelled with what is likely to happen next.
 
 import { el, append, debounce, openSheet } from '../ui/dom.js';
-import { songRow, attribution, emptyState, gapExplainerLink } from '../ui/components.js';
+import { songRow, attribution, emptyState, gapExplainerLink, sectionHead } from '../ui/components.js';
 import { normalizeQuery, matchesQuery } from '../data/normalize.js';
 import { compareSongsByName, compareByLongestGap } from '../data/index.js';
 
@@ -38,9 +38,16 @@ const state = {
 // the sorted column" treatment to get wrong; see songRow in ui/components.js.
 //
 // "Longest gap" (0.1.76) is the fifth: the longest gap a song has been through,
-// closed or still open, descending. The figure IS that gap, and the row's date
-// line becomes the span that bounds it -- see songRow. It is a max over the
-// per-show gaps the gap charts already render; ruled in scope in docs/plan.md.
+// closed or still open. The figure IS that gap, and the row's date line becomes
+// the span that bounds it -- see songRow. It is a max over the per-show gaps
+// the gap charts already render; ruled in scope in docs/plan.md.
+//
+// Under it the list is SECTIONED (0.1.77): "Still open", then "Closed", then
+// "Never played", each under a counted header, each descending within itself.
+// Interleaved, a 300-show gap that ended in 2019 and a 300-show gap still
+// running today sat on adjacent rows and the span text was the only thing
+// telling them apart -- which on a phone it did not. Grouping by a flag the
+// index already carries is grouping; see plan.md decision 6.
 const SORTS = [
   ['alpha', 'A–Z', 'times'],
   ['gap-desc', 'Coldest first', 'gap'],
@@ -158,7 +165,9 @@ export function renderSongs(ctx) {
   const countLine = el('p.note', { style: { margin: '4px 0 8px' } });
   append(screen, countLine);
 
-  const listWrap = el('ul.rows');
+  // A plain container: one ul.rows under four of the sorts, three sectioned
+  // lists under "Longest gap". Rebuilt on every paint.
+  const listWrap = el('div');
   append(screen, listWrap);
   append(screen, attribution());
 
@@ -209,6 +218,9 @@ export function renderSongs(ctx) {
     const figure = active?.[2] || 'gap';
     const maxGap = songs.reduce((m, s) => Math.max(m, s.showsSinceLastPlayed ?? 0), 1);
     const maxTimes = songs.reduce((m, s) => Math.max(m, s.timesPlayed), 1);
+    // LIST-WIDE, computed before the longest sort is split into sections, so a
+    // 300-show gap paints the same bar whether it is still open or ended in
+    // 2019. A per-section max would make the bars lie across the divider.
     const maxLongest = songs.reduce((m, s) => Math.max(m, s.longestGap ? s.longestGap.gap : 0), 1);
     const heatMax = figure === 'times' ? maxTimes : figure === 'longest' ? maxLongest : maxGap;
 
@@ -218,20 +230,41 @@ export function renderSongs(ctx) {
 
     listWrap.replaceChildren();
     if (!songs.length) {
-      append(listWrap, el('li', null, emptyState('No songs match that search.')));
+      append(listWrap, el('ul.rows', null, el('li', null, emptyState('No songs match that search.'))));
       return;
     }
 
-    for (const s of songs) {
-      append(
-        listWrap,
-        songRow(s, {
-          figure,
-          maxGap: heatMax,
-          index,
-          onOpen: (song) => navigate(`#/song/${song.song_id}`),
-        }),
+    const rowsOf = (list) =>
+      el(
+        'ul.rows',
+        null,
+        list.map((s) =>
+          songRow(s, {
+            figure,
+            maxGap: heatMax,
+            index,
+            onOpen: (song) => navigate(`#/song/${song.song_id}`),
+          }),
+        ),
       );
+
+    if (figure !== 'longest') {
+      append(listWrap, rowsOf(songs));
+      return;
+    }
+
+    // Partition AFTER the one sort: a stable split of a sorted array leaves
+    // each part sorted, so the comparator is used once and sections inherit
+    // its order. Empty sections render nothing, header included -- a search
+    // that matches only closed gaps gets one header, not three.
+    const sections = [
+      ['Still open', songs.filter((s) => s.longestGap && s.longestGap.isOpen)],
+      ['Closed', songs.filter((s) => s.longestGap && !s.longestGap.isOpen)],
+      ['Never played', songs.filter((s) => !s.longestGap)],
+    ];
+    for (const [title, list] of sections) {
+      if (!list.length) continue;
+      append(listWrap, el('div.section', null, [sectionHead(`${title} (${list.length})`), rowsOf(list)]));
     }
   }
 

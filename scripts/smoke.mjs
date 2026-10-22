@@ -1487,43 +1487,85 @@ server.listen(PORT, async () => {
     }
   }
 
-  // --- "Longest gap": the rendered figures ARE the order --------------------
+  // --- "Longest gap": sectioned, and every row sits under the right header --
   //
-  // Read from the chips on screen, every row, not from the index: the claim is
-  // that what the reader sees descends, and a comparator with the wrong sign
-  // would render a perfectly numeric list that climbs. Never-played songs have
-  // no gap and render an em dash; those may appear only at the tail. And both
-  // kinds of span must be present -- the open "still open" and a closed
-  // "date → date" -- or the marker branch was never rendered and this check
-  // would be green on a list that printed every span one way.
-  console.log('\n"Longest gap" renders in descending order:');
+  // (0.1.77) Under this sort the list is three sections -- Still open, Closed,
+  // Never played -- each with a counted header, each descending within itself.
+  // Read from the screen, every section and every row, never from the index:
+  //   (a) the headers present are in that order, and the first two exist;
+  //   (b) each header's (N) equals its own row count, the counts sum to every
+  //       row on screen, and that total is what the count line says;
+  //   (c) within a section the figures never climb;
+  //   (d) every row matches its section's kind -- an open span under Still
+  //       open, a closed span under Closed, a dash under Never played. This is
+  //       the one that catches a row under the wrong header; (a)-(c) are all
+  //       satisfied by two well-ordered sections whose titles were swapped.
+  // The header sweep later in this file arrives at Songs on the A–Z default and
+  // never sees these headers, so their non-echo of the h1 is by inspection:
+  // none of the three titles contains "songs".
+  console.log('\n"Longest gap" is sectioned, descending within each:');
+  const ORDER = ['Still open', 'Closed', 'Never played'];
+  const OPEN_SPAN = new RegExp(`^${DATE} → still open`);
+  const CLOSED_SPAN = new RegExp(`^${DATE} → ${DATE}`);
+  const readSections = () => evaluate(`(() => {
+    const t = (n) => ((n || {}).textContent || '').trim();
+    const count = [...document.querySelectorAll('.screen .note')].map(t).find((x) => /^\\d+ songs?\\b/.test(x)) || '';
+    return {
+      countLine: count ? Number(count.match(/^(\\d+)/)[1]) : null,
+      allRows: document.querySelectorAll('.screen .rows li').length,
+      sections: [...document.querySelectorAll('.screen .section')].map((sec) => ({
+        title: t(sec.querySelector('.section-title')),
+        rows: [...sec.querySelectorAll('.rows li')].map((li) => ({
+          title: t(li.querySelector('.row-title')),
+          num: t(li.querySelector('.gap-num')),
+          meta: t(li.querySelector('.row-meta')),
+        })),
+      })),
+    };
+  })()`);
+  const parseSections = (shot) => shot.sections.map((sec) => {
+    const m = sec.title.match(/^(.*) \((\d+)\)$/);
+    return { ...sec, name: m ? m[1] : sec.title, n: m ? Number(m[2]) : null };
+  });
+  const ROW_KIND = {
+    'Still open': (r) => r.num !== '—' && OPEN_SPAN.test(r.meta),
+    'Closed': (r) => r.num !== '—' && CLOSED_SPAN.test(r.meta),
+    'Never played': (r) => r.num === '—' && /^Never played/.test(r.meta),
+  };
+
   if (!(await clickSort('Longest gap'))) fail('longest gap: no "Longest gap" in the sort sheet');
   else {
     await sleep(900);
-    const rows = await evaluate(`[...document.querySelectorAll('.rows li')].map((li) => ({
-      num: (li.querySelector('.gap-num') || {}).textContent,
-      unit: (li.querySelector('.gap-unit') || {}).textContent,
-      meta: (li.querySelector('.row-meta') || {}).textContent,
-    }))`);
-    const nums = rows.map((r) => (r.num || '').trim());
-    const firstDash = nums.indexOf('—');
-    const dashOnlyAtTail = firstDash === -1 || nums.slice(firstDash).every((n) => n === '—');
-    const values = nums.filter((n) => n !== '—').map(Number);
-    let firstClimb = -1;
-    for (let i = 1; i < values.length; i++) if (values[i] > values[i - 1]) { firstClimb = i; break; }
-    // Start-anchored, both: the meta line goes on to a cover note after the
-    // span on cover songs, so an end anchor would miss every one of those.
-    const open = rows.filter((r) => new RegExp(`^${DATE} → still open`).test((r.meta || '').trim())).length;
-    const closed = rows.filter((r) => new RegExp(`^${DATE} → ${DATE}`).test((r.meta || '').trim())).length;
-    const units = new Set(rows.map((r) => ((r.unit || '').trim().toLowerCase())));
-    if (rows.length < 2) fail(`longest gap: ${rows.length} row(s) rendered -- nothing to order`);
-    else if (values.some((v) => !Number.isFinite(v))) fail(`longest gap: a figure is not a number: ${JSON.stringify(nums.find((n) => n !== '—' && !Number.isFinite(Number(n))))}`);
-    else if (!dashOnlyAtTail) fail(`longest gap: a never-played dash at row ${firstDash + 1} has numbered rows after it`);
-    else if (firstClimb !== -1) fail(`longest gap: row ${firstClimb + 1} reads ${values[firstClimb]} after ${values[firstClimb - 1]} -- the list climbs`);
-    else if (units.size !== 1 || !units.has('longest gap')) fail(`longest gap: units on screen are ${JSON.stringify([...units])}, expected only "longest gap"`);
-    else if (!open || !closed) fail(`longest gap: ${open} open span(s) and ${closed} closed span(s) rendered -- both kinds must appear`);
-    else if (open + closed !== values.length) fail(`longest gap: ${values.length} numbered rows but ${open + closed} spans -- a row carries a figure with no dates under it`);
-    else pass(`${values.length} figures non-increasing (${values[0]} … ${values[values.length - 1]}), ${nums.length - values.length} never-played at the tail, ${open} open + ${closed} closed spans`);
+    const shot = await readSections();
+    const parsed = parseSections(shot);
+    const names = parsed.map((x) => x.name);
+    const rank = names.map((n) => ORDER.indexOf(n));
+    const total = parsed.reduce((a, x) => a + x.rows.length, 0);
+    const problems = [];
+    // (a) order and presence
+    if (rank.includes(-1)) problems.push(`(a) unknown section title(s) ${JSON.stringify(parsed.filter((_, i) => rank[i] === -1).map((x) => x.title))}`);
+    else if (rank.some((v, i) => i && v <= rank[i - 1])) problems.push(`(a) sections render as ${JSON.stringify(names)}, expected the order ${JSON.stringify(ORDER)}`);
+    if (!names.includes('Still open') || !names.includes('Closed')) problems.push(`(a) sections are ${JSON.stringify(names)} -- "Still open" and "Closed" must both be present`);
+    // (b) counts
+    for (const x of parsed) if (x.n !== x.rows.length) problems.push(`(b) "${x.title}" heads ${x.rows.length} row(s)`);
+    if (shot.allRows !== total) problems.push(`(b) ${shot.allRows} rows on screen but ${total} under headers`);
+    if (shot.countLine !== total) problems.push(`(b) the count line says ${shot.countLine}, the sections hold ${total}`);
+    // (c) non-increasing within a section
+    for (const x of parsed) {
+      const v = x.rows.map((r) => r.num).filter((n) => n !== '—').map(Number);
+      if (v.some((n) => !Number.isFinite(n))) { problems.push(`(c) "${x.title}" has a non-numeric figure`); continue; }
+      for (let i = 1; i < v.length; i++) if (v[i] > v[i - 1]) { problems.push(`(c) "${x.title}" climbs at row ${i + 1}: ${v[i]} after ${v[i - 1]}`); break; }
+    }
+    // (d) every row under its own kind
+    for (const x of parsed) {
+      const ok = ROW_KIND[x.name];
+      if (!ok) continue;
+      const bad = x.rows.findIndex((r) => !ok(r));
+      if (bad !== -1) problems.push(`(d) "${x.title}" row ${bad + 1} is not that kind: ${JSON.stringify(x.rows[bad])}`);
+    }
+    if (!parsed.length) fail('longest gap: no sections rendered under the sort');
+    else if (problems.length) for (const p of problems) fail(`longest gap: ${p}`);
+    else pass(`${parsed.map((x) => x.title).join(' → ')}: ${total} rows = count line, non-increasing within each, every row under its own kind`);
   }
 
   // --- A–Z and "Most played" show the SAME FACT, so they must RENDER the same
@@ -1577,6 +1619,20 @@ server.listen(PORT, async () => {
     fail(`figure parity: same markup, different paint — ${azFig.colour}/${azFig.width}px vs ${mostFig.colour}/${mostFig.width}px`);
   } else {
     pass(`"${PROBE_SONG}" renders identically under both: ${azFig.html}`);
+  }
+  // One matching song under "Longest gap": exactly ONE section renders, with
+  // one header and that one row. Empty sections render nothing -- a reader who
+  // searched for a song must not get two empty headers around it. "Agatha" is
+  // played, so the header is Still open or Closed, never Never played.
+  if (!(await clickSort('Longest gap'))) fail('single section: no "Longest gap" in the sort sheet');
+  else {
+    await sleep(700);
+    const one = parseSections(await readSections());
+    if (one.length !== 1) fail(`single section: "${PROBE_SONG}" renders ${one.length} section(s) under Longest gap, expected 1 (${JSON.stringify(one.map((x) => x.title))})`);
+    else if (!/^(Still open|Closed) \(1\)$/.test(one[0].title)) fail(`single section: header reads ${JSON.stringify(one[0].title)}, expected "Still open (1)" or "Closed (1)"`);
+    else if (one[0].rows.length !== 1 || one[0].rows[0].title !== PROBE_SONG) fail(`single section: the one section holds ${JSON.stringify(one[0].rows.map((r) => r.title))}`);
+    else if (!ROW_KIND[one[0].name](one[0].rows[0])) fail(`single section: "${PROBE_SONG}" sits under "${one[0].title}" but reads ${JSON.stringify(one[0].rows[0])}`);
+    else pass(`"${PROBE_SONG}" alone renders one section, "${one[0].title}", and no empty headers`);
   }
   await setSongQuery('');
   await clickSort('A–Z');
