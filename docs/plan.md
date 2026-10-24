@@ -401,17 +401,37 @@ the column from a fresh pull and comparing against 19 song pages (`feel-like-a-s
    Consecutive dates give 1; a second performance on the same date gives 0.
 4. **Current gap = position(newest played date) − position(last performance's date).** A song
    played at the newest show reads 0.
-5. **Carton prints a number for a debut too:** the position of the debut date. Whether the app
-   keeps its "Debut" badge there is a Step 1 design decision, recorded there.
+5. **Carton prints a number for a debut too:** the position of the debut date. It is a position,
+   not a closed gap — see decision 1 below.
 
 `Feel Like A Stranger` under this rule: 723 closed, 2015-06-20 → 2026-10-17, current gap 4 —
 Carton's figures exactly.
 
-**What the oracle could not settle.** "On or before today" and "on or before the newest show with
-a setlist" produce identical numbers today, because no show falls between 2026-10-23 and
-2026-10-24. The two diverge only on a day when a show has happened and its setlist is not yet
-posted. Decided for *today*, as Carton evidently counts setlist-less shows elsewhere; recorded as
-unproven.
+**A diagnosis reported in chat the same day was wrong, and is withdrawn here.** It said
+`gapAtShow()` and the current gap were on different footings — an "off-by-one", consecutive
+shows reading 1 at a play and 0 as a current gap. Both were ordinal differences, which IS Carton's
+arithmetic: played at the show before reads 1, played at the newest show reads 0 since, and two
+performances on one date read 0. The residual it was trying to explain (723 against 724) was the
+second-artist show, not a convention offset. The comments that say "gap 0 means played at the
+immediately preceding show" are the thing that was wrong, in both the code and the tests.
+
+**Decisions settled 2026-10-24, with the ruling:**
+
+1. **Debuts are excluded from the longest gap, and the "Debut" badge stays.** Carton's debut-row
+   number is the position of the debut date — how many Eggy shows had happened by then — not a gap
+   between two performances. Counting it as a closed gap would hand every 2024 debut a "longest
+   gap" near 580 that no performance ever closed.
+2. **The second artist (`artist_id` ≠ 1) is excluded from the gap universe and from song
+   performance counts only.** That is what Carton's Eggy song pages do: the Thorns page lists 360
+   rows and omits 2026-02-10 although the setlists table carries a Thorns row for it. The show
+   stays visible in Shows and Venues as a show that happened. **Excluding it more broadly is a
+   separate ruling, open and not made here.**
+3. **The universe runs through today, not through the newest show with a setlist.** The two give
+   identical numbers on 2026-10-24 because no show falls between 2026-10-23 and today, so this is
+   **recorded as unproven.** The observation that settles it: on a show day, before the setlist
+   posts, does Carton's "which was N show(s) ago" count that show? If it does, *today* is right.
+   If it does not, the cutoff is the newest show with a setlist. Whoever is looking at Carton on
+   such a day should record the answer here.
 
 **The convention text in this file above, the index comment, the Settings sheet, the gap
 explainer, and `tests/gap.test.mjs` all describe the withdrawn rule** and are rewritten in the
