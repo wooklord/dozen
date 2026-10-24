@@ -3,5 +3,5 @@
 // The marker renders in the Settings & data sheet (header cache button, then
 // BUILD — a header chip until 0.1.33); it is how a deploy gets confirmed
 // without dev tools. A change without a bump is an incomplete change.
-export const BUILD = 77;
+export const BUILD = 78;
 export const BUILD_LABEL = `BUILD 0.1.${BUILD}`;

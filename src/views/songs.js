@@ -71,7 +71,7 @@ export function renderSongs(ctx) {
   append(
     screen,
     el('p.screen-sub', null, [
-      `${index.counts.songs} songs in the archive. Gap is counted across the ${index.counts.countedShows} shows that have setlist data. `,
+      `${index.counts.songs} songs in the archive. Gap is counted across the ${index.counts.countedShows} shows played so far, as on The Carton. `,
       gapExplainerLink(index, 'How this is counted'),
     ]),
   );

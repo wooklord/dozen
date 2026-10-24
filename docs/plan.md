@@ -149,7 +149,8 @@ Positional tendencies depend entirely on these, so the derivation is specified r
 `position`, `song_id`, `transition_id`.
 
 **Canonical show ordering** — `showdate` ascending (ISO strings sort lexically), tie-broken by
-`showorder` ascending. This ordering is the denominator for every gap number.
+`showorder` ascending. Gap positions are counted by **date** over this ordering, so two shows
+on one date share a position — see *Gap convention* below.
 
 **Set identity** — the tuple `(show_id, settype, setnumber)`. `setnumber` is a **string**
 (`"1"`, `"2"`, `"3"`, `"e"`, `"e2"`) and is never sorted or compared numerically. Sets are ordered
@@ -253,20 +254,33 @@ Full treatment goes in `docs/design.md` at step 0. Committed direction:
   - observed set structures of **prior shows at that venue**,
   - what was played last time at that venue, "On This Date", and the venue's play count.
 
-## Gap convention — settled by measurement
+## Gap convention — Carton's Show Gap column, exactly
 
-> **Withdrawn 2026-10-24.** This section describes the convention that shipped 0.1.x through 0.1.77.
-> It is reversed by the ruling *Gap convention — REVERSED* under *Scope rulings* below, and the
-> code follows in BUILD 0.1.78. Kept so the original reasoning is readable where it was made.
+**Definition shipped (BUILD 0.1.78):** *gap* means what the **Show Gap** column on a
+`thecarton.net/song/{slug}` page means, and the current gap means that page's "which was N
+show(s) ago". The rule, measured against 19 song pages on 2026-10-24 — **1069 of 1069 per-play
+rows and 19 of 19 current gaps** — and the reasoning for adopting it, are in the ruling *Gap
+convention — REVERSED* under *Scope rulings* below, which also quotes the withdrawn convention's
+rationale verbatim. In brief:
 
-**Definition shipped:** *shows since last played* = the number of shows in the canonical ordering
-between a song's most recent performance and the newest show, **counting only shows that have
-setlist data.** 0 means it was played at the most recent show.
+1. **The universe is every Eggy show** (`artist_id` 1) with a valid date, dated on or before
+   today, **including shows with no setlist rows.** Upcoming shows are excluded, and so is the one
+   `artist_id` 2 show. "Through today" is recorded as unproven in the ruling.
+2. **Position is by date.** A date's position is the number of universe shows dated on or before
+   it; two shows on one date share a position.
+3. **Gap at a performance = position(this) − position(previous performance).** Consecutive dates
+   give 1; a second performance on one date gives 0.
+4. **Current gap = position(newest played date) − position(last performance).** Played at the
+   newest show reads 0.
+5. **A debut is a badge, not a gap.** Carton prints the debut date's position there; the app does
+   not count it as a closed gap, so the longest gap is a max over gaps between performances only.
 
-Two things were measured before settling this.
+`scripts/gap-oracle.mjs` re-proves the rule against the live site, through the app's own
+`buildIndex()` and `gapAtShow()`, and SKIPs rather than passes when Carton is unreachable.
 
-**1. Carton's own footnote gaps are not reproducible, and we should stop trying.** 58 footnotes
-state an explicit `(N show gap)`. No single convention reproduces them:
+**Carton's own footnote gaps are not reproducible, and we do not try.** Measured before the first
+convention was settled: 58 footnotes stated an explicit `(N show gap)` and no single rule
+reproduced them —
 
 | Rule | Matches |
 |---|---|
@@ -275,25 +289,14 @@ state an explicit `(N show gap)`. No single convention reproduces them:
 | shows-with-setlists, difference | 9 / 58 |
 | shows-with-setlists, difference − 1 | 28 / 58 |
 
-Footnotes days apart use different conventions (2026-08-06 matches one rule, 2026-08-08 the other),
-which means they are **static text written at different times against a growing archive** — not
-output of a live formula. Retroactive show additions have since shifted the counts.
+Footnotes days apart use different conventions, which means they are **static text written at
+different times against a growing archive** — not output of a live formula. That finding stands.
+What it never measured was the Show Gap *column*, which is computed live and is the thing this
+app now matches. The footnote text is still rendered verbatim beside our figure, never reconciled.
 
-**Consequence:** we compute our own number under one documented convention and **always render
-Carton's footnote text verbatim beside it**, never overwriting it or trying to make the two agree.
-Both are true; they describe different moments.
-
-**2. The denominator excludes shows with no setlist data.** 194 of 804 shows have zero setlist rows
-(mostly 2013–2015). A show with no recorded setlist cannot establish that a song went unplayed —
-we simply don't know — so counting it would inflate every gap spanning it. This also drops one
-corrupt row in the `shows` table dated **`0015-08-28`**.
-
-The counted universe is **610 shows**. For modern songs both denominators converge, since nearly
-every recent show has a setlist; the choice only moves ancient bustout numbers (the coldest song
-reads 608 rather than 783).
-
-The UI states the convention and shows the counted-show total, so the number is never a bare
-figure the user has to take on faith.
+The UI states the convention and the counted-show total, so the number is never a bare figure the
+user has to take on faith — and the "How gap is counted" sheet says, in one line, that it is
+Carton's figure.
 
 ## Scope rulings
 
@@ -422,10 +425,18 @@ immediately preceding show" are the thing that was wrong, in both the code and t
    between two performances. Counting it as a closed gap would hand every 2024 debut a "longest
    gap" near 580 that no performance ever closed.
 2. **The second artist (`artist_id` ≠ 1) is excluded from the gap universe and from song
-   performance counts only.** That is what Carton's Eggy song pages do: the Thorns page lists 360
-   rows and omits 2026-02-10 although the setlists table carries a Thorns row for it. The show
-   stays visible in Shows and Venues as a show that happened. **Excluding it more broadly is a
-   separate ruling, open and not made here.**
+   performance counts only.** That is what Carton's Eggy song pages do: the Thorns page
+   (`/song/t` — see below) is headed "Every Time Played by Eggy", lists **10** performances, omits
+   2026-02-10 although the setlists table carries a Thorns row for it, and says separately that
+   the song "has also been performed by Dani Battat 1 time". The show stays visible in Shows and
+   Venues as a show that happened. **Excluding it more broadly is a separate ruling, open and not
+   made here.**
+
+   > **As first recorded here, this decision cited "the Thorns page lists 360 rows and omits
+   > 2026-02-10". That figure was wrong.** The page fetched was `/song/thorns`, which The Carton
+   > **redirects to the all-songs index** (`/song/`), and 360 was the number of songs on it. The
+   > song's live slug is `t`, matching the API. The decision stands on the real page, quoted
+   > above; the false figure is left here, struck, so the correction is visible.
 3. **The universe runs through today, not through the newest show with a setlist.** The two give
    identical numbers on 2026-10-24 because no show falls between 2026-10-23 and today, so this is
    **recorded as unproven.** The observation that settles it: on a show day, before the setlist

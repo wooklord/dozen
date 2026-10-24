@@ -152,9 +152,9 @@ export function openGapExplainer(index, { withFootnoteNote = true, atShow = fals
   return openSheet('How gap is counted', () =>
     el('div', { style: { display: 'grid', gap: '12px' } }, [
       el('p', { style: { margin: 0, fontSize: 'var(--t-sm)' } }, [
-        'Gap is the number of shows since a song was last played, counted across the ',
-        el('strong', { text: `${c.countedShows} shows` }),
-        ' in the archive that have a setlist recorded. 0 means it was played at the most recent show.',
+        'Gap is the number of shows since a song was last played, counted the way the Show Gap column on The Carton counts it: across the ',
+        el('strong', { text: `${c.countedShows} Eggy shows` }),
+        ' played so far, whether or not a setlist was recorded. 0 means it was played at the most recent show.',
       ]),
       atShow
         ? el('p', {
@@ -166,16 +166,17 @@ export function openGapExplainer(index, { withFootnoteNote = true, atShow = fals
           })
         : null,
       el('div.card', null, [
-        el('div.section-title', { style: { marginBottom: '6px' }, text: 'The denominator' }),
+        el('div.section-title', { style: { marginBottom: '6px' }, text: 'Which shows count' }),
         el(
           'ul.fn-list',
           { style: { margin: 0 } },
           [
             [`${c.shows}`, 'shows in the archive'],
-            [`${c.countedShows}`, 'have a setlist recorded — these are counted'],
-            [`${c.excludedNoSetlist}`, 'were played but have no setlist recorded — not counted'],
+            [`${c.countedShows}`, 'played so far — these are counted'],
+            [`${c.countedNoSetlist}`, 'of those have no setlist recorded — still counted'],
             [`${c.excludedFuture}`, 'are upcoming — not counted'],
-          ].map(([n, label]) =>
+            c.excludedOtherArtist ? [`${c.excludedOtherArtist}`, 'by another artist — not counted'] : null,
+          ].filter(Boolean).map(([n, label]) =>
             el('li', null, [
               el('span.num', { style: { color: 'var(--yolk)', fontWeight: '700', minWidth: '38px' }, text: n }),
               el('span', { text: label }),
@@ -185,14 +186,14 @@ export function openGapExplainer(index, { withFootnoteNote = true, atShow = fals
         el('p.note', {
           style: { marginTop: '8px', marginBottom: 0 },
           text:
-            'A show with no recorded setlist cannot establish that a song went unplayed, so counting ' +
-            'it would inflate every gap spanning it. This makes gap figures here smaller than a ' +
-            'count that included every show.',
+            'A gap is a count of shows, not of setlists, so a show with no setlist recorded still ' +
+            'counts — that is what makes the figure here the same one The Carton prints in the ' +
+            'Show Gap column on each song’s page.',
         }),
         c.excludedBadDate
           ? el('p.note', {
               style: { marginTop: '6px', marginBottom: 0 },
-              text: `${c.excludedBadDate} of the uncounted shows has a corrupt date in the source data and has no setlist either.`,
+              text: `${c.excludedBadDate} show${c.excludedBadDate === 1 ? '' : 's'} with a corrupt date in the source data ${c.excludedBadDate === 1 ? 'is' : 'are'} not counted.`,
             })
           : null,
       ]),
@@ -319,7 +320,7 @@ export function songRow(
     spoken = `played ${value} ${unit}`;
   } else if (figure === 'longest') {
     // The longest gap the song has been through, closed or still open. A max
-    // over per-show gaps the gap charts already render -- see longestGap().
+    // over per-show gaps Carton's Show Gap column prints -- see longestGap().
     value = song.longestGap ? song.longestGap.gap : null;
     unit = 'longest gap';
     spoken =
@@ -327,8 +328,8 @@ export function songRow(
         ? 'never played'
         : `longest observed gap of ${value} shows${song.longestGap.isOpen ? ', still open' : ''}`;
   } else {
-    // "SINCE PLAYED", not "SHOWS". A song played at the most recent counted
-    // show has a gap of 0, and "0 SHOWS" reads as never played -- the opposite
+    // "SINCE PLAYED", not "SHOWS". A song played at the most recent show has
+    // a gap of 0, and "0 SHOWS" reads as never played -- the opposite
     // of what it means. "0 SINCE PLAYED" says the true thing.
     value = song.showsSinceLastPlayed;
     unit = 'since played';

@@ -2,6 +2,11 @@
 //
 // Gap counting. Built on a small synthetic archive so the convention is pinned
 // exactly rather than asserted against live data that changes after each show.
+//
+// The convention is The Carton's own Show Gap column (docs/plan.md, Scope
+// rulings, 2026-10-24). scripts/gap-oracle.mjs proves the rule against the
+// live site through the same functions; this file pins the arithmetic on a
+// fixture that has every case the rule has to get right.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,18 +20,24 @@ import {
 } from '../src/data/index.js';
 
 /**
- * Six shows. Show 3 deliberately has NO setlist rows, so it must not count
- * toward any gap -- that is the convention under test.
+ * Eight shows. Positions are counted BY DATE over the Eggy shows played so far,
+ * and a show with no setlist rows counts like any other -- that is the rule
+ * under test, and it is the inverse of the fixture this replaced.
  *
- *   show 1  2020-01-01   A, B
- *   show 2  2020-02-01   A
- *   show 3  2020-03-01   (no setlist data)
- *   show 4  2020-04-01   B
- *   show 5  2020-05-01   C   <- C's debut
- *   show 6  2020-06-01   A, C
+ *   show 1  2020-01-01   A, B           position 1
+ *   show 2  2020-02-01   A              position 2
+ *   show 3  2020-03-01   (no setlist)   position 3   <- counts, as on Carton
+ *   show 4  2020-04-01   B              position 4
+ *   show 5  2020-05-01   C              position 5   <- C's debut
+ *   show 6  2020-06-01   A, C           position 7   <- two shows on one date
+ *   show 7  2020-06-01   C              position 7      share a position
+ *   show 8  2020-07-01   A              artist_id 2: NOT in the universe, and
+ *                                       A's row there is not a performance
+ *
+ * Newest played date 2020-06-01, position 7.
  */
 function fixture() {
-  const show = (id, date) => ({
+  const show = (id, date, extra = {}) => ({
     show_id: id,
     showdate: date,
     permalink: `show-${id}.html`,
@@ -38,10 +49,12 @@ function fixture() {
     show_year: Number(date.slice(0, 4)),
     showorder: 1,
     venue_id: 1,
+    artist_id: 1,
     show_tags: [],
+    ...extra,
   });
 
-  const row = (uid, showId, date, songId, songName, position) => ({
+  const row = (uid, showId, date, songId, songName, position, artistId = 1) => ({
     uniqueid: String(uid),
     show_id: showId,
     showdate: date,
@@ -67,6 +80,7 @@ function fixture() {
     original_artist: '',
     isreprise: 0,
     isjam: 0,
+    artist_id: artistId,
   });
 
   return {
@@ -77,6 +91,8 @@ function fixture() {
       show(4, '2020-04-01'),
       show(5, '2020-05-01'),
       show(6, '2020-06-01'),
+      show(7, '2020-06-01', { showorder: 2 }), // second show that day
+      show(8, '2020-07-01', { artist_id: 2, artist: 'Other' }),
     ],
     setlists: [
       row(1, 1, '2020-01-01', 10, 'A', 1),
@@ -86,6 +102,8 @@ function fixture() {
       row(5, 5, '2020-05-01', 30, 'C', 1),
       row(6, 6, '2020-06-01', 10, 'A', 1),
       row(7, 6, '2020-06-01', 30, 'C', 2),
+      row(8, 7, '2020-06-01', 30, 'C', 1),
+      row(9, 8, '2020-07-01', 10, 'A', 1, 2),
     ],
     songs: [
       { id: 10, name: 'A', slug: 'a', isoriginal: 1, original_artist: 'Eggy' },
@@ -101,30 +119,61 @@ function fixture() {
 // All fixture dates are in the past, so "today" never truncates the archive.
 const index = buildIndex(fixture());
 
-test('shows without setlist data are excluded from the denominator', () => {
-  // 6 shows exist, but show 3 has no setlist rows.
-  assert.equal(index.counts.shows, 6);
-  assert.equal(index.counts.countedShows, 5);
-  assert.equal(index.counts.excludedNoSetlist, 1);
+test('shows without setlist data count toward the gap', () => {
+  // 8 shows exist; 7 are Eggy shows played so far and all 7 count, show 3
+  // with no setlist rows among them.
+  assert.equal(index.counts.shows, 8);
+  assert.equal(index.counts.playedShows, 8);
+  assert.equal(index.counts.countedShows, 7);
+  assert.equal(index.counts.countedNoSetlist, 1);
+  assert.equal(index.counts.excludedOtherArtist, 1);
+  assert.equal(index.counts.excludedFuture, 0);
 });
 
-test('gap 0 means played at the immediately preceding counted show', () => {
-  // B was played at show 1, then next at show 4. Between them: show 2 counts,
-  // show 3 does NOT (no setlist). So ordinals 0 -> 2, gap 2.
+test('gap 1 means played at the show before; the setlist-less show between counts', () => {
+  // B was played at show 1, then next at show 4. Positions 1 -> 4, gap 3:
+  // show 2 and the setlist-less show 3 both count.
   const r = gapAtShow(index, 20, 4);
   assert.equal(r.isDebut, false);
-  assert.equal(r.gap, 2);
+  assert.equal(r.gap, 3);
   assert.equal(r.previous.showdate, '2020-01-01');
 });
 
-test('the uncounted show does not inflate the gap', () => {
-  // If show 3 were counted, B's gap at show 4 would be 3 rather than 2.
-  assert.notEqual(gapAtShow(index, 20, 4).gap, 3);
+test('the setlist-less show adds one, as on Carton', () => {
+  // Under the withdrawn convention B's gap at show 4 read 2. It is 3.
+  assert.notEqual(gapAtShow(index, 20, 4).gap, 2);
 });
 
-test('consecutive counted shows give gap 1', () => {
-  // A: show 1 -> show 2, adjacent in the counted ordering.
+test('consecutive shows give gap 1', () => {
+  // A: show 1 -> show 2, adjacent dates.
   assert.equal(gapAtShow(index, 10, 2).gap, 1);
+});
+
+test('two shows on one date share a position, and the second performance reads 0', () => {
+  // Shows 6 and 7 are both 2020-06-01: position 7 for each.
+  assert.equal(index.showOrdinal.get(6), 7);
+  assert.equal(index.showOrdinal.get(7), 7);
+  // C at show 6: previous performance is show 5, gap 7 - 5 = 2.
+  assert.equal(gapAtShow(index, 30, 6).gap, 2);
+  // C at show 7: previous performance is show 6, same date, gap 0 -- the
+  // figure Carton prints on the second row of a double-show day.
+  const r = gapAtShow(index, 30, 7);
+  assert.equal(r.gap, 0);
+  assert.equal(Number(r.previous.show_id), 6);
+  // And the gap chart for the second show says so.
+  assert.deepEqual(gapChartForShow(index, 7).map((e) => [e.songname, e.gap]), [['C', 0]]);
+});
+
+test('another artist’s show is outside the universe and its rows are not performances', () => {
+  // Show 8 is in the archive (Shows and Venues still list it) ...
+  assert.ok(index.showsById.has(8));
+  // ... but has no position, and A's row there is not a play.
+  assert.equal(index.showOrdinal.has(8), false);
+  const a = index.songsById.get(10);
+  assert.equal(a.timesPlayed, 3);
+  assert.ok(a.performances.every((p) => Number(p.show_id) !== 8));
+  assert.equal(a.lastPlayed, '2020-06-01');
+  assert.equal(a.showsSinceLastPlayed, 0);
 });
 
 test('a debut is NOT gap 0', () => {
@@ -137,11 +186,10 @@ test('a debut is NOT gap 0', () => {
 });
 
 test('current gap is the same computation evaluated at the newest show', () => {
-  // B last played at show 4; newest counted show is 6. Counted ordinals:
-  // show4 = 2, show6 = 4 -> 2 shows since.
+  // B last played at show 4 (position 4); newest played date is position 7.
   const b = index.songsById.get(20);
-  assert.equal(b.showsSinceLastPlayed, 2);
-  assert.equal(gapAtShow(index, 20, 6).gap, 2);
+  assert.equal(b.showsSinceLastPlayed, 3);
+  assert.equal(gapAtShow(index, 20, 6).gap, 3);
 
   // A was played at the newest show, so its current gap is 0.
   assert.equal(index.songsById.get(10).showsSinceLastPlayed, 0);
@@ -151,9 +199,8 @@ test('gap chart covers every song of that night, in set order', () => {
   const chart = gapChartForShow(index, 6);
   assert.equal(chart.length, 2);
   assert.deepEqual(chart.map((e) => e.songname), ['A', 'C']);
-  // Counted ordering is show1=0, show2=1, show4=2, show5=3, show6=4.
-  assert.equal(chart[0].gap, 3); // A: show 2 (ord 1) -> show 6 (ord 4)
-  assert.equal(chart[1].gap, 1); // C: show 5 -> show 6, adjacent
+  assert.equal(chart[0].gap, 5); // A: show 2 (position 2) -> show 6 (position 7)
+  assert.equal(chart[1].gap, 2); // C: show 5 (position 5) -> show 6 (position 7)
 });
 
 test('gap chart marks a debut rather than reporting a number', () => {
@@ -165,16 +212,32 @@ test('gap chart marks a debut rather than reporting a number', () => {
 });
 
 test('longest observed gap is the max over per-performance gaps', () => {
-  // B: debut at show 1, then show 4 with gap 2. Only one real gap.
+  // B: debut at show 1, then show 4 with gap 3. Only one real gap.
   const b = longestObservedGap(index, 20);
-  assert.equal(b.gap, 2);
+  assert.equal(b.gap, 3);
   assert.equal(b.at.showdate, '2020-04-01');
 
-  // A: gaps of 1 (at show 2) and 3 (at show 6). Max is 3.
+  // A: gaps of 1 (at show 2) and 5 (at show 6). Max is 5.
   const a = longestObservedGap(index, 10);
-  assert.equal(a.gap, 3);
+  assert.equal(a.gap, 5);
   assert.equal(a.at.showdate, '2020-06-01');
   assert.equal(a.previous.showdate, '2020-02-01');
+});
+
+test('a debut is excluded from the longest gap', () => {
+  // C debuted at position 5 -- the number Carton prints on that row -- and its
+  // only gap between performances is 2 (then a 0 on the same-date second
+  // show). The longest is 2, not the debut position (ruling 2026-10-24,
+  // decision 1).
+  const c = longestObservedGap(index, 30);
+  assert.equal(c.gap, 2);
+  assert.notEqual(c.gap, 5);
+  assert.deepEqual(longestGap(index, 30), {
+    gap: 2,
+    fromDate: '2020-05-01',
+    toDate: '2020-06-01',
+    isOpen: false,
+  });
 });
 
 test('a song played only once has no observed gap', () => {
@@ -208,7 +271,7 @@ test('a song played twice in one night appears once, with a count', () => {
   const f = fixture();
   f.setlists.push({
     ...f.setlists[5], // the show-6 "A" row
-    uniqueid: '8',
+    uniqueid: '10',
     setnumber: 'e',
     position: 1,
   });
@@ -218,7 +281,7 @@ test('a song played twice in one night appears once, with a count', () => {
   const a = chart.filter((e) => e.songname === 'A');
   assert.equal(a.length, 1, 'A should appear once, not twice');
   assert.equal(a[0].occurrences, 2);
-  assert.equal(a[0].gap, 3, 'the gap is unchanged by the repeat');
+  assert.equal(a[0].gap, 5, 'the gap is unchanged by the repeat');
   // Both placements are recorded.
   assert.ok(a[0].alsoIn.includes('Set 1'));
   assert.ok(a[0].alsoIn.includes('Encore'));
@@ -226,15 +289,15 @@ test('a song played twice in one night appears once, with a count', () => {
 
 // --- longestGap: closed gaps against the open one ----------------------------
 //
-// Counted ordinals in the fixture: show1=0, show2=1, show4=2, show5=3, show6=4.
-// Each case states which of the two kinds of gap wins and why, and the result
-// is compared whole so a wrong `isOpen` or a swapped date cannot slip past a
-// check that only looked at the number.
+// Positions in the fixture: show1=1, show2=2, show3=3, show4=4, show5=5,
+// show6=show7=7; newest = 7. Each case states which of the two kinds of gap
+// wins and why, and the result is compared whole so a wrong `isOpen` or a
+// swapped date cannot slip past a check that only looked at the number.
 
 test('longest gap: a closed gap longer than the open one reads closed, with both dates', () => {
-  // A: closed gaps 1 (show 2) and 3 (show 6); open gap 0 (played at the newest show).
+  // A: closed gaps 1 (show 2) and 5 (show 6); open gap 0 (played at the newest show).
   assert.deepEqual(longestGap(index, 10), {
-    gap: 3,
+    gap: 5,
     fromDate: '2020-02-01',
     toDate: '2020-06-01',
     isOpen: false,
@@ -245,7 +308,7 @@ test('longest gap: a closed gap longer than the open one reads closed, with both
 });
 
 test('longest gap: an open gap longer than every closed one reads open, toDate null', () => {
-  // A variant with a song at shows 1 and 2 only: closed 1, open 4 - 1 = 3.
+  // A variant with a song at shows 1 and 2 only: closed 1, open 7 - 2 = 5.
   const f = fixture();
   f.setlists = f.setlists.filter((r) => r.song_id !== 10);
   f.setlists.push(
@@ -255,9 +318,9 @@ test('longest gap: an open gap longer than every closed one reads open, toDate n
   f.songs.push({ id: 40, name: 'D', slug: 'd', isoriginal: 1, original_artist: 'Eggy' });
   const idx = buildIndex(f);
   assert.equal(longestObservedGap(idx, 40).gap, 1);
-  assert.equal(idx.songsById.get(40).showsSinceLastPlayed, 3);
+  assert.equal(idx.songsById.get(40).showsSinceLastPlayed, 5);
   assert.deepEqual(longestGap(idx, 40), {
-    gap: 3,
+    gap: 5,
     fromDate: '2020-02-01',
     toDate: null,
     isOpen: true,
@@ -265,13 +328,15 @@ test('longest gap: an open gap longer than every closed one reads open, toDate n
 });
 
 test('longest gap: an exact tie between open and closed reads OPEN', () => {
-  // B: one closed gap of 2 (show 1 -> show 4) and an open gap of 2 (show 4 ->
-  // show 6). Same length; the open one has not ended, so it is the answer.
+  // B: one closed gap of 3 (show 1 -> show 4) and an open gap of 3 (show 4 ->
+  // the newest date). Same length; the open one has not ended, so it is the
+  // answer. The fixture is built to tie: the setlist-less show 3 sits inside
+  // the closed gap and the double-show day sits inside the open one.
   const b = index.songsById.get(20);
-  assert.equal(longestObservedGap(index, 20).gap, 2);
-  assert.equal(b.showsSinceLastPlayed, 2);
+  assert.equal(longestObservedGap(index, 20).gap, 3);
+  assert.equal(b.showsSinceLastPlayed, 3);
   assert.deepEqual(longestGap(index, 20), {
-    gap: 2,
+    gap: 3,
     fromDate: '2020-04-01',
     toDate: null,
     isOpen: true,
@@ -279,14 +344,14 @@ test('longest gap: an exact tie between open and closed reads OPEN', () => {
 });
 
 test('longest gap: a one-play song has only its open gap', () => {
-  // E played once, at show 1: no closed gap, open gap 4.
+  // E played once, at show 1: no closed gap, open gap 7 - 1 = 6.
   const f = fixture();
   f.setlists.push({ ...f.setlists[0], uniqueid: '103', song_id: 50, songname: 'E', slug: 'e', position: 3 });
   f.songs.push({ id: 50, name: 'E', slug: 'e', isoriginal: 1, original_artist: 'Eggy' });
   const idx = buildIndex(f);
   assert.equal(longestObservedGap(idx, 50), null);
   assert.deepEqual(longestGap(idx, 50), {
-    gap: 4,
+    gap: 6,
     fromDate: '2020-01-01',
     toDate: null,
     isOpen: true,
@@ -306,7 +371,7 @@ test('longest gap: a never-played catalogue song is null, and sorts last', () =>
 });
 
 test('longest gap sort: descending, then open gap descending, then name', () => {
-  // Fixture values: A 3 (open 0), B 2 (open 2), C 1 (open 0).
+  // Fixture values: A 5 (open 0), B 3 (open 3), C 2 (open 0).
   const order = index.songs.slice().sort(compareByLongestGap).map((x) => x.name);
   assert.deepEqual(order, ['A', 'B', 'C']);
 

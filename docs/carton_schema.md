@@ -274,6 +274,26 @@ One row per show, including **future shows**. `/v2/shows.json?order_by=showdate&
 > **`show_year` vs `showyear`** — `shows` uses `show_year`; `setlists` uses `showyear`. A typo here
 > returns empty data rather than an error.
 
+### `artist_id` is not always 1 (measured 2026-10-24)
+
+Both `shows` and `setlists` carry `artist_id` / `artist`, and both tables contain a second
+value: **`2` / `Dani Battat`**, on exactly **one show** (2026-02-10, MSC Divina) with **five
+setlist rows** (Thorns, Freeway Flowers, You Can Close Your Eyes, Boom or Bust, Windblown Eyes).
+The Carton's Eggy song pages omit those rows: the Thorns page (`/song/t`) is headed "Every Time
+Played by Eggy", lists 10 performances and not that one, and notes separately that the song "has
+also been performed by Dani Battat 1 time". Its Show Gap column is computed over Eggy shows only —
+counting the show puts every 2026 gap one too high. The app excludes `artist_id ≠ 1` from the gap universe and from song
+performance counts, and nothing else (ruling 2026-10-24, decision 2). Rows with no `artist_id`
+are treated as Eggy.
+
+### A song's slug is not always its name (measured 2026-10-24)
+
+Thorns has slug **`t`** in `songs`, and `/song/t` is its live page (HTTP 200). The guessable
+`/song/thorns` **302-redirects to the all-songs index** `/song/`, which looks like a song page —
+a table, 360 rows — and is not. Deep links built from the API slug are correct; a check that
+builds a URL from the song's NAME is the trap. `scripts/gap-oracle.mjs` identifies the song by
+the page's `data-song-id`, never by the URL it asked for.
+
 ### `location` is a `shows`-only field, and the UI ignores it (measured 2026-08-27)
 
 `location` appears on `shows` and on **none** of `setlists`, `jamcharts` or `venues`, all of which

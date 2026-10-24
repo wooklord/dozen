@@ -102,7 +102,7 @@ export function renderSong(ctx, songId) {
         statTile(song.firstPlayed ? formatShowDateShort(song.firstPlayed) : '—', 'first played'),
       ]),
       el('p.note', { style: { marginTop: '8px' } }, [
-        `Gap counted across the ${index.counts.countedShows} shows in the archive that have setlist data. `,
+        `Gap counted across the ${index.counts.countedShows} Eggy shows played so far, as on The Carton. `,
         gapExplainerLink(index),
       ]),
 

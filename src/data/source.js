@@ -180,7 +180,7 @@ export function yearsFromShows(showRows) {
  *
  * Comparing against the newest PLAYED show is not sound either: a show that
  * has been played but whose setlist The Carton has not posted yet is normal
- * and the app already counts them (`counts.excludedNoSetlist`). That version
+ * and the app already counts them (`counts.countedNoSetlist`). That version
  * would take the app down for every user for as long as Carton lagged on one
  * setlist, which is routine. Any fix needs a tolerance, and every tolerance
  * here is a number invented to make a check pass.

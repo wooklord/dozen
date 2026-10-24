@@ -325,34 +325,60 @@ export function buildIndex(raw) {
 
   const today = localToday();
 
+  // The Eggy catalogue. shows and setlists carry artist_id, and one show (with
+  // five setlist rows) belongs to artist_id 2. Carton's Eggy song pages omit
+  // those rows, so they are not performances here and the show is not in the
+  // gap universe. It still renders on Shows and Venues as a show that happened
+  // -- a broader exclusion is a separate, open ruling (docs/plan.md, decision
+  // 2 of the 2026-10-24 ruling). Rows without an artist_id are Eggy.
+  const isEggy = (r) => r.artist_id == null || Number(r.artist_id) === 1;
+
   // --- Shows -----------------------------------------------------------------
   const showsById = new Map(shows.map((s) => [Number(s.show_id), s]));
   const allShowsSorted = [...shows].sort(compareShows);
   const playedShows = allShowsSorted.filter((s) => s.showdate <= today);
   const futureShows = allShowsSorted.filter((s) => s.showdate > today);
 
-  // --- Gap denominator -------------------------------------------------------
-  // Only shows that HAVE setlist rows count toward a gap.
+  // --- Gap universe ----------------------------------------------------------
+  // Gap means what the Show Gap column on a Carton song page means, and the
+  // current gap means that page's "which was N show(s) ago". Reversed from the
+  // counted-shows convention on 2026-10-24: see docs/plan.md, Scope rulings,
+  // which quotes the withdrawn rationale and records why it lost.
   //
-  // 194 of 804 shows have no setlist data at all (mostly 2013-2015). A show
-  // with no recorded setlist cannot tell us a song went unplayed -- we simply
-  // don't know -- so counting it would inflate every gap that spans it. This
-  // also excludes one corrupt-date row in the shows table ("0015-08-28").
+  // The rule, measured against 19 song pages (1069 of 1069 per-play rows and
+  // 19 of 19 current gaps agree, and no other rule tried comes close):
   //
-  // For modern songs the two denominators converge, since nearly every recent
-  // show has a setlist; the choice only moves ancient bustout numbers.
+  //   - the universe is every Eggy show with a valid date, dated on or before
+  //     today, INCLUDING shows with no setlist rows. Upcoming shows are out.
+  //   - a show's position is the number of universe shows dated on or before
+  //     it, so two shows on one date share a position (28 such dates).
+  //   - gap at a performance = position(this) - position(previous performance).
+  //     Consecutive dates read 1; a second performance on one date reads 0.
+  //   - current gap = position(newest played date) - position(last performance).
   //
-  // NOTE: Carton's own "(N show gap)" footnotes are static text written at
-  // different times against a growing archive, and no single convention
-  // reproduces them (58 footnotes, best rule matches 29). We therefore compute
-  // our own number under ONE documented convention and always render Carton's
-  // footnote text verbatim beside it rather than trying to match it.
-  const showsWithSetlists = new Set(setlists.map((r) => Number(r.show_id)));
-  const countedShows = playedShows.filter((s) => showsWithSetlists.has(Number(s.show_id)));
-
+  // "On or before today" is the one clause the oracle could not prove -- it is
+  // indistinguishable from "on or before the newest show with a setlist" until
+  // a show day arrives before its setlist posts. Recorded as unproven.
+  //
+  // Carton's "(N show gap)" FOOTNOTES are static prose written at the time and
+  // are not this rule; they render verbatim beside our figure, never reconciled.
+  const validDate = (s) => /^(19|20)[0-9][0-9]-/.test(String(s.showdate));
+  const countedShows = playedShows.filter((s) => isEggy(s) && validDate(s));
   const showOrdinal = new Map();
-  countedShows.forEach((s, i) => showOrdinal.set(Number(s.show_id), i));
-  const latestOrdinal = countedShows.length - 1;
+  for (let i = 0; i < countedShows.length; i++) {
+    // Position of the show's DATE: the index just past every show sharing it.
+    let j = i;
+    while (j + 1 < countedShows.length && countedShows[j + 1].showdate === countedShows[i].showdate) j++;
+    showOrdinal.set(Number(countedShows[i].show_id), j + 1);
+  }
+  const latestOrdinal = countedShows.length;
+
+  // The newest show that HAS setlist rows, for the Settings sheet: it is the
+  // figure that diagnoses a stale or truncated index, which the newest show
+  // in the universe (possibly played last night, setlist not yet posted)
+  // would not.
+  const showsWithSetlists = new Set(setlists.map((r) => Number(r.show_id)));
+  const newestSetlistShow = [...countedShows].reverse().find((s) => showsWithSetlists.has(Number(s.show_id))) || null;
 
   // --- Group setlist rows into sets, then classify slots ---------------------
   const setGroups = new Map(); // "show_id|settype|setnumber" -> rows
@@ -391,6 +417,9 @@ export function buildIndex(raw) {
     // Free-text entries are not songs and do not enter the catalogue. See
     // isCustomEntry -- the row stays in setlistByShow and still renders.
     if (isCustomEntry(row)) continue;
+    // Another artist's row is not a performance on the Eggy catalogue (the row
+    // still renders on that show's own screen). Carton's song pages agree.
+    if (!isEggy(row)) continue;
     const id = Number(row.song_id);
     let entry = bySong.get(id);
     if (!entry) {
@@ -432,8 +461,8 @@ export function buildIndex(raw) {
     entry.firstShowId = first ? Number(first.show_id) : null;
     entry.lastShowId = last ? Number(last.show_id) : null;
 
-    // Gap = shows in the canonical ordering since the song last appeared.
-    // 0 means it was played at the most recent show. Counting only.
+    // Current gap = position(newest played date) - position(last performance):
+    // Carton's "which was N show(s) ago". 0 means played at the newest show.
     if (last && showOrdinal.has(Number(last.show_id))) {
       entry.showsSinceLastPlayed = latestOrdinal - showOrdinal.get(Number(last.show_id));
     } else {
@@ -601,15 +630,16 @@ export function buildIndex(raw) {
         ? jamcharts.reduce((min, j) => (j.showdate < min ? j.showdate : min), jamcharts[0].showdate)
         : null,
 
-      // Full accounting for the gap denominator, so the Data panel can state
-      // it from live values rather than hardcoded numbers. Excluding shows
-      // with no setlist is a counting CONVENTION, not a cleanup detail: it
-      // makes every gap smaller than a convention counting all shows.
-      excludedNoSetlist: playedShows.filter((s) => !showsWithSetlists.has(Number(s.show_id))).length,
+      // Full accounting for the gap universe, so the Settings sheet and the
+      // explainer state it from live values rather than hardcoded numbers.
+      // Shows with no setlist COUNT -- a gap is a count of shows, not of
+      // setlists, and that is what makes the figure match Carton's column.
+      countedNoSetlist: countedShows.filter((s) => !showsWithSetlists.has(Number(s.show_id))).length,
+      excludedOtherArtist: playedShows.filter((s) => !isEggy(s)).length,
       excludedFuture: futureShows.length,
       excludedBadDate: shows.filter((s) => !/^(19|20)\d\d-/.test(String(s.showdate))).length,
     },
-    newestShowdate: countedShows.length ? countedShows[countedShows.length - 1].showdate : null,
+    newestShowdate: newestSetlistShow ? newestSetlistShow.showdate : null,
   };
 }
 
@@ -617,18 +647,19 @@ export function buildIndex(raw) {
  * Gap for one song AS OF a given show.
  *
  * THE ONE FUNCTION both gap views call. "Current gap" is this same
- * computation evaluated at the newest counted show -- not a second code path.
+ * computation evaluated at the newest show -- not a second code path.
  * That is deliberate: gap-at-the-time and current gap are different numbers,
  * and if they were computed separately they would eventually drift by a few
  * and both would look broken.
  *
- * Counted under the identical convention as everything else: only shows that
- * have setlist data are in the denominator.
+ * Counted over the same universe as everything else (see "Gap universe" in
+ * buildIndex): positions by date over every Eggy show played so far.
  *
  * @returns {{gap: number|null, previous: object|null, isDebut: boolean}}
- *   `isDebut` means there was no prior performance at all. That is NOT gap 0 --
- *   gap 0 means "played at the immediately preceding counted show" -- and
- *   conflating the two would be wrong.
+ *   `isDebut` means there was no prior performance at all. That is NOT a gap:
+ *   gap 1 means "played at the show before", gap 0 means "a second
+ *   performance on the same date". Carton prints the debut date's POSITION on
+ *   a debut row; here it is a badge (ruling 2026-10-24, decision 1).
  */
 export function gapAtShow(index, songId, showId) {
   const song = index.songsById.get(Number(songId));
@@ -637,16 +668,24 @@ export function gapAtShow(index, songId, showId) {
     return { gap: null, previous: null, isDebut: false };
   }
 
-  // Performances are already in canonical show order, so walk back to the last
-  // one that happened strictly before this show and is in the counted universe.
+  // Performances are already in canonical show order. If the song was played
+  // at this show, the previous performance is the one before its first row
+  // here -- which may be at the OTHER show of a same-date pair, sharing this
+  // position, and reads 0 exactly as Carton prints it. If it was not (the
+  // current gap is this computation at the newest show), it is the last
+  // performance at or before this position.
+  const sid = Number(showId);
+  const perfs = song.performances;
+  const from = perfs.findIndex((p) => Number(p.show_id) === sid);
   let previous = null;
-  for (let i = song.performances.length - 1; i >= 0; i--) {
-    const p = song.performances[i];
-    const ord = index.showOrdinal.get(Number(p.show_id));
-    if (ord === undefined) continue; // show has no setlist data -- not counted
-    if (ord < thisOrdinal) {
-      previous = p;
-      break;
+  if (from >= 0) {
+    for (let i = from - 1; i >= 0; i--) {
+      if (index.showOrdinal.has(Number(perfs[i].show_id))) { previous = perfs[i]; break; }
+    }
+  } else {
+    for (let i = perfs.length - 1; i >= 0; i--) {
+      const ord = index.showOrdinal.get(Number(perfs[i].show_id));
+      if (ord !== undefined && ord <= thisOrdinal) { previous = perfs[i]; break; }
     }
   }
 
@@ -706,8 +745,11 @@ export function gapChartForShow(index, showId) {
  * The longest gap a song has actually been through, as a max over its
  * per-performance gaps.
  *
- * Each individual figure is a fact Carton renders on its own gap charts; this
- * is the maximum of them. It describes something that HAPPENED -- it is
+ * Each individual figure is a fact Carton renders in its Show Gap column; this
+ * is the maximum of them. Debuts are skipped: Carton prints a POSITION on a
+ * debut row (how many shows had happened by then), not a gap between two
+ * performances, and counting it would hand every recent debut a "longest gap"
+ * no performance ever closed (ruling 2026-10-24, decision 1). It describes something that HAPPENED -- it is
  * labelled "longest observed gap" with the date, never a "record" and never a
  * due-status, and it carries the same convention explanation as every other
  * gap figure.
@@ -732,7 +774,7 @@ export function longestObservedGap(index, songId) {
  *
  * Wraps longestObservedGap() -- the closed gaps are that walk, not a second
  * one -- and compares its maximum against the current gap, showsSinceLastPlayed,
- * which is the same computation evaluated at the newest counted show and still
+ * which is the same computation evaluated at the newest show and still
  * growing. Whichever is larger is the answer, and the result says which it was:
  *
  *   { gap, fromDate, toDate, isOpen }

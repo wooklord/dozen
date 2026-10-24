@@ -955,7 +955,7 @@ is about**. The other number is one tap away on song detail, where it has room t
 Still one figure, still one line.)
 
 **"SINCE PLAYED", not "SHOWS".** This is a correctness fix wearing a wording fix's clothes. A song
-played at the most recent counted show has a gap of **0**, and the top row of "Hottest first" was
+played at the newest show has a gap of **0**, and the top row of "Hottest first" was
 rendering that as **0 SHOWS** — which reads as *never played*, the exact opposite of what it means.
 `0 SINCE PLAYED` says the true thing. `scripts/smoke.mjs` asserts that top row reads exactly `0`,
 because a check that only confirmed a number was present would have been green through the whole
@@ -981,7 +981,7 @@ boolean with one reachable value is the shape this repo has been bitten by often
 ### "Longest gap" is a fifth sort, and the sort moved into a sheet (0.1.76)
 
 The longest gap a song has been through — the maximum of the per-show gaps the gap charts already
-render, compared against the current gap, which is the same computation at the newest counted show
+render, compared against the current gap, which is the same computation at the newest show
 and still growing. Ruled in scope in `plan.md` on 2026-10-21 as a max over displayed figures. The
 word is **observed**, and the open case is **still open**: both describe what has happened.
 

@@ -443,13 +443,19 @@ Concretely, that means:
   value has to agree in three independent places.
 
 **Standing practice: prove a check goes RED before trusting it GREEN.** A test
-that has never failed on the bug it exists for has demonstrated nothing. Both
-current checks were verified this way:
+that has never failed on the bug it exists for has demonstrated nothing. The
+checks were verified this way:
 
 - `scripts/smoke.mjs` — with the `venueLine` import removed: 7 failures, exit 1.
   Restored: 0 failures, exit 0.
 - `tests/build.test.mjs` — with `version.js` bumped alone: 2 failures. In step:
   85 passing.
+- `scripts/gap-oracle.mjs` and the smoke test's one-song gap parity check
+  (0.1.78) — with the withdrawn setlist-rows filter put back on the gap
+  universe: the oracle reports 117 mismatches across 1119 checks, all 20 pages
+  FAIL (none SKIP), exit 1; the smoke test fails the parity line (609 against
+  Carton's 723), exit 1; 11 unit tests fail. Restored, by checksum the same
+  file: 1119 of 1119, smoke green, 208 passing.
 
 Do this for every new check. It costs one minute and it is the only thing that
 separates a real check from a comforting one.
@@ -626,7 +632,7 @@ ended at `2026-08-14`.
 
 Comparing against the newest *played* show is not sound either: a show played
 before The Carton posts its setlist produces the same shape, and the app already
-counts those (`counts.excludedNoSetlist`). Any version of this needs a
+counts those (`counts.countedNoSetlist`). Any version of this needs a
 tolerance, and every tolerance available is a number invented to make the check
 pass — which is the thing this file spends most of its length warning about.
 
@@ -824,6 +830,7 @@ between runs.
 |---|---|---|---|
 | `node --test` | instant | none | always, before anything else |
 | `node scripts/smoke.mjs` | ~1 min | Carton (cold pull) | **before every push** |
+| `node scripts/gap-oracle.mjs` | ~1 min | Carton (cold pull + 20 song pages) | after any change to gap arithmetic or to the show universe in `buildIndex`; it compares every Show Gap cell on 20 Carton song pages against the app's own `gapAtShow()`, and **SKIPs, never passes,** when Carton is unreachable. The smoke test carries a one-song spot check of the same parity |
 | `node scripts/contrast.mjs` | instant | none | when eyeballing a colour; the assertions already run in `node --test` |
 | `node scripts/deadcss.mjs` | instant | none | when a CSS rule looks inert; lists every declaration the cascade can never let win. The assertions already run in `node --test` (`tests/deadcss.test.mjs`) |
 |  `node scripts/layout-diff.mjs [ref] [width] [theme]` | ~3 min | Carton (two cold boots) | after a deliberate layout change, to see what else moved |

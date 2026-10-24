@@ -370,14 +370,18 @@ function openSettingsSheet() {
         el('p', {
           style: { margin: '0 0 8px', fontSize: 'var(--t-sm)' },
           text:
-            `Gap is counted across the ${i?.counts.countedShows ?? 0} shows that have setlist data. ` +
-            `${i?.counts.excludedNoSetlist ?? 0} shows in the archive were played but have no setlist ` +
-            `recorded and are not counted; ${i?.counts.excludedFuture ?? 0} upcoming shows are not counted either.`,
+            `Gap matches the Show Gap figure on each song's Carton page: counted across the ` +
+            `${i?.counts.countedShows ?? 0} Eggy shows played so far, including the ` +
+            `${i?.counts.countedNoSetlist ?? 0} with no setlist recorded. ` +
+            `${i?.counts.excludedFuture ?? 0} upcoming shows are not counted` +
+            (i?.counts.excludedOtherArtist
+              ? `, nor ${i.counts.excludedOtherArtist === 1 ? 'is the 1 show' : `are the ${i.counts.excludedOtherArtist} shows`} by another artist.`
+              : '.'),
         }),
         i?.counts.excludedBadDate
           ? el('p.note', {
               style: { margin: '0 0 8px' },
-              text: `${i.counts.excludedBadDate} of the uncounted shows also has a corrupt date in The Carton's data.`,
+              text: `${i.counts.excludedBadDate} show${i.counts.excludedBadDate === 1 ? '' : 's'} with a corrupt date in The Carton's data ${i.counts.excludedBadDate === 1 ? 'is' : 'are'} not counted either.`,
             })
           : null,
         el(

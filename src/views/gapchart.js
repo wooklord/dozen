@@ -2,10 +2,10 @@
 // moment.
 //
 // This is NOT archive-wide rotation. Gap here is counted as of this show's
-// date, so a song played last night reads 0 here even if it has since gone
-// cold. Both numbers come from the same gapAtShow() function under the same
-// exclude-shows-without-setlists convention -- if they were computed
-// separately they would drift by a few and both would look broken.
+// date, so a song played the show before reads 1 here even if it has since
+// gone cold. Both numbers come from the same gapAtShow() function over the
+// same universe -- every Eggy show played so far, by date, as Carton's Show
+// Gap column counts it -- so they cannot drift apart and both look broken.
 
 import { el, append, icon, ICONS } from '../ui/dom.js';
 import {
@@ -120,8 +120,10 @@ export function renderGapChart(ctx, showId) {
                 ]),
               ],
             ),
-            // Debut is not gap 0 -- gap 0 means "played at the immediately
-            // preceding counted show". Different facts, shown differently.
+            // Debut is not a gap: gap 1 means "played at the show before",
+            // gap 0 "a second performance on the same date". Carton prints the
+            // debut date's position on a debut row; here it is a badge
+            // (ruling 2026-10-24, decision 1). Different facts, shown differently.
             e.isDebut
               ? el('div.gap-figure', null, [el('span.badge.badge-jam', { text: 'Debut' })])
               : el(

@@ -22,6 +22,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import { ROUTES, REDIRECTS } from './routes.mjs';
+import { parseSongPage } from './gap-oracle.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = 8123 + Math.floor(Math.random() * 400);
@@ -1477,7 +1478,7 @@ server.listen(PORT, async () => {
     } else if (r.colour !== yolk) {
       fail(`sort "${label}": the figure is ${r.colour}, not the yolk accent ${yolk}`);
     } else if (wantTopNum !== null && r.num !== wantTopNum) {
-      fail(`sort "${label}": top row reads ${JSON.stringify(r.num)}, expected ${JSON.stringify(wantTopNum)} — the smallest gap belongs to a song played at the newest counted show`);
+      fail(`sort "${label}": top row reads ${JSON.stringify(r.num)}, expected ${JSON.stringify(wantTopNum)} — the smallest gap belongs to a song played at the newest show`);
     } else if (!wantMeta.test(r.meta || '')) {
       fail(`sort "${label}": meta line is ${JSON.stringify(r.meta)}, expected ${wantMeta}`);
     } else if (/×|\bgap \d/.test(r.meta)) {
@@ -2593,6 +2594,53 @@ server.listen(PORT, async () => {
   } else if (shown !== endpointSongs) {
     fail(`songs: the app counts ${shown} but the songs endpoint returns ${endpointSongs} — an orphan song_id is in the catalogue`);
   } else pass(`catalogue is ${shown}, matching the songs endpoint exactly`);
+
+  // Gap parity with The Carton, one song, end to end -- the figures the song
+  // detail screen RENDERS against the Show Gap column on that song's Carton
+  // page. Feel Like A Stranger (song 219): three plays, and the longest gap
+  // spans 114 shows with no setlist rows plus the one second-artist show, so
+  // the figure reads 723 only under Carton's own rule -- 610 under the
+  // withdrawn counted-shows rule, 724 with the second artist counted. The
+  // full oracle is scripts/gap-oracle.mjs; this is the one-song canary on the
+  // push gate. SKIP, not pass, when the page cannot be fetched.
+  console.log('\ngap matches the Show Gap column on Carton:');
+  await evaluate(`location.hash = '#/song/219';`);
+  await sleep(1500);
+  const renderedGap = await evaluate(`(() => {
+    const read = (labelStart) => {
+      const stat = [...document.querySelectorAll('.stat')].find((s) => {
+        const l = s.querySelector('.stat-label');
+        return l && l.textContent.trim().startsWith(labelStart);
+      });
+      const v = stat && stat.querySelector('.stat-value');
+      return v ? Number(v.textContent.trim()) : null;
+    };
+    return { current: read('shows since last'), longest: read('longest observed gap') };
+  })()`);
+  let cartonSongPage = null;
+  try {
+    const res = await fetch('https://thecarton.net/song/feel-like-a-stranger');
+    if (res.ok) cartonSongPage = parseSongPage(await res.text());
+  } catch {
+    /* handled below as a SKIP -- an unreachable third party is not a defect here */
+  }
+  if (renderedGap.current === null || renderedGap.longest === null) {
+    fail(`gap parity: song detail did not render both stats (read ${JSON.stringify(renderedGap)})`);
+  } else if (!cartonSongPage || cartonSongPage.current === null || cartonSongPage.rows.length < 2) {
+    skip(`gap parity not cross-checked (Carton page unreachable); the app shows current ${renderedGap.current}, longest ${renderedGap.longest}`);
+  } else {
+    // Longest = max over the closed gaps (every row but the debut) and the
+    // current gap -- the debut row's number is a position, not a gap.
+    const closedGaps = cartonSongPage.rows.slice(1).map((r) => r.gap);
+    const wantLongest = Math.max(...closedGaps, cartonSongPage.current);
+    if (renderedGap.current !== cartonSongPage.current) {
+      fail(`gap parity: app current gap ${renderedGap.current}, Carton says ${cartonSongPage.current} show(s) ago`);
+    } else if (renderedGap.longest !== wantLongest) {
+      fail(`gap parity: app longest gap ${renderedGap.longest}, Carton's Show Gap column gives ${wantLongest}`);
+    } else {
+      pass(`Feel Like A Stranger: current ${renderedGap.current}, longest ${renderedGap.longest}, both as on Carton`);
+    }
+  }
 
   // The rows themselves must still be on screen, and must not be controls.
   // Show 1667710116 is the 2022-11-05 Foundry show carrying "NYE Announcement".
