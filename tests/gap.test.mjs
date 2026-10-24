@@ -398,13 +398,13 @@ test('longest gap sort: closed gap descending, then current gap descending, then
   assert.ok(compareByLongestGap(mk('x', null, 50), mk('y', 1, 0)) > 0);
 });
 
-// --- isPastLongestGap: the "Past longest gap" filter -------------------------
+// --- isPastLongestGap: the "Passed longest gap" filter -------------------------
 //
 // True only when the current gap is STRICTLY longer than the longest closed
 // gap. Each case names its two figures so a flipped or loosened comparison
 // fails on the row that says why.
 
-test('past longest gap: strictly longer, and a closed gap is required', () => {
+test('passed longest gap: strictly longer, and a closed gap is required', () => {
   // A: closed 5, current 0 -- the current gap is shorter.
   assert.equal(isPastLongestGap(index.songsById.get(10)), false);
   // B: closed 3, current 3 -- equal is not longer.

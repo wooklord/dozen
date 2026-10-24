@@ -2611,7 +2611,7 @@ server.listen(PORT, async () => {
   else if (hiddenListed.length) fail(`songs: ${hiddenListed.length} song(s) the setlists say have no Eggy performance are listed — ${hiddenListed.slice(0, 5).map((s) => `${s.name.trim()} (id ${s.id})`).join(', ')}`);
   else pass(`${listedIds.length} rows under A–Z, none reading 0 times or "Never played"${hiddenSongs ? `, none of the ${hiddenSongs.length} derived-unplayed ids among them` : ''}`);
 
-  // --- "Past longest gap": a strict comparison of two rendered figures -----
+  // --- "Passed longest gap": a strict comparison of two rendered figures -----
   //
   // (0.1.79) With the filter on, "Coldest first" renders each kept song's
   // CURRENT gap and "Longest gap" renders its LONGEST OBSERVED gap -- the two
@@ -2628,7 +2628,7 @@ server.listen(PORT, async () => {
   //       lead chip reads the filter.
   // Red proof: flip the comparison in isPastLongestGap (data/index.js) to >=
   // -- the tied songs appear and (b) fails naming them.
-  console.log('\n"Past longest gap" keeps only songs whose current gap exceeds their longest observed:');
+  console.log('\n"Passed longest gap" keeps only songs whose current gap exceeds their longest observed:');
   const clickFilter = async (label) =>
     evaluate(`(() => {
       const lead = document.querySelector('.screen .sortbar-secondary .chip-lead');
@@ -2660,7 +2660,7 @@ server.listen(PORT, async () => {
   let coldShot = null;
   let longShot = null;
   if (!(await clickSort('Coldest first'))) filterProblems.push('no "Coldest first" in the sort sheet');
-  else if (!(await clickFilter('Past longest gap'))) filterProblems.push('no "Past longest gap" in the filter sheet');
+  else if (!(await clickFilter('Passed longest gap'))) filterProblems.push('no "Passed longest gap" in the filter sheet');
   else {
     await sleep(900);
     coldShot = await readFigures();
@@ -2673,11 +2673,11 @@ server.listen(PORT, async () => {
 
   // --- Both chip bars fit their visible width, at their widest labels ------
   //
-  // Right now the sort reads "Longest gap" and the filter "Past longest gap",
+  // Right now the sort reads "Longest gap" and the filter "Passed longest gap",
   // the widest each lead chip gets. Content wider than its bar is overflow
   // behind a hidden scrollbar -- the 0.1.75 defect -- and a bar holding ONE
   // chip has no business needing it. The filter sheet's grid is held to the
-  // same rule, and each chip in it to its own label: a "Past longest gap"
+  // same rule, and each chip in it to its own label: a "Passed longest gap"
   // that fit by clipping its name would be a chip that fits by lying.
   // Measured at the smoke viewport, 390px, on the bar's clientWidth -- which
   // INCLUDES its 16px padding each side, so the figures here read against
@@ -2706,7 +2706,7 @@ server.listen(PORT, async () => {
   }
 
   if (coldShot && longShot) {
-    if (coldShot.filterChip !== 'Past longest gap') filterProblems.push(`(d) the lead chip reads ${JSON.stringify(coldShot.filterChip)}`);
+    if (coldShot.filterChip !== 'Passed longest gap') filterProblems.push(`(d) the lead chip reads ${JSON.stringify(coldShot.filterChip)}`);
     if (coldShot.sheetOpen || longShot.sheetOpen) filterProblems.push('picking a filter or sort left the sheet open');
     if (!/current gap is longer than their longest observed gap/.test(coldShot.countText)) filterProblems.push(`(d) the count line reads ${JSON.stringify(coldShot.countText)}`);
     if (coldShot.countLine !== coldShot.rows.length) filterProblems.push(`(d) the count line says ${coldShot.countLine}, the list holds ${coldShot.rows.length}`);
@@ -2758,13 +2758,13 @@ server.listen(PORT, async () => {
       if (!filterProblems.length) pass(`${coldShot.rows.length} songs kept under both sorts, every current gap > longest observed; details agree: ${checked.join(', ')}`);
     }
   }
-  for (const p of filterProblems) fail(`past longest gap: ${p}`);
+  for (const p of filterProblems) fail(`passed longest gap: ${p}`);
   // Leave the screen as the later sections expect it: no filter, A–Z. Asserted,
   // because a filter left on would fail every later Songs section for a
   // reason that has nothing to do with what it checks.
-  if (!(await clickFilter('All'))) fail('past longest gap: could not reset the filter to "All" -- later Songs checks would run filtered');
+  if (!(await clickFilter('All'))) fail('passed longest gap: could not reset the filter to "All" -- later Songs checks would run filtered');
   await sleep(300);
-  if (!(await clickSort('A–Z'))) fail('past longest gap: could not reset the sort to "A–Z"');
+  if (!(await clickSort('A–Z'))) fail('passed longest gap: could not reset the sort to "A–Z"');
   await sleep(600);
 
   // Gap parity with The Carton, one song, end to end -- the figures the song

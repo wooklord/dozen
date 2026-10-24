@@ -57,7 +57,7 @@ const SORTS = [
 // [key, label]. Single-select, like the sort: one filter at a time, and each
 // composes with every sort.
 //
-// "Past longest gap" (0.1.79) keeps the songs whose current gap is longer than
+// "Passed longest gap" (0.1.79) keeps the songs whose current gap is longer than
 // their longest observed gap -- a true/false test on two figures Carton prints
 // on the song's page, which is filtering. Strict: equal is not longer. A song
 // with no closed gap has nothing to compare and is not kept. No number
@@ -69,12 +69,12 @@ const FILTERS = [
   ['originals', 'Originals'],
   ['covers', 'Covers'],
   ['jam', 'Jam charts'],
-  ['past', 'Past longest gap'],
+  ['past', 'Passed longest gap'],
 ];
 
 // Stated once, next to the chip that applies it, in the ruling's own words.
 const PAST_LONGEST_NOTE =
-  'Past longest gap keeps the songs whose current gap is longer than the longest gap ' +
+  'Passed longest gap keeps the songs whose current gap is longer than the longest gap ' +
   'between any two of their performances, both counted as on The Carton. Equal is not ' +
   'longer. A song played at only one show has no gap between two performances and is ' +
   'left out.';
@@ -167,7 +167,8 @@ export function renderSongs(ctx) {
   //
   // Five filter chips do not fit either. Measured headless at 390px with the
   // bar's own 16px padding, so 358px visible: the four chips were 299px of
-  // content, and "Past longest gap" took the row to 430px -- 72px of overflow
+  // content, and a fifth chip (measured as "Past longest gap", 124px; the
+  // 0.1.80 label "Passed longest gap" is wider still) took the row to 430px -- 72px of overflow
   // behind a hidden scrollbar, the chip cut mid-word at the edge. Same fix as
   // the sort row, for the same reason: one chip reading the active filter, a
   // sheet with all five, nothing off-screen. The lead keeps .chip-quiet so the
@@ -276,7 +277,7 @@ export function renderSongs(ctx) {
     const maxLongest = songs.reduce((m, s) => Math.max(m, s.longestObservedGap ? s.longestObservedGap.gap : 0), 1);
     const heatMax = figure === 'times' ? maxTimes : figure === 'longest' ? maxLongest : maxGap;
 
-    // The count line says what the list IS. Under "Past longest gap" that is
+    // The count line says what the list IS. Under "Passed longest gap" that is
     // the comparison, stated literally; the other filters' chips already name
     // their subset.
     const n = songs.length;

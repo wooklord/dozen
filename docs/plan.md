@@ -425,12 +425,19 @@ The list above is a measurement from one day. The catalogue parity check in `scr
 must assert equality with the endpoint **minus the songs with zero Eggy performances**, derived
 on the day it runs — not against this table, and not loosened to "fewer than the endpoint".
 
-#### "Past longest gap" filter — IN scope (2026-10-24)
+#### "Passed longest gap" filter — IN scope (2026-10-24)
 
 **Ruling.** A Songs filter that keeps the songs whose **current gap exceeds their longest
 observed (closed) gap** is in scope. It is a true/false test on two figures Carton prints — the
 current gap from the song page's Show Gap column, the longest closed gap as a max over the same
 column — and a true/false test on displayed figures is filtering, which the scope rule allows.
+
+> **Amended 2026-10-24, same day, BUILD 0.1.80: the chip reads "Passed longest gap", not "Past
+> longest gap".** "Past" also reads as the adjective "previous", so the chip could be taken as
+> naming a historical longest gap — the sort beside it — rather than the comparison. "Passed" is
+> only the verb. "Past" was the chat's suggestion; the rename is the user's. The count line, the
+> predicate `isPastLongestGap` and the filter key are unchanged; 0.1.79 shipped and was verified
+> live under the old label, so this is a bump, not a second commit under it.
 
 The lines it stays behind:
 

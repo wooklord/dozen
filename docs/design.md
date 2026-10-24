@@ -1086,7 +1086,7 @@ sheet from the live index. The sub-line reads "songs played live". The smoke tes
 now asserts the rendered count equals the endpoint **minus** the zero-performance songs, derived in
 the test from raw setlist rows: equality with a derived number, not "fewer than the endpoint".
 
-**"Past longest gap" is a fifth filter, and the filter row became a lead chip and a sheet.** The
+**"Passed longest gap" is a fifth filter, and the filter row became a lead chip and a sheet.** The
 filter keeps songs whose current gap is longer than their longest observed gap — a true/false test
 on two figures Carton prints on the song's page, which is filtering. Strict: equal is not longer,
 and the 2 songs that tie today are out. A song with no closed gap has nothing to compare and is
@@ -1095,7 +1095,8 @@ anywhere; the chip, the count line and the sheet note state the comparison and n
 comes next.
 
 Measured headless at 390px with the bar's own 16px padding, 358px visible: the four filter chips
-were **299px** of content, and "Past longest gap" took the row to **430px** — 72px of overflow
+were **299px** of content, and the fifth chip (measured as "Past longest gap", 124px; renamed
+"Passed longest gap" in 0.1.80, see `plan.md`, and wider still) took the row to **430px** — 72px of overflow
 behind a hidden scrollbar, the chip cut mid-word at the edge. The sort row's 0.1.76 fix applies
 unchanged: one lead chip reading the active filter, a sheet with all five in the same `.chip-grid`.
 The lead keeps `.chip-quiet`, so the filter row still reads a step below the sort row, as it did as

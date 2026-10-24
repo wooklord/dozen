@@ -824,7 +824,7 @@ export function compareByLongestGap(a, b) {
 }
 
 /**
- * The "Past longest gap" filter: true when the song's current gap is LONGER
+ * The "Passed longest gap" filter: true when the song's current gap is LONGER
  * than its longest observed gap. Both are figures Carton prints on the song's
  * page (the Show Gap column and its maximum), and this is a true/false test on
  * them -- filtering, ruled in scope in docs/plan.md (2026-10-24).
