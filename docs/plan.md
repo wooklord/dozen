@@ -255,6 +255,10 @@ Full treatment goes in `docs/design.md` at step 0. Committed direction:
 
 ## Gap convention — settled by measurement
 
+> **Withdrawn 2026-10-24.** This section describes the convention that shipped 0.1.x through 0.1.77.
+> It is reversed by the ruling *Gap convention — REVERSED* under *Scope rulings* below, and the
+> code follows in BUILD 0.1.78. Kept so the original reasoning is readable where it was made.
+
 **Definition shipped:** *shows since last played* = the number of shows in the canonical ordering
 between a song's most recent performance and the newest show, **counting only shows that have
 setlist data.** 0 means it was played at the most recent show.
@@ -338,6 +342,81 @@ Design decisions recorded with the ruling:
    itself. Asked for after seeing 0.1.76 on the phone: an interleaved list made it hard to tell
    which gaps were still running and which had ended. Grouping by a Carton-derived flag is grouping,
    which the scope rule allows, and the header words are this ruling's own.
+
+### Gap convention — REVERSED to match The Carton's Show Gap column (2026-10-24)
+
+**Ruling:** the counted-shows convention is withdrawn. From BUILD 0.1.78, *gap* in this app
+means exactly what the **Show Gap** column on a `thecarton.net/song/{slug}` page means, and the
+current gap means what that page's "which was N show(s) ago" means. Same number, same name.
+
+**What was being reversed, and why it was decided.** The convention shipped 2026-08-17 in the
+first data-layer commit (`96f0d73`) and was surfaced in the UI the same day (`7afc90b`). Its
+rationale, quoted verbatim from the *Gap convention — settled by measurement* section above:
+
+> **2. The denominator excludes shows with no setlist data.** 194 of 804 shows have zero setlist
+> rows (mostly 2013–2015). A show with no recorded setlist cannot establish that a song went
+> unplayed — we simply don't know — so counting it would inflate every gap spanning it. This also
+> drops one corrupt row in the `shows` table dated **`0015-08-28`**.
+>
+> The counted universe is **610 shows**. For modern songs both denominators converge, since nearly
+> every recent show has a setlist; the choice only moves ancient bustout numbers (the coldest song
+> reads 608 rather than 783).
+
+and from the comment above the ordinal map in `src/data/index.js`:
+
+> Only shows that HAVE setlist rows count toward a gap. [...] A show with no recorded setlist
+> cannot tell us a song went unplayed -- we simply don't know -- so counting it would inflate every
+> gap that spans it. [...] For modern songs the two denominators converge, since nearly every
+> recent show has a setlist; the choice only moves ancient bustout numbers.
+
+The same section also recorded that Carton's *footnote* gaps could not be reproduced by any
+convention and concluded "we compute our own number under one documented convention". That
+measurement was of the static footnote text, which is still true and still irrelevant: the
+footnotes are prose written at the time. The **Show Gap column** is computed live, and it was
+never measured against.
+
+**Why it is reversed.** The "Longest gap" sort (0.1.76) put the convention's effect on a headline
+figure for the first time, and it is not an "ancient bustout" rounding: *Feel Like A Stranger*
+reads **610** here against Carton's **723**, because 114 of the shows in that span have no setlist
+rows. That is a ~15% divergence on every number the Songs screen ranks by. This app repackages
+Carton for a game that is **scored against Carton's figures**; a different number under the same
+name is wrong even when the sheet two taps away discloses how it was counted. "We don't know
+whether it was played" was a defensible counting rule in isolation, and it is not the rule the
+reader is playing against.
+
+**What Carton's column means — measured, not assumed.** Determined 2026-10-24 by reconstructing
+the column from a fresh pull and comparing against 19 song pages (`feel-like-a-stranger`,
+`the-harder-they-come`, `franklins-tower`, `helpless`, `shadow`, `burritos-el-chavo-2`,
+`one-stop-shop`, `12-pounds-of-pain`, `wayless`, `a-moments-notice-2`, `yuck`, `tom-sawyer`,
+`high-noon`, `gretchen`, `fay`, `carry-on`, `time-loves-a-hero`, `interior-people`, `birdland`).
+**1069 of 1069 per-play rows and 19 of 19 current gaps match** under this rule and no other tried:
+
+1. **The universe is every Eggy show** — `shows` rows with `artist_id` 1 and a valid date, dated
+   on or before today — **including shows with no setlist rows.** Upcoming shows are excluded.
+   The one `artist_id` 2 show (`Dani Battat`, 2026-02-10) is excluded; including it puts every
+   2026 figure one too high.
+2. **Position is counted by date, not by row.** A date's position is the number of universe shows
+   dated on or before it. Two shows on one date share a position (there are 28 such dates).
+3. **Gap at a performance = position(this date) − position(previous performance's date).**
+   Consecutive dates give 1; a second performance on the same date gives 0.
+4. **Current gap = position(newest played date) − position(last performance's date).** A song
+   played at the newest show reads 0.
+5. **Carton prints a number for a debut too:** the position of the debut date. Whether the app
+   keeps its "Debut" badge there is a Step 1 design decision, recorded there.
+
+`Feel Like A Stranger` under this rule: 723 closed, 2015-06-20 → 2026-10-17, current gap 4 —
+Carton's figures exactly.
+
+**What the oracle could not settle.** "On or before today" and "on or before the newest show with
+a setlist" produce identical numbers today, because no show falls between 2026-10-23 and
+2026-10-24. The two diverge only on a day when a show has happened and its setlist is not yet
+posted. Decided for *today*, as Carton evidently counts setlist-less shows elsewhere; recorded as
+unproven.
+
+**The convention text in this file above, the index comment, the Settings sheet, the gap
+explainer, and `tests/gap.test.mjs` all describe the withdrawn rule** and are rewritten in the
+0.1.78 change, not here. This ruling lands first so the two records cannot disagree without one of
+them saying so.
 
 ## Out of scope — parked
 
