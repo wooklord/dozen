@@ -421,6 +421,7 @@ then passes for the wrong reason, and reports health it never established.
 | `layout-diff` reporting "identical" | that **a change moved nothing else** | the tool rendering the **wrong theme** — it never set one, so a light-only change was "verified" by a dark-mode run |
 | Waiting for `!document.querySelector('.loader')` | that **the app had finished booting** | the document **not having parsed yet**. `Page.navigate` resolves early, so the first poll saw no loader and declared success on a blank page |
 | `layout-diff` reporting "identical" (again) | that **a change moved nothing else** | both builds served from **one origin at the same urls**: the second boot fetched the new CSS and rendered the OLD parsed stylesheet |
+| `fetch` `/song/thorns` and count the rows (2026-10-24) | that **Carton's Thorns page** lists N performances | the **all-songs index**, reached by a 302 — a page with a table and 360 rows that looked like a song page and wasn't. The count was cited as evidence for a ruling before anyone noticed. Caught when `scripts/gap-oracle.mjs` started identifying songs by the page's `data-song-id` instead of the URL it asked for. The struck figure is in `docs/plan.md`, decision 2 under "Decisions settled 2026-10-24"; the slug behaviour is in `docs/carton_schema.md`, "A song's slug is not always its name" |
 
 The shape is always a **proxy**: the check tests a side effect rather than the
 thing itself, and the side effect has more than one cause.
@@ -977,7 +978,10 @@ a file is reachable at some edge; it does not prove the app is that build.
 tell a stale edge apart from a bad deploy instead of conflating them.
 
 **When the browser check disagrees with the file checks, re-run it before
-concluding — but do not dismiss it.** Propagation skew resolves in a minute or
+concluding — but do not dismiss it.** Capture the first run's full output before
+re-running, so a second run that disagrees has something to compare against;
+a re-run that overwrites the first leaves only the verdict you preferred.
+Propagation skew resolves in a minute or
 two, and a second run agreeing is the evidence that it was skew. What it is
 never evidence of is "nothing happened": for the length of that window, visitors
 were served the old app. If it persists past a few minutes, it is a real deploy
