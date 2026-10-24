@@ -15,8 +15,8 @@ import {
   gapAtShow,
   gapChartForShow,
   longestObservedGap,
-  longestGap,
   compareByLongestGap,
+  isPastLongestGap,
 } from '../src/data/index.js';
 
 /**
@@ -232,11 +232,11 @@ test('a debut is excluded from the longest gap', () => {
   const c = longestObservedGap(index, 30);
   assert.equal(c.gap, 2);
   assert.notEqual(c.gap, 5);
-  assert.deepEqual(longestGap(index, 30), {
+  // And that is what the entry stores, with the two dates that bound it.
+  assert.deepEqual(index.songsById.get(30).longestObservedGap, {
     gap: 2,
     fromDate: '2020-05-01',
     toDate: '2020-06-01',
-    isOpen: false,
   });
 });
 
@@ -287,96 +287,102 @@ test('a song played twice in one night appears once, with a count', () => {
   assert.ok(a[0].alsoIn.includes('Encore'));
 });
 
-// --- longestGap: closed gaps against the open one ----------------------------
+// --- longestObservedGap on the entry: closed gaps only -----------------------
 //
 // Positions in the fixture: show1=1, show2=2, show3=3, show4=4, show5=5,
-// show6=show7=7; newest = 7. Each case states which of the two kinds of gap
-// wins and why, and the result is compared whole so a wrong `isOpen` or a
-// swapped date cannot slip past a check that only looked at the number.
+// show6=show7=7; newest = 7. The entry stores the longest CLOSED span with
+// the two dates that bound it. The current gap is a separate figure and is
+// never folded in: the 0.1.76 rule that took the larger of the two, and its
+// tie rule, were withdrawn (docs/plan.md, 2026-10-24). Results are compared
+// whole so a swapped date cannot slip past a check that only read the number.
 
-test('longest gap: a closed gap longer than the open one reads closed, with both dates', () => {
-  // A: closed gaps 1 (show 2) and 5 (show 6); open gap 0 (played at the newest show).
-  assert.deepEqual(longestGap(index, 10), {
-    gap: 5,
-    fromDate: '2020-02-01',
-    toDate: '2020-06-01',
-    isOpen: false,
-  });
-  // And it is the value buildIndex stored on the entry -- the list sorts by
-  // the stored one, so the two must be the same object shape and value.
-  assert.deepEqual(index.songsById.get(10).longestGap, longestGap(index, 10));
-});
-
-test('longest gap: an open gap longer than every closed one reads open, toDate null', () => {
-  // A variant with a song at shows 1 and 2 only: closed 1, open 7 - 2 = 5.
+/** The fixture plus D, played at shows 1 and 2 only: closed 1, current 5. */
+function withD() {
   const f = fixture();
-  f.setlists = f.setlists.filter((r) => r.song_id !== 10);
   f.setlists.push(
     { ...f.setlists[0], uniqueid: '101', show_id: 1, showdate: '2020-01-01', song_id: 40, songname: 'D', slug: 'd', position: 3 },
     { ...f.setlists[0], uniqueid: '102', show_id: 2, showdate: '2020-02-01', song_id: 40, songname: 'D', slug: 'd', position: 2 },
   );
   f.songs.push({ id: 40, name: 'D', slug: 'd', isoriginal: 1, original_artist: 'Eggy' });
-  const idx = buildIndex(f);
-  assert.equal(longestObservedGap(idx, 40).gap, 1);
-  assert.equal(idx.songsById.get(40).showsSinceLastPlayed, 5);
-  assert.deepEqual(longestGap(idx, 40), {
+  return f;
+}
+
+/** The fixture plus E, played once at show 1, and F, played twice at show 6. */
+function withOneShowSongs() {
+  const f = fixture();
+  f.setlists.push(
+    { ...f.setlists[0], uniqueid: '103', song_id: 50, songname: 'E', slug: 'e', position: 3 },
+    { ...f.setlists[0], uniqueid: '104', show_id: 6, showdate: '2020-06-01', song_id: 55, songname: 'F', slug: 'f', position: 4 },
+    { ...f.setlists[0], uniqueid: '105', show_id: 6, showdate: '2020-06-01', song_id: 55, songname: 'F', slug: 'f', position: 5 },
+  );
+  f.songs.push(
+    { id: 50, name: 'E', slug: 'e', isoriginal: 1, original_artist: 'Eggy' },
+    { id: 55, name: 'F', slug: 'f', isoriginal: 1, original_artist: 'Eggy' },
+  );
+  return f;
+}
+
+test('the entry stores the longest closed gap with both bounding dates', () => {
+  // A: closed gaps 1 (show 2) and 5 (show 6). The entry is the 5, dated.
+  assert.deepEqual(index.songsById.get(10).longestObservedGap, {
     gap: 5,
     fromDate: '2020-02-01',
-    toDate: null,
-    isOpen: true,
+    toDate: '2020-06-01',
   });
 });
 
-test('longest gap: an exact tie between open and closed reads OPEN', () => {
-  // B: one closed gap of 3 (show 1 -> show 4) and an open gap of 3 (show 4 ->
-  // the newest date). Same length; the open one has not ended, so it is the
-  // answer. The fixture is built to tie: the setlist-less show 3 sits inside
-  // the closed gap and the double-show day sits inside the open one.
-  const b = index.songsById.get(20);
-  assert.equal(longestObservedGap(index, 20).gap, 3);
-  assert.equal(b.showsSinceLastPlayed, 3);
-  assert.deepEqual(longestGap(index, 20), {
-    gap: 3,
-    fromDate: '2020-04-01',
-    toDate: null,
-    isOpen: true,
-  });
-});
-
-test('longest gap: a one-play song has only its open gap', () => {
-  // E played once, at show 1: no closed gap, open gap 7 - 1 = 6.
-  const f = fixture();
-  f.setlists.push({ ...f.setlists[0], uniqueid: '103', song_id: 50, songname: 'E', slug: 'e', position: 3 });
-  f.songs.push({ id: 50, name: 'E', slug: 'e', isoriginal: 1, original_artist: 'Eggy' });
-  const idx = buildIndex(f);
-  assert.equal(longestObservedGap(idx, 50), null);
-  assert.deepEqual(longestGap(idx, 50), {
-    gap: 6,
+test('a current gap longer than every closed gap does not become the longest', () => {
+  // D: closed 1, current 7 - 2 = 5. The longest observed is still the 1 --
+  // the current gap is the other figure, not a candidate for this one.
+  const idx = buildIndex(withD());
+  assert.equal(idx.songsById.get(40).showsSinceLastPlayed, 5);
+  assert.deepEqual(idx.songsById.get(40).longestObservedGap, {
+    gap: 1,
     fromDate: '2020-01-01',
-    toDate: null,
-    isOpen: true,
+    toDate: '2020-02-01',
   });
 });
 
-test('longest gap: a never-played catalogue song is null, and sorts last', () => {
+test('a song played at one show only has no observed gap, and sorts last', () => {
+  // E once at show 1; F twice at show 6, on one date. Neither has a gap
+  // between two performances, so neither has a longest observed gap --
+  // F's second row is a repeat on the same date, not a return.
+  const idx = buildIndex(withOneShowSongs());
+  assert.equal(idx.songsById.get(50).longestObservedGap, null);
+  assert.equal(idx.songsById.get(55).longestObservedGap, null);
+  assert.equal(idx.songsById.get(55).timesPlayed, 2, 'F was played twice');
+  const order = idx.songs.slice().sort(compareByLongestGap).map((x) => x.name);
+  assert.deepEqual(order, ['A', 'B', 'C', 'E', 'F']);
+});
+
+test('a never-played catalogue song is not listed, and is still reachable by id', () => {
   const f = fixture();
   f.songs.push({ id: 60, name: 'Aardvark', slug: 'aardvark', isoriginal: 1, original_artist: 'Eggy' });
   const idx = buildIndex(f);
-  assert.equal(longestGap(idx, 60), null);
-  assert.equal(idx.songsById.get(60).longestGap, null);
-  const order = idx.songs.slice().sort(compareByLongestGap).map((x) => x.name);
-  // Aardvark would lead A-Z; under the longest sort it is last.
-  assert.equal(order[order.length - 1], 'Aardvark');
-  assert.deepEqual(order, ['A', 'B', 'C', 'Aardvark']);
+  // Aardvark would lead A-Z; it is not in the list at all, because Carton's
+  // own song list does not list it (docs/plan.md, 2026-10-24).
+  assert.ok(!idx.songs.some((s) => s.song_id === 60));
+  assert.deepEqual(idx.unplayedSongs.map((s) => s.name), ['Aardvark']);
+  assert.equal(idx.counts.songs, 3);
+  assert.equal(idx.counts.songsUnplayed, 1);
+  const entry = idx.songsById.get(60);
+  assert.equal(entry.timesPlayed, 0);
+  assert.equal(entry.longestObservedGap, null);
+  assert.equal(entry.showsSinceLastPlayed, null);
 });
 
-test('longest gap sort: descending, then open gap descending, then name', () => {
-  // Fixture values: A 5 (open 0), B 3 (open 3), C 2 (open 0).
+test('longest gap sort: closed gap descending, then current gap descending, then name', () => {
+  // Fixture values: A 5 (current 0), B 3 (current 3), C 2 (current 0).
   const order = index.songs.slice().sort(compareByLongestGap).map((x) => x.name);
   assert.deepEqual(order, ['A', 'B', 'C']);
 
-  // Tie on longest, different open gaps: the larger open gap first.
-  const mk = (name, gap, open) => ({ name, sortkey: name.toLowerCase(), longestGap: gap === null ? null : { gap }, showsSinceLastPlayed: open });
+  // Tie on the closed gap, different current gaps: the larger current gap first.
+  const mk = (name, gap, current) => ({
+    name,
+    sortkey: name.toLowerCase(),
+    longestObservedGap: gap === null ? null : { gap },
+    showsSinceLastPlayed: current,
+  });
   assert.deepEqual(
     [mk('Zed', 5, 1), mk('Ann', 5, 4)].sort(compareByLongestGap).map((x) => x.name),
     ['Ann', 'Zed'],
@@ -388,4 +394,34 @@ test('longest gap sort: descending, then open gap descending, then name', () => 
   );
   // The sign is the one the chip promises: a bigger gap comes FIRST.
   assert.ok(compareByLongestGap(mk('x', 9, 0), mk('y', 1, 0)) < 0);
+  // No closed gap sorts after any closed gap, however small.
+  assert.ok(compareByLongestGap(mk('x', null, 50), mk('y', 1, 0)) > 0);
+});
+
+// --- isPastLongestGap: the "Past longest gap" filter -------------------------
+//
+// True only when the current gap is STRICTLY longer than the longest closed
+// gap. Each case names its two figures so a flipped or loosened comparison
+// fails on the row that says why.
+
+test('past longest gap: strictly longer, and a closed gap is required', () => {
+  // A: closed 5, current 0 -- the current gap is shorter.
+  assert.equal(isPastLongestGap(index.songsById.get(10)), false);
+  // B: closed 3, current 3 -- equal is not longer.
+  assert.equal(index.songsById.get(20).showsSinceLastPlayed, 3);
+  assert.equal(index.songsById.get(20).longestObservedGap.gap, 3);
+  assert.equal(isPastLongestGap(index.songsById.get(20)), false, 'a tie is not kept');
+  // C: closed 2, current 0.
+  assert.equal(isPastLongestGap(index.songsById.get(30)), false);
+  // D: closed 1, current 5 -- longer, kept.
+  const withDIdx = buildIndex(withD());
+  assert.equal(isPastLongestGap(withDIdx.songsById.get(40)), true);
+  // E: no closed gap, current 6 -- nothing to compare, not kept.
+  const oneShow = buildIndex(withOneShowSongs());
+  assert.equal(oneShow.songsById.get(50).showsSinceLastPlayed, 6);
+  assert.equal(isPastLongestGap(oneShow.songsById.get(50)), false, 'no closed gap is not zero');
+  assert.equal(isPastLongestGap(oneShow.songsById.get(55)), false);
+  // Shapes that must not throw or pass: nothing, and a closed gap with no current one.
+  assert.equal(isPastLongestGap(null), false);
+  assert.equal(isPastLongestGap({ longestObservedGap: { gap: 1 }, showsSinceLastPlayed: null }), false);
 });

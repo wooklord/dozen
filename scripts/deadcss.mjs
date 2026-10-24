@@ -121,8 +121,9 @@ const specificityOf = (classes) => classes.length;
 /**
  * Class combinations that actually occur on one element, read from the source.
  *
- * `el('button.chip.chip-quiet')` is the convention (see src/ui/dom.js), and a
- * `class:` prop merges further classes onto the same node, so both are read.
+ * `el('button.chip.chip-lead.chip-quiet')` is the convention (see
+ * src/ui/dom.js), and a `class:` prop merges further classes onto the same
+ * node, so both are read.
  */
 export function readClassSets(dir = path.join(ROOT, 'src')) {
   const sets = [];

@@ -194,8 +194,9 @@ server.listen(PORT, async () => {
   // appear on any other route, or a screen that failed to render passes
   // because the PREVIOUS screen is still on display. routes.mjs says so in a
   // comment. Two of its markers did not satisfy it -- 'shows in the archive'
-  // renders on song detail too, 'Jam charts' renders as a Songs filter chip --
-  // and both passed only because of where they sat in the array.
+  // renders on song detail too, 'Jam charts' rendered as a Songs filter chip
+  // (in the filter sheet since 0.1.79) -- and both passed only because of
+  // where they sat in the array.
   //
   // So the property is measured against what the routes actually rendered,
   // just now, in this browser. Not grepped from source: a marker can appear on
@@ -1337,11 +1338,13 @@ server.listen(PORT, async () => {
     //    default, so exactly one chip per bar is painted at rest. This is what
     //    makes the check about the CLASS of bug rather than this one bar.
     //
-    //    A bar that is a LEAD CHIP ALONE (Songs' sort bar, 0.1.76) is asserted
-    //    on the lead: painted, and naming the default sort. "Exactly one chip
-    //    painted" would be satisfied there by the lead being miscounted as a
-    //    chip, which is the proxy shape this file keeps finding.
-    for (const [where, hash, wantBars, wantLead] of [['Songs', '#/songs', 2, 'A–Z'], ['Jams', '#/jams', 1, null]]) {
+    //    A bar that is a LEAD CHIP ALONE (Songs' sort bar since 0.1.76, its
+    //    filter bar since 0.1.79) is asserted on the lead: painted, and naming
+    //    the default -- "A–Z" for the sort, "All" for the filter, in that
+    //    order. "Exactly one chip painted" would be satisfied there by the
+    //    lead being miscounted as a chip, which is the proxy shape this file
+    //    keeps finding. Jams has no lead and must not grow one.
+    for (const [where, hash, wantBars, wantLeads] of [['Songs', '#/songs', 2, ['A–Z', 'All']], ['Jams', '#/jams', 1, []]]) {
       await evaluate(`location.hash = ${JSON.stringify(hash)};`);
       await sleep(1400);
       const s2 = await evaluate(CHIP_PROBE);
@@ -1350,22 +1353,18 @@ server.listen(PORT, async () => {
         continue;
       }
       const leads = s2.bars.map((_, i) => i).filter((i) => leadOf(s2, i));
-      if (wantLead && leads.length !== 1) {
-        fail(`chip paint (${theme}): ${where} has ${leads.length} lead-chip bar(s), expected 1 (the sort selector)`);
-        continue;
-      }
-      if (!wantLead && leads.length) {
-        fail(`chip paint (${theme}): ${where} has a lead chip (${JSON.stringify(leadOf(s2, leads[0]).text)}) and no sheet to lead to`);
+      if (leads.length !== wantLeads.length) {
+        fail(`chip paint (${theme}): ${where} has ${leads.length} lead-chip bar(s) (${JSON.stringify(leads.map((i) => leadOf(s2, i).text))}), expected ${wantLeads.length} (${wantLeads.join(', ') || 'none -- no sheet to lead to'})`);
         continue;
       }
       const bad = s2.bars
         .map((_, i) => [i, painted(s2, i)])
         .filter(([i, p]) => (leadOf(s2, i) ? p.length !== 0 : p.length !== 1));
-      const leadBad = leads.filter((i) => !leadPainted(s2, i) || !leadOf(s2, i).text.startsWith(wantLead));
+      const leadBad = leads.filter((i, k) => !leadPainted(s2, i) || !leadOf(s2, i).text.startsWith(wantLeads[k]));
       if (bad.length) {
         fail(`chip paint (${theme}): ${where} ${bad.map(([i, p]) => `bar #${i} paints ${JSON.stringify(p)}`).join(', ')} — expected exactly one selected chip (none beside a lead)`);
       } else if (leadBad.length) {
-        fail(`chip paint (${theme}): ${where} lead chip is ${JSON.stringify(leadOf(s2, leadBad[0]))}, expected "${wantLead}" in the selected fill ${s2.selFill}`);
+        fail(`chip paint (${theme}): ${where} lead chip is ${JSON.stringify(leadOf(s2, leadBad[0]))}, expected "${wantLeads[leads.indexOf(leadBad[0])]}" in the selected fill ${s2.selFill}`);
       } else {
         pass(`${theme}: ${where} — ${s2.bars.map((_, i) => JSON.stringify(leadOf(s2, i) ? leadOf(s2, i).text : painted(s2, i)[0])).join(' + ')} selected`);
       }
@@ -1397,7 +1396,7 @@ server.listen(PORT, async () => {
   //   Coldest      -> shows since played  meta: Last {date}
   //   Hottest      -> shows since played  meta: Last {date}
   //   Most played  -> times played        meta: Last {date}
-  //   Longest gap  -> longest gap         meta: {date} → {date} | still open
+  //   Longest gap  -> longest gap         meta: {date} → {date}  (the closed span)
   //
   // The sort is picked through the LEAD CHIP AND THE SHEET (0.1.76), the same
   // two taps a thumb makes. The pressed state is read from the lead chip's
@@ -1441,7 +1440,7 @@ server.listen(PORT, async () => {
 
   const DATE = '[A-Z][a-z]{2} \\d{1,2}, \\d{4}';
   const META_LAST = new RegExp(`^Last ${DATE}`);
-  const META_SPAN = new RegExp(`^${DATE} → (${DATE}|still open)`);
+  const META_SPAN = new RegExp(`^${DATE} → ${DATE}`);
   for (const [label, wantUnit, wantTopNum, wantMeta] of [
     ['A–Z', 'times', null, META_LAST],
     ['Coldest first', 'since played', null, META_LAST],
@@ -1488,85 +1487,65 @@ server.listen(PORT, async () => {
     }
   }
 
-  // --- "Longest gap": sectioned, and every row sits under the right header --
+  // --- "Longest gap": one flat list, non-increasing, dashes only at the tail
   //
-  // (0.1.77) Under this sort the list is three sections -- Still open, Closed,
-  // Never played -- each with a counted header, each descending within itself.
-  // Read from the screen, every section and every row, never from the index:
-  //   (a) the headers present are in that order, and the first two exist;
-  //   (b) each header's (N) equals its own row count, the counts sum to every
-  //       row on screen, and that total is what the count line says;
-  //   (c) within a section the figures never climb;
-  //   (d) every row matches its section's kind -- an open span under Still
-  //       open, a closed span under Closed, a dash under Never played. This is
-  //       the one that catches a row under the wrong header; (a)-(c) are all
-  //       satisfied by two well-ordered sections whose titles were swapped.
-  // The header sweep later in this file arrives at Songs on the A–Z default and
-  // never sees these headers, so their non-echo of the h1 is by inspection:
-  // none of the three titles contains "songs".
-  console.log('\n"Longest gap" is sectioned, descending within each:');
-  const ORDER = ['Still open', 'Closed', 'Never played'];
-  const OPEN_SPAN = new RegExp(`^${DATE} → still open`);
+  // (0.1.79) The 0.1.77 sections were withdrawn -- "Still open" was the
+  // Coldest-first order under a header -- and the figure is the longest
+  // CLOSED gap, so the list is one ul.rows like every other sort. Read from
+  // the screen, never from the index:
+  //   (a) no .section renders on the screen and exactly one ul.rows does --
+  //       the sections are gone, not merely emptied; a lone header would
+  //       still be a .section;
+  //   (b) every numbered figure is <= the one before it;
+  //   (c) every dash (no closed gap: played at one show only) comes after the
+  //       last number -- a dash above a number means the comparator put a
+  //       no-gap song over a gapped one -- and there is at least one, so the
+  //       tail rule was exercised rather than vacuously true;
+  //   (d) every numbered row's meta is a span with BOTH dates, every dashed
+  //       row's is a "Last {date}" line, and "still open" appears nowhere;
+  //   (e) the row count equals the count line.
+  console.log('\n"Longest gap" is one flat list, non-increasing, dashes at the tail:');
   const CLOSED_SPAN = new RegExp(`^${DATE} → ${DATE}`);
-  const readSections = () => evaluate(`(() => {
+  const readFlat = () => evaluate(`(() => {
     const t = (n) => ((n || {}).textContent || '').trim();
     const count = [...document.querySelectorAll('.screen .note')].map(t).find((x) => /^\\d+ songs?\\b/.test(x)) || '';
     return {
       countLine: count ? Number(count.match(/^(\\d+)/)[1]) : null,
-      allRows: document.querySelectorAll('.screen .rows li').length,
-      sections: [...document.querySelectorAll('.screen .section')].map((sec) => ({
-        title: t(sec.querySelector('.section-title')),
-        rows: [...sec.querySelectorAll('.rows li')].map((li) => ({
-          title: t(li.querySelector('.row-title')),
-          num: t(li.querySelector('.gap-num')),
-          meta: t(li.querySelector('.row-meta')),
-        })),
+      sections: document.querySelectorAll('.screen .section').length,
+      lists: document.querySelectorAll('.screen ul.rows').length,
+      rows: [...document.querySelectorAll('.screen .rows li')].map((li) => ({
+        title: t(li.querySelector('.row-title')),
+        num: t(li.querySelector('.gap-num')),
+        meta: t(li.querySelector('.row-meta')),
       })),
     };
   })()`);
-  const parseSections = (shot) => shot.sections.map((sec) => {
-    const m = sec.title.match(/^(.*) \((\d+)\)$/);
-    return { ...sec, name: m ? m[1] : sec.title, n: m ? Number(m[2]) : null };
-  });
-  const ROW_KIND = {
-    'Still open': (r) => r.num !== '—' && OPEN_SPAN.test(r.meta),
-    'Closed': (r) => r.num !== '—' && CLOSED_SPAN.test(r.meta),
-    'Never played': (r) => r.num === '—' && /^Never played/.test(r.meta),
-  };
 
   if (!(await clickSort('Longest gap'))) fail('longest gap: no "Longest gap" in the sort sheet');
   else {
     await sleep(900);
-    const shot = await readSections();
-    const parsed = parseSections(shot);
-    const names = parsed.map((x) => x.name);
-    const rank = names.map((n) => ORDER.indexOf(n));
-    const total = parsed.reduce((a, x) => a + x.rows.length, 0);
+    const flat = await readFlat();
     const problems = [];
-    // (a) order and presence
-    if (rank.includes(-1)) problems.push(`(a) unknown section title(s) ${JSON.stringify(parsed.filter((_, i) => rank[i] === -1).map((x) => x.title))}`);
-    else if (rank.some((v, i) => i && v <= rank[i - 1])) problems.push(`(a) sections render as ${JSON.stringify(names)}, expected the order ${JSON.stringify(ORDER)}`);
-    if (!names.includes('Still open') || !names.includes('Closed')) problems.push(`(a) sections are ${JSON.stringify(names)} -- "Still open" and "Closed" must both be present`);
-    // (b) counts
-    for (const x of parsed) if (x.n !== x.rows.length) problems.push(`(b) "${x.title}" heads ${x.rows.length} row(s)`);
-    if (shot.allRows !== total) problems.push(`(b) ${shot.allRows} rows on screen but ${total} under headers`);
-    if (shot.countLine !== total) problems.push(`(b) the count line says ${shot.countLine}, the sections hold ${total}`);
-    // (c) non-increasing within a section
-    for (const x of parsed) {
-      const v = x.rows.map((r) => r.num).filter((n) => n !== '—').map(Number);
-      if (v.some((n) => !Number.isFinite(n))) { problems.push(`(c) "${x.title}" has a non-numeric figure`); continue; }
-      for (let i = 1; i < v.length; i++) if (v[i] > v[i - 1]) { problems.push(`(c) "${x.title}" climbs at row ${i + 1}: ${v[i]} after ${v[i - 1]}`); break; }
-    }
-    // (d) every row under its own kind
-    for (const x of parsed) {
-      const ok = ROW_KIND[x.name];
-      if (!ok) continue;
-      const bad = x.rows.findIndex((r) => !ok(r));
-      if (bad !== -1) problems.push(`(d) "${x.title}" row ${bad + 1} is not that kind: ${JSON.stringify(x.rows[bad])}`);
-    }
-    if (!parsed.length) fail('longest gap: no sections rendered under the sort');
+    const nums = flat.rows.map((r) => r.num);
+    const values = nums.filter((n) => n !== '—').map(Number);
+    const lastNumber = nums.map((n) => n !== '—').lastIndexOf(true);
+    const firstDash = nums.indexOf('—');
+    if (flat.sections !== 0) problems.push(`(a) ${flat.sections} .section element(s) render under the sort -- the sections are back`);
+    if (flat.lists !== 1) problems.push(`(a) ${flat.lists} ul.rows render, expected one flat list`);
+    if (!values.length) problems.push('(b) no numbered rows at all -- nothing was ordered');
+    if (values.some((n) => !Number.isFinite(n))) problems.push('(b) a non-numeric figure');
+    for (let i = 1; i < values.length; i++) if (values[i] > values[i - 1]) { problems.push(`(b) climbs at numbered row ${i + 1}: ${values[i]} after ${values[i - 1]}`); break; }
+    if (firstDash === -1) problems.push('(c) no dashed rows -- no song played at one show only, so the tail rule went untested');
+    else if (firstDash < lastNumber) problems.push(`(c) a dash at row ${firstDash + 1} sits above a number at row ${lastNumber + 1}`);
+    const badNum = flat.rows.findIndex((r) => r.num !== '—' && !CLOSED_SPAN.test(r.meta));
+    if (badNum !== -1) problems.push(`(d) numbered row ${badNum + 1} has no two-date span: ${JSON.stringify(flat.rows[badNum])}`);
+    const badDash = flat.rows.findIndex((r) => r.num === '—' && !META_LAST.test(r.meta));
+    if (badDash !== -1) problems.push(`(d) dashed row ${badDash + 1} is not a "Last {date}" line: ${JSON.stringify(flat.rows[badDash])}`);
+    if (flat.rows.some((r) => /still open/i.test(r.meta))) problems.push('(d) "still open" still renders on a row');
+    if (flat.countLine !== flat.rows.length) problems.push(`(e) the count line says ${flat.countLine}, the list holds ${flat.rows.length}`);
+    if (!flat.rows.length) fail('longest gap: no rows rendered under the sort');
     else if (problems.length) for (const p of problems) fail(`longest gap: ${p}`);
-    else pass(`${parsed.map((x) => x.title).join(' → ')}: ${total} rows = count line, non-increasing within each, every row under its own kind`);
+    else pass(`${flat.rows.length} rows in one list = count line: ${values.length} numbered, non-increasing, then ${nums.length - values.length} dashes; every span two-dated`);
   }
 
   // --- A–Z and "Most played" show the SAME FACT, so they must RENDER the same
@@ -1620,20 +1599,6 @@ server.listen(PORT, async () => {
     fail(`figure parity: same markup, different paint — ${azFig.colour}/${azFig.width}px vs ${mostFig.colour}/${mostFig.width}px`);
   } else {
     pass(`"${PROBE_SONG}" renders identically under both: ${azFig.html}`);
-  }
-  // One matching song under "Longest gap": exactly ONE section renders, with
-  // one header and that one row. Empty sections render nothing -- a reader who
-  // searched for a song must not get two empty headers around it. "Agatha" is
-  // played, so the header is Still open or Closed, never Never played.
-  if (!(await clickSort('Longest gap'))) fail('single section: no "Longest gap" in the sort sheet');
-  else {
-    await sleep(700);
-    const one = parseSections(await readSections());
-    if (one.length !== 1) fail(`single section: "${PROBE_SONG}" renders ${one.length} section(s) under Longest gap, expected 1 (${JSON.stringify(one.map((x) => x.title))})`);
-    else if (!/^(Still open|Closed) \(1\)$/.test(one[0].title)) fail(`single section: header reads ${JSON.stringify(one[0].title)}, expected "Still open (1)" or "Closed (1)"`);
-    else if (one[0].rows.length !== 1 || one[0].rows[0].title !== PROBE_SONG) fail(`single section: the one section holds ${JSON.stringify(one[0].rows.map((r) => r.title))}`);
-    else if (!ROW_KIND[one[0].name](one[0].rows[0])) fail(`single section: "${PROBE_SONG}" sits under "${one[0].title}" but reads ${JSON.stringify(one[0].rows[0])}`);
-    else pass(`"${PROBE_SONG}" alone renders one section, "${one[0].title}", and no empty headers`);
   }
   await setSongQuery('');
   await clickSort('A–Z');
@@ -2563,37 +2528,244 @@ server.listen(PORT, async () => {
   // called "Why Should I Worry" claiming three performances, and made the
   // catalogue read 367 against an endpoint reporting 366.
   //
-  // THE COUNT IS COMPARED AGAINST THE ENDPOINT, NOT AGAINST 366. A literal
-  // would go stale the day Carton adds a song and would then be failing for a
-  // reason that has nothing to do with this. The invariant is the real one:
-  // every song in the catalogue comes from the songs table, so the rendered
-  // count must equal the number of rows that table returns. If it drifts
-  // again, another orphan song_id has appeared -- which is exactly what should
-  // be reported.
-  console.log('\nfree-text entries are not songs:');
+  // THE COUNT IS COMPARED AGAINST A NUMBER DERIVED FROM THE ENDPOINTS, NOT
+  // AGAINST A LITERAL. A literal would go stale the day Carton adds a song and
+  // would then be failing for a reason that has nothing to do with this.
+  //
+  // Since 0.1.79 the list is the songs with at least one Eggy performance --
+  // what Carton's own song list shows (docs/plan.md, 2026-10-24) -- so the
+  // invariant is: rendered count == songs endpoint rows MINUS the rows with
+  // no such performance. "Such performance" is derived HERE, from the raw
+  // setlists pull: a row that is not `_custom_` and whose artist_id is 1 or
+  // absent. Not read from the app, whose own filter is the thing under test.
+  // Equality with that derived number is the check. "Fewer than the
+  // endpoint" would be satisfied by any bug that dropped songs, and "equal
+  // to the endpoint" was the 0.1.78 invariant that the ruling replaced. If it
+  // drifts, either an orphan song_id is back in the catalogue or the filter
+  // is wrong -- the message says which side is bigger.
+  console.log('\nthe catalogue is the endpoint minus the songs with no Eggy performance:');
   await evaluate(`location.hash = '#/songs';`);
   await sleep(1500);
   const shown = await evaluate(`(() => {
     const sub = document.querySelector('.screen-sub');
-    const m = sub && sub.textContent.match(/([\\d,]+)\\s+songs in the archive/);
+    const m = sub && sub.textContent.match(/([\\d,]+)\\s+songs played live/);
     return m ? Number(m[1].replace(/,/g, '')) : null;
   })()`);
 
   let endpointSongs = null;
+  let hiddenSongs = null;
   try {
-    const res = await fetch('https://thecarton.net/api/v2/songs.json?limit=20000');
-    const body = await res.json();
-    if (Array.isArray(body.data)) endpointSongs = body.data.length;
+    const [songsRes, setlistsRes] = await Promise.all([
+      fetch('https://thecarton.net/api/v2/songs.json?limit=20000'),
+      fetch('https://thecarton.net/api/v2/setlists.json?limit=20000'),
+    ]);
+    const songsBody = await songsRes.json();
+    const setlistsBody = await setlistsRes.json();
+    if (Array.isArray(songsBody.data) && Array.isArray(setlistsBody.data)) {
+      endpointSongs = songsBody.data.length;
+      const playedByEggy = new Set();
+      for (const r of setlistsBody.data) {
+        if (String(r.slug) === '_custom_') continue;
+        if (r.artist_id != null && Number(r.artist_id) !== 1) continue;
+        playedByEggy.add(Number(r.song_id));
+      }
+      hiddenSongs = songsBody.data.filter((s) => !playedByEggy.has(Number(s.id)));
+    }
   } catch {
     /* handled below as a SKIP -- an unreachable third party is not a defect here */
   }
 
   if (shown === null) fail('songs: could not read the count from the Songs sub-line');
-  else if (endpointSongs === null) {
+  else if (endpointSongs === null || hiddenSongs === null) {
     skip(`catalogue count not cross-checked (Carton unreachable); the app shows ${shown}`);
-  } else if (shown !== endpointSongs) {
-    fail(`songs: the app counts ${shown} but the songs endpoint returns ${endpointSongs} — an orphan song_id is in the catalogue`);
-  } else pass(`catalogue is ${shown}, matching the songs endpoint exactly`);
+  } else if (shown !== endpointSongs - hiddenSongs.length) {
+    fail(`songs: the app lists ${shown}, but the endpoint has ${endpointSongs} songs of which ${hiddenSongs.length} have no Eggy performance — expected ${endpointSongs - hiddenSongs.length}`);
+  } else {
+    pass(`catalogue is ${shown}: the endpoint's ${endpointSongs} minus ${hiddenSongs.length} with no Eggy performance (${hiddenSongs.slice(0, 3).map((s) => s.name.trim()).join(', ')}${hiddenSongs.length > 3 ? ', …' : ''})`);
+  }
+
+  // Every listed song has been played: under A–Z the figure is times played,
+  // and a 0 there -- or a "Never played" date line -- is unique to a song with
+  // no Eggy performance, which the list no longer holds. Read after the sort
+  // is explicitly A–Z, because the module state carries the last sort picked.
+  //
+  // MEMBERSHIP, NOT JUST COUNT. The parity check above compares two numbers,
+  // and equal numbers are satisfied by the app hiding N wrong songs while
+  // listing N the derivation says are unplayed. The zero-plays filter closes
+  // one direction (nothing listed reads 0); the id check closes the other:
+  // none of the songs the derivation found unplayed may appear in the list.
+  // BY ID, NOT NAME: the endpoint holds two "When I Paint My Masterpiece"
+  // rows, one played and one stray, and a name match failed on the played
+  // one the first time this ran. The row carries its id as data-song-id.
+  if (!(await clickSort('A–Z'))) fail('songs: no "A–Z" in the sort sheet, so the zero-plays check could not set its sort');
+  await sleep(700);
+  const listedIds = await evaluate(`[...document.querySelectorAll('.screen .rows li .row-shell')].map((s) => s.dataset.songId || '')`);
+  const unplayedRows = await evaluate(`[...document.querySelectorAll('.screen .rows li')]
+    .filter((li) => ((li.querySelector('.gap-num') || {}).textContent || '').trim() === '0'
+      || /Never played/.test((li.querySelector('.row-meta') || {}).textContent || ''))
+    .map((li) => ((li.querySelector('.row-title') || {}).textContent || '').trim())`);
+  const hiddenListed = hiddenSongs ? hiddenSongs.filter((s) => listedIds.includes(String(s.id))) : [];
+  if (!listedIds.length) fail('songs: no rows rendered under A–Z, so the zero-plays check saw nothing');
+  else if (listedIds.some((id) => !/^\d+$/.test(id))) fail('songs: a row carries no data-song-id, so membership could not be checked by id');
+  else if (unplayedRows.length) fail(`songs: ${unplayedRows.length} listed song(s) read 0 times or "Never played" — ${unplayedRows.slice(0, 5).join(', ')}`);
+  else if (hiddenListed.length) fail(`songs: ${hiddenListed.length} song(s) the setlists say have no Eggy performance are listed — ${hiddenListed.slice(0, 5).map((s) => `${s.name.trim()} (id ${s.id})`).join(', ')}`);
+  else pass(`${listedIds.length} rows under A–Z, none reading 0 times or "Never played"${hiddenSongs ? `, none of the ${hiddenSongs.length} derived-unplayed ids among them` : ''}`);
+
+  // --- "Past longest gap": a strict comparison of two rendered figures -----
+  //
+  // (0.1.79) With the filter on, "Coldest first" renders each kept song's
+  // CURRENT gap and "Longest gap" renders its LONGEST OBSERVED gap -- the two
+  // figures the ruling compares -- so both are read from the screen, by song
+  // name, and compared here rather than trusting the predicate that built
+  // the list:
+  //   (a) the two sorts list the same names -- one set, two orders -- and
+  //       every row carries the figure its sort is about;
+  //   (b) for every name, current > longest. STRICT: the chip says "longer",
+  //       and a song whose two figures are equal must not be listed;
+  //   (c) three rows' detail screens show the same two numbers the lists
+  //       showed, so what was compared is what a reader sees on tap;
+  //   (d) the count line states the comparison and equals the rows, and the
+  //       lead chip reads the filter.
+  // Red proof: flip the comparison in isPastLongestGap (data/index.js) to >=
+  // -- the tied songs appear and (b) fails naming them.
+  console.log('\n"Past longest gap" keeps only songs whose current gap exceeds their longest observed:');
+  const clickFilter = async (label) =>
+    evaluate(`(() => {
+      const lead = document.querySelector('.screen .sortbar-secondary .chip-lead');
+      if (!lead) return false;
+      lead.click();
+      const c = [...document.querySelectorAll('.sheet .chip-grid .chip')].find((x) => x.textContent.trim() === ${JSON.stringify(label)});
+      if (!c) { const b = document.querySelector('.sheet-backdrop'); if (b) b.click(); return false; }
+      c.click();
+      return true;
+    })()`);
+  const readFigures = () =>
+    evaluate(`(() => {
+      const t = (n) => ((n || {}).textContent || '').trim();
+      const lead = document.querySelector('.screen .sortbar-secondary .chip-lead');
+      const count = [...document.querySelectorAll('.screen .note')].map(t).find((x) => /^\\d+ songs?\\b/.test(x)) || '';
+      return {
+        filterChip: lead ? t(lead).replace(/\\s*\\u25BE\\s*$/, '') : null,
+        sheetOpen: !!document.querySelector('.sheet'),
+        countLine: count ? Number(count.match(/^(\\d+)/)[1]) : null,
+        countText: count,
+        rows: [...document.querySelectorAll('.screen .rows li')].map((li) => ({
+          title: t(li.querySelector('.row-title')),
+          num: t(li.querySelector('.gap-num')),
+          unit: t(li.querySelector('.gap-unit')).toLowerCase(),
+        })),
+      };
+    })()`);
+  const filterProblems = [];
+  let coldShot = null;
+  let longShot = null;
+  if (!(await clickSort('Coldest first'))) filterProblems.push('no "Coldest first" in the sort sheet');
+  else if (!(await clickFilter('Past longest gap'))) filterProblems.push('no "Past longest gap" in the filter sheet');
+  else {
+    await sleep(900);
+    coldShot = await readFigures();
+    if (!(await clickSort('Longest gap'))) filterProblems.push('no "Longest gap" in the sort sheet');
+    else {
+      await sleep(900);
+      longShot = await readFigures();
+    }
+  }
+
+  // --- Both chip bars fit their visible width, at their widest labels ------
+  //
+  // Right now the sort reads "Longest gap" and the filter "Past longest gap",
+  // the widest each lead chip gets. Content wider than its bar is overflow
+  // behind a hidden scrollbar -- the 0.1.75 defect -- and a bar holding ONE
+  // chip has no business needing it. The filter sheet's grid is held to the
+  // same rule, and each chip in it to its own label: a "Past longest gap"
+  // that fit by clipping its name would be a chip that fits by lying.
+  // Measured at the smoke viewport, 390px, on the bar's clientWidth -- which
+  // INCLUDES its 16px padding each side, so the figures here read against
+  // 390, not the 358 of visible chip room quoted in songs.js. Red proof: the
+  // five filter chips rendered inline beside the lead chip -- "609px of
+  // content in 390px".
+  if (longShot) {
+    const bars = await evaluate(`(() => {
+      const lead = document.querySelector('.screen .sortbar-secondary .chip-lead');
+      const bars = [...document.querySelectorAll('.screen .sortbar')].map((b) => ({ text: b.textContent.trim(), client: b.clientWidth, scroll: b.scrollWidth }));
+      if (lead) lead.click();
+      const grid = document.querySelector('.sheet .chip-grid');
+      const chips = grid ? [...grid.querySelectorAll('.chip')].map((c) => ({ text: c.textContent.trim(), client: c.clientWidth, scroll: c.scrollWidth })) : [];
+      const sheet = { client: grid ? grid.clientWidth : null, scroll: grid ? grid.scrollWidth : null };
+      const bd = document.querySelector('.sheet-backdrop'); if (bd) bd.click();
+      return { bars, chips, sheet, viewport: window.innerWidth };
+    })()`);
+    const over = bars.bars.filter((b) => b.scroll > b.client + 1);
+    const clipped = bars.chips.filter((c) => c.scroll > c.client + 1);
+    if (bars.bars.length !== 2) fail(`chip bars: ${bars.bars.length} bar(s) on Songs, expected the sort bar and the filter bar`);
+    else if (over.length) fail(`chip bars: ${over.map((b) => `"${b.text}" is ${b.scroll}px of content in ${b.client}px`).join(', ')} — wider than the bar, so something is off-screen`);
+    else if (bars.chips.length !== 5) fail(`filter sheet: ${bars.chips.length} chip(s), expected 5`);
+    else if (bars.sheet.scroll > bars.sheet.client + 1) fail(`filter sheet: the grid is ${bars.sheet.scroll}px in ${bars.sheet.client}px`);
+    else if (clipped.length) fail(`filter sheet: ${clipped.map((c) => `"${c.text}" ${c.scroll}px in ${c.client}px`).join(', ')} — a label clipped inside its chip`);
+    else pass(`bars at ${bars.viewport}px: ${bars.bars.map((b) => `"${b.text}" ${b.scroll}/${b.client}px`).join(', ')}; filter sheet grid ${bars.sheet.scroll}/${bars.sheet.client}px, 5 chips unclipped`);
+  }
+
+  if (coldShot && longShot) {
+    if (coldShot.filterChip !== 'Past longest gap') filterProblems.push(`(d) the lead chip reads ${JSON.stringify(coldShot.filterChip)}`);
+    if (coldShot.sheetOpen || longShot.sheetOpen) filterProblems.push('picking a filter or sort left the sheet open');
+    if (!/current gap is longer than their longest observed gap/.test(coldShot.countText)) filterProblems.push(`(d) the count line reads ${JSON.stringify(coldShot.countText)}`);
+    if (coldShot.countLine !== coldShot.rows.length) filterProblems.push(`(d) the count line says ${coldShot.countLine}, the list holds ${coldShot.rows.length}`);
+    if (!coldShot.rows.length) filterProblems.push('(a) the filter kept nothing, so nothing was compared');
+    if (coldShot.rows.some((r) => r.unit !== 'since played')) filterProblems.push('(a) a Coldest-first row does not carry a since-played figure');
+    if (longShot.rows.some((r) => r.unit !== 'longest gap')) filterProblems.push('(a) a Longest-gap row does not carry a longest-gap figure');
+    const coldNames = coldShot.rows.map((r) => r.title).sort();
+    const longNames = longShot.rows.map((r) => r.title).sort();
+    if (JSON.stringify(coldNames) !== JSON.stringify(longNames)) {
+      filterProblems.push(`(a) the two sorts list different songs: ${coldNames.length} under Coldest first, ${longNames.length} under Longest gap`);
+    } else if (coldShot.rows.length) {
+      const current = new Map(coldShot.rows.map((r) => [r.title, Number(r.num)]));
+      const longest = new Map(longShot.rows.map((r) => [r.title, Number(r.num)]));
+      const bad = [...current].filter(([name, cur]) => !(Number.isFinite(cur) && Number.isFinite(longest.get(name)) && cur > longest.get(name)));
+      if (bad.length) {
+        filterProblems.push(`(b) ${bad.length} kept song(s) whose current gap is NOT longer than their longest observed: ${bad.slice(0, 4).map(([n, c]) => `${n} ${c} vs ${longest.get(n)}`).join('; ')}`);
+      }
+      // (c) first, middle and last rows of the list on screen (Longest gap),
+      // opened by their row button, read on detail, and compared by name.
+      const picks = [...new Set([0, Math.floor(longShot.rows.length / 2), longShot.rows.length - 1])];
+      const checked = [];
+      for (const i of picks) {
+        const opened = await evaluate(`(() => {
+          const li = document.querySelectorAll('.screen .rows li')[${i}];
+          const b = li && li.querySelector('button.row');
+          if (!b) return null;
+          const t = li.querySelector('.row-title').textContent.trim();
+          b.click();
+          return t;
+        })()`);
+        await sleep(900);
+        const detail = await evaluate(`(() => {
+          const read = (labelStart) => {
+            const stat = [...document.querySelectorAll('.stat')].find((s) => { const l = s.querySelector('.stat-label'); return l && l.textContent.trim().startsWith(labelStart); });
+            const v = stat && stat.querySelector('.stat-value');
+            return v ? v.textContent.trim() : null;
+          };
+          const h1 = document.querySelector('.screen h1');
+          return { hash: location.hash, title: h1 ? h1.textContent.trim() : null, current: read('shows since last'), longest: read('longest observed gap') };
+        })()`);
+        if (!opened || !/^#\/song\//.test(detail.hash)) filterProblems.push(`(c) row ${i + 1} did not open a song detail (${detail.hash})`);
+        else if (!detail.title || !detail.title.startsWith(opened)) filterProblems.push(`(c) row ${i + 1} "${opened}" opened ${JSON.stringify(detail.title)}`);
+        else if (Number(detail.current) !== current.get(opened) || Number(detail.longest) !== longest.get(opened)) {
+          filterProblems.push(`(c) "${opened}": the lists showed current ${current.get(opened)} / longest ${longest.get(opened)}, detail shows ${detail.current} / ${detail.longest}`);
+        } else checked.push(`${opened} ${detail.current}>${detail.longest}`);
+        await evaluate(`location.hash = '#/songs';`);
+        await sleep(900);
+      }
+      if (!filterProblems.length) pass(`${coldShot.rows.length} songs kept under both sorts, every current gap > longest observed; details agree: ${checked.join(', ')}`);
+    }
+  }
+  for (const p of filterProblems) fail(`past longest gap: ${p}`);
+  // Leave the screen as the later sections expect it: no filter, A–Z. Asserted,
+  // because a filter left on would fail every later Songs section for a
+  // reason that has nothing to do with what it checks.
+  if (!(await clickFilter('All'))) fail('past longest gap: could not reset the filter to "All" -- later Songs checks would run filtered');
+  await sleep(300);
+  if (!(await clickSort('A–Z'))) fail('past longest gap: could not reset the sort to "A–Z"');
+  await sleep(600);
 
   // Gap parity with The Carton, one song, end to end -- the figures the song
   // detail screen RENDERS against the Show Gap column on that song's Carton

@@ -289,17 +289,20 @@ export function heatFor(value, max) {
  * sort is about. Nothing is lost: the other number is one tap away on song
  * detail.
  *
- * Under figure 'longest' (0.1.76) the date line is the SPAN the figure bounds
- * -- "Feb 7, 2025 → Oct 17, 2026", or "Feb 7, 2025 → still open" when the gap
- * is the current one -- because a longest gap without its dates is a number
- * with no universe. That is still one figure and one date line; the span
- * states the figure's dates and does not repeat its value.
+ * Under figure 'longest' (0.1.76, narrowed to closed gaps in 0.1.79) the date
+ * line is the SPAN the figure bounds -- "Feb 7, 2025 → Oct 17, 2026", the two
+ * performances either side of the longest observed gap -- because a longest
+ * gap without its dates is a number with no universe. That is still one
+ * figure and one date line; the span states the figure's dates and does not
+ * repeat its value. A song with no closed gap renders a dash and keeps the
+ * ordinary "Last {date}" line.
  *
  * @param {object} opts
  * @param {boolean} [opts.jamBadge=false]  Show a "Jam" badge on the meta line.
  *   OFF by default. On the Songs list it crowded the second line -- which is
  *   where the date and cover credit are scanned -- and it duplicated the "Jam
- *   charts" filter chip sitting directly above the list. The fact stays
+ *   charts" filter (a chip row above the list until 0.1.79, in the filter
+ *   sheet since). The fact stays
  *   reachable through that filter, through the Jams tab, and through the jam
  *   chart entries on song detail, where it does real work rather than acting
  *   as a label. Parameterized rather than deleted so a future caller can ask
@@ -319,14 +322,13 @@ export function songRow(
     unit = song.timesPlayed === 1 ? 'time' : 'times';
     spoken = `played ${value} ${unit}`;
   } else if (figure === 'longest') {
-    // The longest gap the song has been through, closed or still open. A max
-    // over per-show gaps Carton's Show Gap column prints -- see longestGap().
-    value = song.longestGap ? song.longestGap.gap : null;
+    // The longest observed gap: the longest span between two performances, a
+    // max over the per-show gaps Carton's Show Gap column prints -- see
+    // longestObservedGap() in data/index.js. Null when the song has been
+    // played at only one show.
+    value = song.longestObservedGap ? song.longestObservedGap.gap : null;
     unit = 'longest gap';
-    spoken =
-      value === null
-        ? 'never played'
-        : `longest observed gap of ${value} shows${song.longestGap.isOpen ? ', still open' : ''}`;
+    spoken = value === null ? 'no observed gap' : `longest observed gap of ${value} shows`;
   } else {
     // "SINCE PLAYED", not "SHOWS". A song played at the most recent show has
     // a gap of 0, and "0 SHOWS" reads as never played -- the opposite
@@ -337,14 +339,13 @@ export function songRow(
   }
 
   // The date line, and nothing that duplicates the figure column. Under the
-  // longest figure it is the span: both bounding dates, or the from-date and
-  // "still open" when the open gap is the longest. The from-date of an open
-  // span IS the last-played date, so nothing the line used to say is lost.
+  // longest figure it is the span: the two performances that bound the
+  // longest observed gap. Every other case is the last-played date.
   const meta = el('div.row-meta');
   let dateText;
-  if (figure === 'longest' && song.longestGap) {
-    const { fromDate, toDate, isOpen } = song.longestGap;
-    dateText = `${formatShowDateShort(fromDate)} → ${isOpen ? 'still open' : formatShowDateShort(toDate)}`;
+  if (figure === 'longest' && song.longestObservedGap) {
+    const { fromDate, toDate } = song.longestObservedGap;
+    dateText = `${formatShowDateShort(fromDate)} → ${formatShowDateShort(toDate)}`;
   } else {
     dateText = song.lastPlayed ? `Last ${formatShowDateShort(song.lastPlayed)}` : 'Never played';
   }
@@ -408,7 +409,12 @@ export function songRow(
       ]);
 
   const heat = heatFor(value, maxGap);
-  const shell = el('div.row-shell', { 'data-picked': String(picked) }, [
+  // data-song-id: the row's identity, for checks that read the list from the
+  // screen. Song NAMES are not unique in the catalogue (two "When I Paint My
+  // Masterpiece" rows, one played and one stray), so a check that matched
+  // rows by name would pass or fail on the wrong row. Same rule as venues:
+  // key on the id.
+  const shell = el('div.row-shell', { 'data-picked': String(picked), 'data-song-id': String(song.song_id) }, [
     el('span.gap-bar', {
       style: { '--heat': String(heat) },
       'data-heat': heat === 0 ? 'none' : null,

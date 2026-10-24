@@ -325,6 +325,18 @@ function openSettingsSheet() {
           el('div.stat-label', { text: 'last updated' }),
         ]),
       ]),
+      // The Songs tab lists what Carton's own song list lists: songs with at
+      // least one Eggy performance. The songs endpoint carries a few more, and
+      // the difference is stated here from the live count rather than left
+      // for someone to notice against the endpoint.
+      i?.counts.songsUnplayed
+        ? el('p.note', {
+            style: { margin: '6px 0 0' },
+            text:
+              `${i.counts.songs} songs listed. ${i.counts.songsUnplayed} more in The Carton's catalogue ` +
+              `${i.counts.songsUnplayed === 1 ? 'has' : 'have'} no Eggy performance and ${i.counts.songsUnplayed === 1 ? 'is' : 'are'} not listed, as on The Carton's own song list.`,
+          })
+        : null,
 
       // The BUILD marker. Moved out of the header, but still two taps away and
       // still the thing that confirms a deploy landed.

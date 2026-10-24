@@ -330,7 +330,9 @@ export function buildIndex(raw) {
   // those rows, so they are not performances here and the show is not in the
   // gap universe. It still renders on Shows and Venues as a show that happened
   // -- a broader exclusion is a separate, open ruling (docs/plan.md, decision
-  // 2 of the 2026-10-24 ruling). Rows without an artist_id are Eggy.
+  // 2 of the gap-convention reversal of 2026-10-24; not the longest-gap
+  // ruling's decision 2, withdrawn the same day). Rows without an artist_id
+  // are Eggy.
   const isEggy = (r) => r.artist_id == null || Number(r.artist_id) === 1;
 
   // --- Shows -----------------------------------------------------------------
@@ -511,12 +513,21 @@ export function buildIndex(raw) {
     });
   }
 
-  // Longest gap, once per load. gapAtShow needs only songsById and showOrdinal,
-  // both of which exist now, so this is computed here rather than in the sort
-  // comparator -- the Songs list re-sorts on every debounced keystroke and
-  // would otherwise walk every performance of every song each time.
+  // Longest observed gap, once per load. gapAtShow needs only songsById and
+  // showOrdinal, both of which exist now, so this is computed here rather than
+  // in the sort comparator -- the Songs list re-sorts on every debounced
+  // keystroke and would otherwise walk every performance of every song each
+  // time. CLOSED gaps only: the span between two performances. The current gap
+  // is a different figure (showsSinceLastPlayed) and is not folded in; the
+  // 0.1.76 wrapper that did so was withdrawn (docs/plan.md, 2026-10-24).
+  // A song played at only one show has no closed gap and stores null.
   const gapView = { songsById: bySong, showOrdinal };
-  for (const entry of bySong.values()) entry.longestGap = longestGap(gapView, entry.song_id);
+  for (const entry of bySong.values()) {
+    const best = longestObservedGap(gapView, entry.song_id);
+    entry.longestObservedGap = best
+      ? { gap: best.gap, fromDate: best.previous.showdate, toDate: best.at.showdate }
+      : null;
+  }
 
   // --- Per-show setlists -----------------------------------------------------
   const setlistByShow = new Map();
@@ -591,12 +602,30 @@ export function buildIndex(raw) {
 
   // Canonical order is alphabetical through the shared comparator, so any view
   // that does not re-sort already matches the A-Z sort exactly.
-  const songList = [...bySong.values()].sort(compareSongsByName);
-  const songsByKey = new Map(songList.map((s) => [s.songkey, s]));
+  //
+  // THE LIST IS THE SONGS CARTON LISTS: every song with at least one Eggy
+  // performance, which is what The Carton's own all-songs page shows with its
+  // artist filter on Eggy. The songs endpoint carries entries it never shows
+  // -- 10 on 2026-10-24: 7 with no setlist row at all and 3 played only at
+  // the one show by another artist -- and the endpoint has no field that
+  // marks them, so membership is derived from the performances counted above
+  // (ruled 2026-10-24, docs/plan.md). They stay in songsById, so a deep link
+  // to one still renders its detail with its zero count, and are listed
+  // separately so the Settings sheet can account for the difference.
+  //
+  // Jams reads index.songs too. Checked 2026-10-24: none of the ten carries a
+  // jam chart entry, so nothing drops off that tab. An entry on an unplayed
+  // song would need a second-artist performance with a jam chart, and would
+  // show as counts.jamcharts exceeding the entries listed under Jams.
+  const everySong = [...bySong.values()].sort(compareSongsByName);
+  const songList = everySong.filter((s) => s.timesPlayed > 0);
+  const unplayedSongs = everySong.filter((s) => s.timesPlayed === 0);
+  const songsByKey = new Map(everySong.map((s) => [s.songkey, s]));
 
   return {
     today,
     songs: songList,
+    unplayedSongs,
     songsById: bySong,
     songsByKey,
     shows: allShowsSorted,
@@ -617,6 +646,7 @@ export function buildIndex(raw) {
       playedShows: playedShows.length,
       countedShows: countedShows.length,
       songs: songList.length,
+      songsUnplayed: unplayedSongs.length,
       venues: venues.length,
       jamcharts: jamcharts.length,
 
@@ -770,53 +800,19 @@ export function longestObservedGap(index, songId) {
 }
 
 /**
- * The longest gap a song has been through INCLUDING the one it is in now.
+ * Sort for the Songs "Longest gap" mode: longest observed (closed) gap
+ * descending, then the current gap descending, then the shared name order.
+ * Songs with no closed gap -- played at only one show -- have nothing to rank
+ * on and sort last, as never-played songs do under the other gap sorts.
  *
- * Wraps longestObservedGap() -- the closed gaps are that walk, not a second
- * one -- and compares its maximum against the current gap, showsSinceLastPlayed,
- * which is the same computation evaluated at the newest show and still
- * growing. Whichever is larger is the answer, and the result says which it was:
- *
- *   { gap, fromDate, toDate, isOpen }
- *
- * Closed: fromDate and toDate are the two performances that bound the span.
- * Open: fromDate is the last performance, toDate is null, isOpen is true.
- *
- * AN EXACT TIE READS AS OPEN. The open gap is the same length and has not
- * ended, so "still open" is the truer of the two descriptions; ruled in
- * docs/plan.md, pinned in tests/gap.test.mjs. A one-play song has no closed
- * gap and is the open case by construction. Never played returns null.
- *
- * Every figure here is a max over numbers Carton renders on its own gap
- * charts. It describes what has happened, never what will.
- */
-export function longestGap(index, songId) {
-  const song = index.songsById.get(Number(songId));
-  if (!song) return null;
-  const closed = longestObservedGap(index, songId);
-  const open = song.showsSinceLastPlayed;
-  if (open === null || open === undefined) {
-    if (!closed) return null;
-    return { gap: closed.gap, fromDate: closed.previous.showdate, toDate: closed.at.showdate, isOpen: false };
-  }
-  if (closed && closed.gap > open) {
-    return { gap: closed.gap, fromDate: closed.previous.showdate, toDate: closed.at.showdate, isOpen: false };
-  }
-  return { gap: open, fromDate: song.lastPlayed, toDate: null, isOpen: true };
-}
-
-/**
- * Sort for the Songs "Longest gap" mode: longest gap descending, then the
- * current gap descending, then the shared name order. Songs that have never
- * been played have no gap and sort last, as under the other gap sorts.
- *
+ * Reads the entry's stored `longestObservedGap`, set once in buildIndex.
  * Exported so the tie-break is unit-tested rather than living inline in the
- * view; 53 adjacent pairs in the live archive tie on both numbers, so the name
- * fallback is not a theoretical branch.
+ * view; dozens of adjacent pairs in the live archive tie on the closed gap, so
+ * the current-gap and name fallbacks are not theoretical branches.
  */
 export function compareByLongestGap(a, b) {
-  const av = a.longestGap ? a.longestGap.gap : null;
-  const bv = b.longestGap ? b.longestGap.gap : null;
+  const av = a.longestObservedGap ? a.longestObservedGap.gap : null;
+  const bv = b.longestObservedGap ? b.longestObservedGap.gap : null;
   if (av === null && bv === null) return compareSongsByName(a, b);
   if (av === null) return 1;
   if (bv === null) return -1;
@@ -825,6 +821,24 @@ export function compareByLongestGap(a, b) {
     (b.showsSinceLastPlayed ?? -1) - (a.showsSinceLastPlayed ?? -1) ||
     compareSongsByName(a, b)
   );
+}
+
+/**
+ * The "Past longest gap" filter: true when the song's current gap is LONGER
+ * than its longest observed gap. Both are figures Carton prints on the song's
+ * page (the Show Gap column and its maximum), and this is a true/false test on
+ * them -- filtering, ruled in scope in docs/plan.md (2026-10-24).
+ *
+ * Strict: equal is not longer, so a tie is not kept. A song with no closed gap
+ * (played at only one show) has nothing to compare and is not kept either --
+ * "no closed gap" is not treated as zero. No number derived from the two is
+ * ever rendered; the rows show the figures they already show.
+ */
+export function isPastLongestGap(song) {
+  if (!song || !song.longestObservedGap) return false;
+  const current = song.showsSinceLastPlayed;
+  if (current === null || current === undefined) return false;
+  return current > song.longestObservedGap.gap;
 }
 
 /**

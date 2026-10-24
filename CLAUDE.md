@@ -462,6 +462,21 @@ checks were verified this way:
   FAIL (none SKIP), exit 1; the smoke test fails the parity line (609 against
   Carton's 723), exit 1; 11 unit tests fail. Restored, by checksum the same
   file: 1119 of 1119, smoke green, 208 passing.
+- The 0.1.79 checks, four faults applied one at a time and each file restored
+  from a byte copy before the next:
+  - `compareByLongestGap` with its sign flipped: 2 unit failures; the smoke
+    flat-list check reads "climbs at numbered row 3: 3 after 1", exit 1.
+  - the zero-performance filter removed from `buildIndex`: 2 unit failures;
+    3 smoke failures — the catalogue check reads 370 against the derived 360,
+    the A–Z check names the 10 songs reading 0 times, and the longest-gap list
+    finds a "Never played" row.
+  - `isPastLongestGap` loosened to `>=`: 1 unit failure, the tie case; the
+    smoke filter check names the two tied songs, "Sussudio 51 vs 51; Silver
+    Steed (My Blue) 6 vs 6".
+  - the five filter chips rendered inline beside the lead chip: 0 unit
+    failures — unit tests cannot see layout — and the smoke bar check reads
+    "609px of content in 390px".
+  Restored: 208 passing, smoke green with 0 skips.
 
 Do this for every new check. It costs one minute and it is the only thing that
 separates a real check from a comforting one.

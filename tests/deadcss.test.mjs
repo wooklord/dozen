@@ -53,7 +53,9 @@ test('class combinations are readable from the source', () => {
   const sets = readClassSets();
   assert.ok(sets.length > 100, `only ${sets.length} class combinations found in src/`);
   const joined = sets.map((s) => s.classes.join('.'));
-  assert.ok(joined.includes('chip.chip-quiet'), 'the Songs filter chip should be readable');
+  // The Songs filter lead chip (0.1.79) wears the lead paint AND the quiet
+  // weight, so the three-class chain is the one that must be readable.
+  assert.ok(joined.includes('chip.chip-lead.chip-quiet'), 'the Songs filter lead chip should be readable');
   assert.ok(joined.includes('sortbar.sortbar-secondary'), 'the secondary bar should be readable');
 });
 

@@ -808,10 +808,13 @@ button.gap-figure:active {
 
 /* Same trap, same fix: `.chip` sets font-weight 600 later at equal
  * specificity, so plain `.chip-quiet` never applied a single declaration. The
- * only call site (songs.js, the filter row) always carries both classes, so
- * the filter chips have always rendered at 600 alongside the sort chips.
- * See the note above .chip[aria-pressed="true"] for the design decision this
- * silently invalidated. */
+ * call site (songs.js, the filter row) always carried both classes, so the
+ * filter chips rendered at 600 alongside the sort chips for as long as the
+ * rule was dead. See the note above .chip[aria-pressed="true"] for the design
+ * decision this silently invalidated. Since 0.1.79 the only call site is the
+ * filter row's single LEAD chip, `chip.chip-lead.chip-quiet`: the lead paint
+ * from .chip.chip-lead, the 500 weight from here, so the filter row still
+ * reads a step below the sort row. */
 .chip.chip-quiet {
   font-weight: 500;
 }

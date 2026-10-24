@@ -370,8 +370,9 @@ excluded) stands**, and the IN-scope reasoning at the top of this ruling is unch
 per-show figures Carton renders.
 
 The implementation of 2 and 6 — the `longestGap()` wrapper, the sections, the "still open"
-marker, the open-span date line, and the tests and smoke checks that pin them — is removed in
-0.1.79, not here. Until that lands, the app renders the withdrawn rule and this record says so.
+marker, the open-span date line, and the tests and smoke checks that pinned them — was removed
+in 0.1.79. This record landed first, in its own commit, so the two could not disagree without one
+of them saying so.
 
 #### Songs with zero Eggy performances are hidden from the Songs tab (2026-10-24)
 
@@ -414,8 +415,11 @@ performance where `artist_id` is 1 or absent, on a row that is not `_custom_`.**
 **The endpoint carries nothing that marks them.** Seven fields, the same on every row (`id`,
 `name`, `slug`, `isoriginal`, `original_artist`, `created_at`, `updated_at`): no soundcheck flag,
 no times-played, no played-live marker, and the timestamps do not separate the ten from the rest.
-Membership is derivable from `setlists` only. Two oddities seen and not acted on: 366's name
-carries a trailing space, and 329 is "barr" with slug `barra`, no performance anywhere.
+Membership is derivable from `setlists` only. Two oddities seen and not acted on: 366 is a second
+row named "When I Paint My Masterpiece " — same name, trailing space included, as 365, which is
+the one that has been played — so song names are not unique in the catalogue and a check that
+matched the hidden set by name failed on the played row the first time it ran (0.1.79; the smoke
+test keys on `data-song-id` now). And 329 is "barr" with slug `barra`, no performance anywhere.
 
 The list above is a measurement from one day. The catalogue parity check in `scripts/smoke.mjs`
 must assert equality with the endpoint **minus the songs with zero Eggy performances**, derived
@@ -435,8 +439,12 @@ The lines it stays behind:
 - **The chip and its explainer state the comparison literally** — the current gap is longer than
   the longest closed gap — with no "due", "watch", "bustout", "overdue" or any word about what
   will happen. The language test in `CLAUDE.md` applies to every string.
-- **One-play songs are excluded.** They have no closed gap, so there is nothing to compare; the
-  filter does not treat "no closed gap" as zero.
+- **The comparison is strict.** A song whose current gap equals its longest observed gap is not
+  kept: equal is not longer, and the chip says longer. Measured 2026-10-24: 2 songs tie, 67
+  exceed.
+- **Songs with no closed gap are excluded.** A song played at only one show — once, or several
+  times on one date — has no gap between two performances, so there is nothing to compare; the
+  filter does not treat "no closed gap" as zero. 103 songs today, 97 of them single plays.
 - **It composes with every sort**, as the other filters do. It does not imply an order of its
   own.
 

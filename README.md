@@ -12,7 +12,7 @@ back to the corresponding page there.
 | Screen | What it shows |
 |---|---|
 | **Home** | The next show (or any upcoming one), what was played last time at that venue, "On This Date", and the venue's play count |
-| **Songs** | Every song, searchable. Each row carries one date line plus one figure — the one the active sort is about: times played under A–Z and "Most played", shows since played under "Coldest"/"Hottest", and under "Longest gap" the longest gap the song has been through, with the span that bounds it in place of the date, grouped into Still open, Closed and Never played. Filter by original/cover/jam chart |
+| **Songs** | Every song played live, as listed by The Carton, searchable. Each row carries one date line plus one figure — the one the active sort is about: times played under A–Z and "Most played", shows since played under "Coldest"/"Hottest", and under "Longest gap" the longest gap between two of the song's performances, with the two dates that bound it in place of the date. Filter by original/cover/jam chart, or to songs whose current gap is longer than their longest observed gap |
 | **Shows** | The recent shows with Carton's setlist notation preserved exactly and footnotes as tappable markers, plus search by venue, city, state or date, and "load older" back through the archive. Browse by year, then by month in the same chip bar |
 | **Jams** | Jam chart membership, A–Z or by entry count |
 | **Picks** | A local shortlist you can reorder and copy as plain text |

@@ -980,6 +980,13 @@ boolean with one reachable value is the shape this repo has been bitten by often
 
 ### "Longest gap" is a fifth sort, and the sort moved into a sheet (0.1.76)
 
+> **Withdrawn in part, 0.1.79.** The rule that the figure is the larger of the closed gaps and the
+> current gap, the tie rule, the "still open" span and the open-case marker were withdrawn on
+> 2026-10-24 (`plan.md`, withdrawal of decisions 2 and 6). The figure is the longest **closed** gap
+> now. The sort itself, the span-as-date-line rule, and the lead-chip-and-sheet selector all
+> stand, and the filter bar this entry calls "unchanged" became a lead chip and sheet of its own
+> in 0.1.79. See the 0.1.79 entry below; this entry is left as decided.
+
 The longest gap a song has been through — the maximum of the per-show gaps the gap charts already
 render, compared against the current gap, which is the same computation at the newest show
 and still growing. Ruled in scope in `plan.md` on 2026-10-21 as a max over displayed figures. The
@@ -1019,6 +1026,12 @@ one build**; 0.1.77 below sections it, and the check became per-section.
 
 ### The longest-gap list is sectioned: still open, closed, never played (0.1.77)
 
+> **Withdrawn, 0.1.79.** The "Still open" section was, by construction, every song whose current
+> gap was its longest, in current-gap order — the "Coldest first" sort under a header. Noticed on
+> the phone after 0.1.78; recorded in `plan.md` on 2026-10-24. The list is one flat list again, and
+> the never-played tail is gone with the never-played songs (see the 0.1.79 entry below). This
+> entry is left as decided, so the reasoning that produced it stays visible.
+
 Seen on the phone the day 0.1.76 shipped: a 300-show gap that ended in 2019 and a 300-show gap still
 running today sat on adjacent rows, and the span text — `→ Oct 17, 2026` against `→ still open` —
 was the only thing telling them apart. At 13px on a scrolling list it did not. So under "Longest
@@ -1049,6 +1062,52 @@ swapped, and that is exactly the sabotage used to prove it red. A second check i
 with the search box and asserts a single section with a single header. The header sweep arrives at
 Songs on the A–Z default and never sees these headers, so their not echoing the h1 is by inspection.
 `layout-diff` probes the same default and does not cover the sectioned view.
+
+### Longest gap is the closed gap, the list is what Carton lists, and a fifth filter (0.1.79)
+
+Three changes from one phone session on 0.1.78, each ruled in `plan.md` on 2026-10-24.
+
+**The 0.1.76 larger-of-both rule and the 0.1.77 sections are withdrawn.** The "Still open" section
+was, by construction, every song whose current gap was its longest, in current-gap order — the
+"Coldest first" sort under a header. Two sorts were repeating each other. "Longest gap" now ranks by
+the longest **closed** gap, the span between two performances, which is what `longestObservedGap()`
+computed before 0.1.76. The row's date line is that span's two dates. A song played at one show only
+has no closed gap and reads a dash at the tail (103 today: 97 single plays and 6 whose every
+performance fell on one date). One flat list under every sort. Song detail shows the same span, or
+a dash labelled as none. The tie rule, the "still open" marker and the open-ended date line went
+with the rule they served; nothing on screen says "open" any more.
+
+**The Songs list is the list Carton shows.** `thecarton.net/song/` with its artist filter on Eggy
+lists 360 songs — its own meta description says 361 and overcounts its table. The songs endpoint
+returns 370, and the ten it adds are exactly the songs with no Eggy performance: seven with no
+setlist row at all, three played only at the one show by another artist. They are hidden from the
+Songs tab, stay reachable by deep link with their zero count, and are accounted for in the Settings
+sheet from the live index. The sub-line reads "songs played live". The smoke test's catalogue check
+now asserts the rendered count equals the endpoint **minus** the zero-performance songs, derived in
+the test from raw setlist rows: equality with a derived number, not "fewer than the endpoint".
+
+**"Past longest gap" is a fifth filter, and the filter row became a lead chip and a sheet.** The
+filter keeps songs whose current gap is longer than their longest observed gap — a true/false test
+on two figures Carton prints on the song's page, which is filtering. Strict: equal is not longer,
+and the 2 songs that tie today are out. A song with no closed gap has nothing to compare and is
+out. It composes with every sort; 67 songs today. No number derived from the two is rendered
+anywhere; the chip, the count line and the sheet note state the comparison and nothing about what
+comes next.
+
+Measured headless at 390px with the bar's own 16px padding, 358px visible: the four filter chips
+were **299px** of content, and "Past longest gap" took the row to **430px** — 72px of overflow
+behind a hidden scrollbar, the chip cut mid-word at the edge. The sort row's 0.1.76 fix applies
+unchanged: one lead chip reading the active filter, a sheet with all five in the same `.chip-grid`.
+The lead keeps `.chip-quiet`, so the filter row still reads a step below the sort row, as it did as
+a chip row. The smoke test asserts both bars' content fits their visible width and that no chip in
+the filter sheet clips its label.
+
+**The smoke check for the filter reads both figures off the screen.** With the filter on, "Coldest
+first" renders each kept song's current gap and "Longest gap" its longest observed; the test reads
+both lists by name, asserts the name sets are identical and current > longest for every one, then
+opens three rows and asserts the detail's two stats match what the lists showed. Proved red by
+flipping the predicate's comparison to greater-or-equal: the tied songs appear, and the check names
+them.
 
 ## Attribution
 

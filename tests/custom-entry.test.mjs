@@ -87,16 +87,23 @@ test('the gap chart reports no gap for a free-text entry', () => {
   assert.deepEqual(entries.map((e) => e.songname).sort(), ['Other Song', 'Real Song']);
 });
 
-test('a catalogue song that is never played still counts', () => {
-  // The exclusion must not take the never-played songs with it -- those are
-  // real catalogue entries and "Never played" is the honest answer for them.
+test('a catalogue song that is never played is kept by id but not listed', () => {
+  // The exclusion must not take the never-played songs with it -- they are
+  // real catalogue entries, and a deep link to one must still resolve. They
+  // are not LISTED, because The Carton's own song list does not list them
+  // (ruled 2026-10-24, docs/plan.md): the Songs tab shows played songs, and
+  // the unplayed ones are counted separately so the difference is stated.
   const withUnplayed = {
     ...RAW,
     songs: [...RAW.songs, { id: 12, name: 'Never Played', slug: 'never-played', isoriginal: 1, original_artist: 'Eggy' }],
   };
   const index = buildIndex(withUnplayed);
-  assert.equal(index.counts.songs, 3);
-  const never = index.songs.find((s) => s.name === 'Never Played');
+  assert.equal(index.counts.songs, 2, 'the listed count is the played songs');
+  assert.equal(index.counts.songsUnplayed, 1);
+  const never = index.songsById.get(12);
   assert.equal(never.timesPlayed, 0);
   assert.equal(never.showsSinceLastPlayed, null, 'no gap, which is not the same as a large gap');
+  assert.equal(never.longestObservedGap, null);
+  assert.ok(!index.songs.includes(never), 'not in the listed songs');
+  assert.deepEqual(index.unplayedSongs.map((s) => s.song_id), [12]);
 });
