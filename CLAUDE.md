@@ -403,6 +403,11 @@ statistics. No writes to any database. No contact with the other two repos.
 - For feature code: **show the change plan and get approval before editing.** Standing default,
   loosened where a batch has been pre-approved.
 - Docs land in the repo the moment they're decided, not at the end of a session.
+- **Scratch files and downloads go to the scratchpad, by absolute path, and `git status --short`
+  follows any command that fetched or wrote outside a planned edit.** Three slips in one week — a
+  stray `eol=lf` file, a file written into Program Files, and the repo's `index.html` overwritten
+  by a download whose `cd` ran in a different subshell — were each caught after the fact, not
+  prevented. The status check is what turns "caught later" into "caught now".
 
 ### The recurring failure: "what else could satisfy this?"
 

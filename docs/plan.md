@@ -315,6 +315,11 @@ not "bustout", no language that implies what will happen.
 
 Design decisions recorded with the ruling:
 
+> **Decisions 2 and 6 below were withdrawn on 2026-10-24, and 3's open-span clause and 5 fall
+> with them.** They are left in place, as decided, so the reasoning that produced 0.1.76–0.1.78
+> stays visible. The withdrawal, with its reason, and the two rulings made in the same session
+> are recorded after decision 6.
+
 1. **A sort mode, not a threshold filter.** "Longest gap" joins the Songs sort modes,
    descending. No cut-off that would need a number invented to set it.
 2. **Longest = max(closed gaps, current open gap)**, and the figure is flagged when the open gap —
@@ -345,6 +350,95 @@ Design decisions recorded with the ruling:
    itself. Asked for after seeing 0.1.76 on the phone: an interleaved list made it hard to tell
    which gaps were still running and which had ended. Grouping by a Carton-derived flag is grouping,
    which the scope rule allows, and the header words are this ruling's own.
+
+#### Withdrawal of decisions 2 and 6 (2026-10-24)
+
+**Withdrawn: decision 2** (longest = max(closed gaps, current open gap), ties read open) **and
+decision 6** (Still open / Closed / Never played sections). Decision 5's "still open" marker and
+decision 3's open-end marker exist only to serve 2 and 6 and go with them.
+
+**Reason.** The Still open section is, by construction, the set of songs whose current gap is
+their longest, sorted by that current gap — which is a strict subset of the "Coldest first" sort
+in the same order. Two sorts on the Songs tab were repeating each other, one of them under a
+header. Noticed on the phone after 0.1.78.
+
+**What "longest observed gap" means now: CLOSED gaps only** — the largest span between two
+performances, which is what `longestObservedGap()` computed before 0.1.76. No sections, no open
+marker, no tie rule, because there is no open figure to tie with. A one-play song has no closed
+gap and reads as having no observed gap; it is not an open span of its own. **Decision 1 (debuts
+excluded) stands**, and the IN-scope reasoning at the top of this ruling is unchanged: a max over
+per-show figures Carton renders.
+
+The implementation of 2 and 6 — the `longestGap()` wrapper, the sections, the "still open"
+marker, the open-span date line, and the tests and smoke checks that pin them — is removed in
+0.1.79, not here. Until that lands, the app renders the withdrawn rule and this record says so.
+
+#### Songs with zero Eggy performances are hidden from the Songs tab (2026-10-24)
+
+**Ruling.** The Songs tab lists the songs Carton's own song list lists: `thecarton.net/song/`,
+headed as every song played live, with the artist filter on Eggy. The `songs` endpoint carries
+entries that list never shows, and the app had been rendering them as a catalogue of 370 with a
+"Never played" tail. Hiding them is filtering on a Carton-derived count, and it matches the
+page the app is a reader for.
+
+**Reconciled 2026-10-24, measured, not assumed.** Carton's Eggy index has **360** rows, not 361.
+The 361 is the page's own `<meta name="description">` ("Complete list of 361 Eggy songs"), and
+the page overcounts itself: its table has 360 rows. The description is also the figure a search
+result or link preview shows, which is how it gets quoted. Fetched at its real URL and at `/song/by/eggy`, the URL the page's own artist
+filter builds (identical lists, 200, no redirect, no `data-song-id` — an index, not a song
+page). The endpoint has 370. Every one of the 360 is in the endpoint, and on every one of them
+Carton's "Times Played Live" equals the app's Eggy-only count — 360 agree, 0 disagree. The ten
+in the endpoint and not in the index:
+
+| id | name | original artist | Eggy plays | other-artist plays | in Dani Battat index |
+|---|---|---|---|---|---|
+| 36 | B7 | Eggy | 0 | 0 | no |
+| 45 | Mountain On The Horizon | Eggy | 0 | 0 | no |
+| 60 | Spinning Wheels | Eggy | 0 | 0 | no |
+| 67 | Waiting | Eggy | 0 | 0 | no |
+| 329 | barr | Eggy | 0 | 0 | no |
+| 354 | Candy Mountain Run | Bruce Hornsby | 0 | 0 | no |
+| 358 | You Can Close Your Eyes | James Taylor | 0 | 1 | yes, times 1 |
+| 359 | Freeway Flowers | Eggy | 0 | 1 | yes, times 1 |
+| 360 | Windblown Eyes | Jack Johnson | 0 | 1 | yes, times 1 |
+| 366 | When I Paint My Masterpiece | Bob Dylan | 0 | 0 | no |
+
+**The set is exactly the app's "Never played" group of ten** — same ten ids, nothing on either
+side of the equality unaccounted for. Seven have no setlist row by any artist. Three were played
+once, at the 2026-02-10 Dani Battat show (`artist_id` 2), and Carton files them under that artist
+only: its Dani Battat index (`/song/by/dani-battat`) has five rows, those three plus Thorns and
+Boom or Bust, which sit in the Eggy index too because Eggy has played them. So the rule that
+reproduces Carton's membership is the one the app already applies to counts: **at least one
+performance where `artist_id` is 1 or absent, on a row that is not `_custom_`.**
+
+**The endpoint carries nothing that marks them.** Seven fields, the same on every row (`id`,
+`name`, `slug`, `isoriginal`, `original_artist`, `created_at`, `updated_at`): no soundcheck flag,
+no times-played, no played-live marker, and the timestamps do not separate the ten from the rest.
+Membership is derivable from `setlists` only. Two oddities seen and not acted on: 366's name
+carries a trailing space, and 329 is "barr" with slug `barra`, no performance anywhere.
+
+The list above is a measurement from one day. The catalogue parity check in `scripts/smoke.mjs`
+must assert equality with the endpoint **minus the songs with zero Eggy performances**, derived
+on the day it runs — not against this table, and not loosened to "fewer than the endpoint".
+
+#### "Past longest gap" filter — IN scope (2026-10-24)
+
+**Ruling.** A Songs filter that keeps the songs whose **current gap exceeds their longest
+observed (closed) gap** is in scope. It is a true/false test on two figures Carton prints — the
+current gap from the song page's Show Gap column, the longest closed gap as a max over the same
+column — and a true/false test on displayed figures is filtering, which the scope rule allows.
+
+The lines it stays behind:
+
+- **No derived number is ever rendered.** Not the difference, not the ratio, not "by N shows".
+  The row shows the figures it already shows under the active sort.
+- **The chip and its explainer state the comparison literally** — the current gap is longer than
+  the longest closed gap — with no "due", "watch", "bustout", "overdue" or any word about what
+  will happen. The language test in `CLAUDE.md` applies to every string.
+- **One-play songs are excluded.** They have no closed gap, so there is nothing to compare; the
+  filter does not treat "no closed gap" as zero.
+- **It composes with every sort**, as the other filters do. It does not imply an order of its
+  own.
 
 ### Gap convention — REVERSED to match The Carton's Show Gap column (2026-10-24)
 
