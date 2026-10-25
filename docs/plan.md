@@ -319,6 +319,11 @@ Design decisions recorded with the ruling:
 > with them.** They are left in place, as decided, so the reasoning that produced 0.1.76–0.1.78
 > stays visible. The withdrawal, with its reason, and the two rulings made in the same session
 > are recorded after decision 6.
+>
+> **Later the same day, the withdrawal of decision 2 was itself withdrawn in part** — the figure
+> under the "Longest gap" sort is again max(closed, open), with 3's open-end marker and 5's
+> "still open" wording back in service. Decision 6 stays withdrawn: one flat list, no sections.
+> See "0.1.81 design" below, after the "Passed longest gap" ruling.
 
 1. **A sort mode, not a threshold filter.** "Longest gap" joins the Songs sort modes,
    descending. No cut-off that would need a number invented to set it.
@@ -352,6 +357,13 @@ Design decisions recorded with the ruling:
    which the scope rule allows, and the header words are this ruling's own.
 
 #### Withdrawal of decisions 2 and 6 (2026-10-24)
+
+> **Partly reversed later on 2026-10-24, after a day on 0.1.80.** The withdrawal of decision 2
+> (max of closed and open, ties read open) is itself withdrawn; the withdrawal of decision 6
+> (sections) stands. The paragraph below headed "What 'longest observed gap' means now: CLOSED
+> gaps only" describes 0.1.79 and 0.1.80 and no later build. It is left as written, because it
+> was the reasoning that shipped, and the reversal with its own reason is recorded under
+> "0.1.81 design" below.
 
 **Withdrawn: decision 2** (longest = max(closed gaps, current open gap), ties read open) **and
 decision 6** (Still open / Closed / Never played sections). Decision 5's "still open" marker and
@@ -454,6 +466,60 @@ The lines it stays behind:
   filter does not treat "no closed gap" as zero. 103 songs today, 97 of them single plays.
 - **It composes with every sort**, as the other filters do. It does not imply an order of its
   own.
+
+#### 0.1.81 design — locked 2026-10-24, after a day on 0.1.80
+
+Five decisions, made in chat and recorded before any code. The language test in `CLAUDE.md`
+was applied to every string below.
+
+**(a) Decision 2 is reinstated; decision 6 stays withdrawn.** Under the "Longest gap" sort the
+figure is again **max(closed gaps, current open gap)**. When the open gap is the longest, the date
+line reads **"still open"** at its open end (decision 5's words). An exact tie between the open
+gap and a closed gap **reads open** — the open one is the same length and still counting. There
+are **no sections**: one flat list, descending.
+
+This is a reversal of a reversal, and both are kept with their dates and reasons:
+
+- **2026-10-24, morning — withdrawn** (above): the Still open section duplicated the "Coldest
+  first" sort under a header, so the open figure went and the sort read closed gaps only.
+- **2026-10-24, evening — reinstated in part**, the user's call after using 0.1.80 on the
+  phone: with closed gaps only, **103 songs dropped to a dash** (the songs with no closed gap, 97
+  of them single plays) and the list **hid every gap that is still running**. The duplication the morning
+  withdrawal found was the *section*, not the figure. The sort should show every song's longest
+  gap; **separating open from closed is the filter's job**, not the sort's. So the figure comes
+  back and the sections do not.
+
+**(b) New filter: "Closed gaps only."** Keeps the songs whose longest gap is a closed one — a
+closed gap exists **and is strictly longer than the current gap**. One-play songs are out (no
+closed gap). A tie is out: it reads open, per (a). With "Passed longest gap" (current gap strictly
+longer than the longest closed gap) the two filters **partition the songs that have a closed
+gap**; the tied songs appear only under All. Measured 2026-10-24: 2 tie.
+
+Two readings were offered and this is reading (1). Reading (2), a *figure mode* that would show
+the closed gap for every song, was rejected: it changes the number rather than the rows, and does
+nothing under the other four sorts, so it is not a filter.
+
+**(c) New sort: "Least played."** Times played ascending, then name A–Z. Ties at one play put
+roughly a hundred songs alphabetically at the top of the list. That is correct and is noted here
+so it is not read as a bug.
+
+**(d) Under the "Longest gap" sort the cover credit leaves the date line.** The span
+(`from → to`) truncated it on every cover row at 390px. The other sorts keep the credit exactly
+as they render it now.
+
+**(e) Controls: sort and filter are two lead chips on one row.** Each chip carries its own
+small uppercase label inside it, muted, with the value in the lead paint: "SORT Longest gap ▾"
+and "FILTER All ▾". Each opens its bottom sheet, which lists every option as a full-width row:
+the name, then a one-line description beneath it. Descriptions locked verbatim in chat:
+
+| Sheet | Option | Description |
+|---|---|---|
+| Sort | A–Z | Alphabetical. The number is times played. |
+| Sort | Coldest first | Most shows since last played, first. The number is shows since played. |
+
+The handoff that carried this design into the build session ended after those two rows. The
+remaining descriptions — the other sorts and every filter — are proposed in the 0.1.81 change
+plan and are recorded here, verbatim, in the commit that ships them.
 
 ### Gap convention — REVERSED to match The Carton's Show Gap column (2026-10-24)
 
