@@ -459,6 +459,12 @@ a {
 .row:active {
   background: var(--surface-up);
 }
+/* The compact Shows row (0.1.82). Dates are the row titles, and tabular
+ * figures keep "Oct 7, 2026" and "Oct 17, 2026" in step down the list. */
+.row.show-row .row-title {
+  font-variant-numeric: tabular-nums;
+}
+
 
 .row-main {
   min-width: 0;
@@ -662,20 +668,12 @@ button.gap-figure:active {
   color: var(--yolk);
 }
 
-/* A BAR WITH A FIXED LEAD CHIP AND A SCROLLING REMAINDER (0.1.75).
- *
- * Shows drills down by REPLACING its one chip bar rather than stacking a second
- * one under it, so the only route back to the years is the lead chip -- and the
- * months beside it run to ~700px in a 390px viewport. A lead chip inside the
- * scroller scrolls away with them and the way out goes with it, which is the
- * old month bar's defect rotated ninety degrees: there, scrolling 330px DOWN
- * left the months behind while the years stayed pinned.
- *
- * STICKY WAS TRIED FIRST AND IS NOT WHAT SHIPPED. It held the chip in place and
- * then the months slid underneath it, rendering as clipped half-pills against
- * its edge -- legible as scrolling for text, but a pill is a discrete shape and
- * a bisected one reads as a rendering fault. Two elements make the overlap
- * impossible rather than tidying it up afterwards.
+/* A LEAD BAR holds chips that OPEN SHEETS rather than toggle (0.1.75 on). It
+ * does not scroll: Songs' two leads and Shows' three sit on one row, and when
+ * they do not fit a value wraps (see .sortbar-leads below). Shows' 0.1.75
+ * fixed-chip-plus-scroller arrangement (.chip-back, .sortbar-scroll) was
+ * retired in 0.1.82 when the year/month drill-down moved into the When sheet;
+ * docs/design.md records the measurements that justified both.
  *
  * The doubled class is not decoration: .sortbar declares overflow-x later at
  * EQUAL specificity, and this file has already been bitten twice by exactly
@@ -686,54 +684,17 @@ button.gap-figure:active {
   overflow-x: visible;
 }
 
-.sortbar-scroll {
-  display: flex;
-  gap: var(--s-2);
-  /* min-width lets the flex item shrink below its content width; without it
-     the row refuses to be narrower than twelve chips and pushes the bar wide. */
-  min-width: 0;
-  flex: 1;
-  overflow-x: auto;
-  scrollbar-width: none;
-  /* Fade the first 10px. A chip scrolled against this boundary is bisected,
-     and a pill cut vertically shows only its round cap -- beside the lead chip
-     that reads as a stray glyph rather than as scrolling. Measured at 390px in
-     July 2026, where the auto-scroll to "Jul" left exactly that.
-     THE RIGHT EDGE IS DELIBERATELY LEFT HARD: a chip cut off there is the
-     standard "there is more this way" affordance, and the year bar has always
-     had it. Softening both would remove a cue to fix a defect that is only on
-     one side. */
-  mask-image: linear-gradient(to right, transparent 0, #000 10px);
-  /* The fade softens a bisected chip; snapping stops one COMING TO REST there
-     at all. `proximity`, not `mandatory`: this is a row you flick past, and
-     mandatory would fight a deliberate half-scroll. */
-  scroll-snap-type: x proximity;
-}
-.sortbar-scroll > .chip {
-  scroll-snap-align: start;
-}
-.sortbar-scroll::-webkit-scrollbar {
-  display: none;
-}
-
-/* The lead chip IS the current selection -- you are in 2026, or the list is
- * sorted A–Z -- and this bar would otherwise have no pressed chip at all.
+/* The lead chip IS the current selection -- the list is sorted A–Z, or Shows
+ * is on 2026 -- and this bar would otherwise have no pressed chip at all.
  *
  * The paint comes from the class rather than from aria-pressed, which means a
  * toggle's state and would be a lie on a button that opens a sheet. Same three
  * tokens as .chip[aria-pressed="true"], so the two cannot drift apart.
  *
- * Two classes, one rule. .chip-back is Shows' way out of a year and carries a
- * chevron; .chip-lead (0.1.76) is a Songs selector -- the sort, and since
- * 0.1.79 the filter -- and carries a caret. They are named for what they do,
- * not for how they paint, so a check reading one is not satisfied by the other.
- *
- * SELECTOR IS `.chip.chip-back` for the reason above, and tests/deadcss.test.mjs
- * caught it when it was not -- four declarations "beaten by .chip". Third time
- * that trap has been sprung here, first time something other than a person
- * found it.
+ * SELECTOR IS `.chip.chip-lead`, doubled, and tests/deadcss.test.mjs caught it
+ * when it was not -- four declarations "beaten by .chip". Third time that trap
+ * has been sprung here, first time something other than a person found it.
  */
-.chip.chip-back,
 .chip.chip-lead {
   background: var(--chip-sel-fill);
   color: var(--chip-sel-ink);
@@ -765,8 +726,10 @@ button.gap-figure:active {
  * the narrower chip reaches its full width first and only the wider one is
  * left short: at 360px the sort chip stays one line and the filter chip
  * wraps. The grid items stretch, so the two pills stay the same height. The
- * class is its own (.sortbar-leads), because .sortbar-lead is also Shows'
- * bar, whose scroller depends on flex.
+ * class is its own (.sortbar-leads): .sortbar-lead alone is the non-grid lead
+ * bar, and .sortbar-leads is the grid variant both Songs and Shows now use
+ * (Shows' 0.1.75 bar, which needed flex for its month scroller, is gone as of
+ * 0.1.82).
  *
  * scripts/smoke.mjs measures the widest pair at BOTH 390px and 360px: the bar
  * never overflows, and no .chip-value is wider than its box, at either width.
@@ -781,6 +744,16 @@ button.gap-figure:active {
   display: grid;
   grid-template-columns: auto auto;
   justify-content: start;
+}
+
+/* SHOWS' THREE LEADS (0.1.82): When, Filter, View. Three labelled chips were
+ * measured at 365px of content in a 360px bar -- the off-screen defect -- so
+ * the When chip has no inner label (a year or month is self-labelling) and the
+ * Filter value "N on" is one non-breaking token. With that the trio is 345px
+ * at 390 (one line each) and at 360 only the When value wraps, "Oct" over
+ * "2026". docs/plan.md, 0.1.82 (a) as amended, has the four measured rows. */
+.sortbar.sortbar-leads.sortbar-leads-3 {
+  grid-template-columns: auto auto auto;
 }
 .chip.chip-lead .chip-label {
   font-size: var(--t-xs);
@@ -800,10 +773,11 @@ button.gap-figure:active {
   flex: none;
 }
 
-/* Every option at once, in a sheet: the years on Shows. The year bar it first
- * replaced showed 5 of 15. Songs' sort and filter sheets used this grid from
- * 0.1.76 to 0.1.80 and are .sheet-option rows now, because each option
- * carries a description a 34px chip has no room for.
+/* Every option at once, in a sheet: the years, and then the months, on Shows'
+ * When sheet (0.1.75, relocated 0.1.82). The year bar it first replaced showed
+ * 5 of 15. Songs' sort and filter sheets used this grid from 0.1.76 to 0.1.80
+ * and are .sheet-option rows now, because each option carries a description a
+ * 34px chip has no room for; years and months need no explaining.
  *
  * ROW GAP IS --s-3, NOT --s-2, AND THAT IS NOT A TASTE DECISION. .chip's hit
  * region is a 44px ::after centred on a 34px box, so it overhangs 5px above and
@@ -821,10 +795,10 @@ button.gap-figure:active {
   justify-content: center;
 }
 
-/* The way out leads, and spans the row so it reads as the escape rather than as
-   a fourth year in the first line. */
-.year-all {
-  grid-column: 1 / -1;
+/* Months: four to a row, so twelve are three rows. "All shows" is a described
+   .sheet-option row above the grid now (0.1.82), not a spanning chip. */
+.chip-grid.month-grid {
+  grid-template-columns: repeat(4, 1fr);
 }
 
 .stat-tappable:active {
@@ -916,6 +890,14 @@ button.gap-figure:active {
   font-size: 10px;
   padding: 1px 5px;
 }
+/* The compact Shows row's badge (0.1.82): words -- "2 sets + E", "No setlist"
+ * -- in the body face, not the card badge's mono S1+S2+E. Its own class so a
+ * check reading the card form is not satisfied by a row, and vice versa.
+ * flex: none keeps it whole; the venue line beside it is what truncates. */
+.badge-sets {
+  flex: none;
+}
+
 
 /* --------------------------------------------------------------- picking --- */
 
@@ -1033,8 +1015,9 @@ button.gap-figure:active {
  * and that is established, not something to normalise here. The VISUAL box
  * is 34px; the hit region is the 44px ::after below, same as .btn.btn-small.
  *
- * This rule is shared by the Home "Change" button, the "Back" chip and the
- * sort/filter chips, so all of them gain the stronger edge together.
+ * This rule is shared by the Home "Change" button, the lead chips on Songs and
+ * Shows, the Shows filter pills and the sort/filter toggle chips, so all of
+ * them gain the stronger edge together.
  */
 .chip {
   flex: none;
@@ -1111,6 +1094,29 @@ button.gap-figure:active {
   border-color: var(--chip-sel-line);
   background: var(--chip-sel-fill);
 }
+/* Active Shows filters as removable pills under the lead bar (0.1.82). They
+ * are selected state made visible, so they wear the selected tokens; tapping
+ * one clears its group. Row gap is --s-3 for the same reason .chip-grid's is:
+ * .chip's 44px hit region overhangs a 34px box by 5px each way. */
+.filter-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-2);
+  margin: 0 0 var(--s-2);
+}
+.filter-pills[hidden] {
+  display: none;
+}
+.chip.filter-pill {
+  background: var(--chip-sel-fill);
+  color: var(--chip-sel-ink);
+  border-color: var(--chip-sel-line);
+}
+.pill-remove {
+  flex: none;
+  font-size: var(--t-xs);
+}
+
 
 .search {
   width: 100%;
@@ -1256,6 +1262,112 @@ button.gap-figure:active {
   line-height: 1.4;
   color: var(--ink-label);
 }
+/* GROUPED SHEETS (0.1.82): the Shows When and Filter sheets hold more than one
+ * list. A group is a small uppercase title in --ink-label (the section-label
+ * token, measured on --surface, which is the sheet's ground), a one-line
+ * description in the same ink, and its control. The title's top margin is the
+ * group's spacing; a wrapper margin would only collapse into it. */
+.sheet-group-title {
+  margin: var(--s-3) 0 var(--s-1);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-label);
+}
+.sheet-group-desc {
+  margin: 0 0 var(--s-2);
+  font-size: var(--t-sm);
+  line-height: 1.4;
+  color: var(--ink-label);
+}
+/* A row of toggle chips: Any / 1 / 2 / 3+. These ARE toggles, so aria-pressed
+   paints them through .chip[aria-pressed="true"]. */
+.sheet-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-2);
+}
+.sheet-foot {
+  margin: var(--s-3) 0 0;
+  font-size: var(--t-sm);
+  line-height: 1.4;
+  color: var(--ink-label);
+}
+/* Apply and Clear all. Sticky to the sheet's bottom edge so the count stays
+   readable while the wheel above it is being scrolled in an 80vh sheet. */
+.sheet-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: var(--s-2);
+  padding-top: var(--s-3);
+  margin-top: var(--s-3);
+  background: var(--surface);
+}
+.sheet-actions .btn-block {
+  flex: 1;
+}
+
+/* THE STATE WHEEL (0.1.82): a scroll-snap listbox, five rows of --tap, with a
+ * band marking the centre row. Not a native select, which on Android is a
+ * system dropdown that cannot be styled and is not a wheel. The band is a
+ * sibling UNDER the list, not a pseudo-element on it: a scrolling box's
+ * ::before scrolls away with its content. Padding rows at each end let the
+ * first and last option reach the band; wheel() in views/shows.js assumes the
+ * row height here, 44px, so the two must move together. */
+.wheel-frame {
+  position: relative;
+  border: 1px solid var(--btn-line);
+  border-radius: var(--r-cell);
+  background: var(--surface);
+  overflow: hidden;
+}
+.wheel-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--tap) * 2);
+  height: var(--tap);
+  background: var(--chip-sel-fill);
+  pointer-events: none;
+}
+.wheel {
+  position: relative;
+  height: calc(var(--tap) * 5);
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  /* THE SNAPPORT STARTS AT THE BAND, NOT AT THE TOP EDGE. scroll-snap-align:
+     start aligns an option's top to the snapport's top; without this inset
+     that is the wheel's own top edge, so the browser snapped option 0 up to
+     scrollTop 88 and the listbox, reading its position, selected option 2 --
+     "Any" read as "AR" on the first smoke run (0.1.82). With the inset equal
+     to the two padding rows, the snap points are exactly i * 44px. */
+  scroll-padding-top: calc(var(--tap) * 2);
+  scrollbar-width: none;
+  /* Rows fade toward the edges, which is what says "there is more" on a wheel. */
+  mask-image: linear-gradient(to bottom, transparent 0, #000 25%, #000 75%, transparent 100%);
+}
+.wheel::-webkit-scrollbar {
+  display: none;
+}
+.wheel-pad {
+  height: calc(var(--tap) * 2);
+}
+.wheel-option {
+  height: var(--tap);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  scroll-snap-align: start;
+  font-size: var(--t-md);
+  font-weight: 600;
+  color: var(--ink-dim);
+}
+.wheel-option[aria-selected="true"] {
+  color: var(--chip-sel-ink);
+}
+
 
 /* --------------------------------------------------------------- setlist --- */
 

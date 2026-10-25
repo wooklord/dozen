@@ -500,6 +500,24 @@ checks were verified this way:
     in 60px" at both widths.
   Restored, by hash the same files: 214 passing, smoke 195 ok with 0 skips,
   gap oracle 1119 of 1119.
+- The 0.1.82 checks, seven faults applied one at a time, each file restored
+  from a byte copy and confirmed by sha256:
+  - `matchesSets` reading `3+` as `> 3`: 1 unit failure (the three-set show
+    leaves 3+).
+  - `matchesEncore` with its branches swapped: 2 unit failures; smoke names the
+    rows, `row 1 (Wed, Oct 21, 2026): detail has an encore set` and two more,
+    plus `badge "2 sets + E": badge shows an encore` -- the row-to-detail tie.
+  - `matchesState` as a substring: 1 unit failure, "a prefix is not a match".
+  - `setSummary` counting encores as sets: 4 unit failures.
+  - `white-space: nowrap` on `.chip-value`: 9 smoke failures across both bars
+    -- Shows at 360 "the layout viewport reads 361px", the When value on 1 line
+    where 2 are required; Songs at 360 "366px of content in 360px".
+  - And two the smoke test found in the build itself, before any proof was
+    staged: the wheel snapping option 0 to the wrong edge (13 failures, "Any"
+    applied as `in AR`) and the opening-position frame undoing an ArrowDown
+    (`ArrowDown left option 0 selected`). Both are recorded in `docs/design.md`.
+  Restored, by hash the same files: 222 passing, smoke 190 ok with 0 skips,
+  gap oracle 1119 of 1119, layout-diff `#/shows` changed and 8 routes identical.
 
 Do this for every new check. It costs one minute and it is the only thing that
 separates a real check from a comforting one.

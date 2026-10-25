@@ -1,69 +1,107 @@
-// SHOWS — the shows view, with search.
+// SHOWS — every show played, newest first, under three controls (0.1.82).
 //
-// Replaces the old Recent screen rather than sitting beside it. The empty-query
-// landing state is exactly what Recent did: the most recent shows, newest
-// first. Search and "load older" are the two ways past that.
+// WHEN, FILTER and VIEW are three lead chips on one row, the Songs-tab pattern
+// (docs/plan.md, "0.1.82 design"). When is all shows, a year, or a month -- the
+// 0.1.75 year-then-month drill-down, relocated into one sheet. Filter is three
+// groups that AND: how many sets, whether there was an encore, and the venue's
+// state. View is Compact (one row per show) or Detail (the full setlist card),
+// and the view sticks in localStorage; When and Filter are session state, like
+// Songs' sort. The search box narrows whatever When has picked.
 //
-// Everything here is filtering, grouping, counting and ordering.
+// Everything here is filtering, grouping, counting and ordering. Set count,
+// encore presence and state are Carton fields or counts over Carton rows;
+// nothing is inferred, and no row is labelled with what will happen next.
 
-// `icon` and `ICONS` were dropped when the row's gap chart action went: this
-// file no longer renders a glyph. An unused import is not free -- it is the
-// kind of leftover that makes the next reader look for a control that is not
-// there.
 import { el, append, debounce, openSheet } from '../ui/dom.js';
 import {
-  setlistBlock,
   setlistCard,
   cartonLink,
   showPermalink,
   attribution,
-  sectionHead,
   emptyState,
   venueLine,
   venuePlace,
 } from '../ui/components.js';
-import { showStructure, compareVenuesByName } from '../data/index.js';
-import { formatShowDate, formatShowDateShort } from '../util/dates.js';
+import {
+  showStructure,
+  compareVenuesByName,
+  setSummary,
+  setBadgeText,
+  filterShows,
+  venueStates,
+  SETS_OPTIONS,
+  ENCORE_OPTIONS,
+} from '../data/index.js';
+import { formatShowDate } from '../util/dates.js';
 import { parseDateQuery, matchShowsByDate, matchVenues, matchReasonLabel } from '../util/search.js';
 
+// Detail view pages its cards; compact rows render all at once -- a row is a
+// date, a venue line and a badge, and 795 of them are cheaper than one cold
+// pull.
 const PAGE = 15;
 
-// Full month names, matching what parseDateQuery accepts. The query built from
-// these has to be a string the search grammar already parses -- that is the
-// whole point of routing the drill-down through it.
+const VIEW_KEY = 'dozen.showsView.v1';
+const VIEWS = {
+  compact: {
+    label: 'Compact',
+    description: 'One row per show: date, venue, and how many sets. Tap a row for the setlist.',
+  },
+  detail: {
+    label: 'Detail',
+    description: 'The full setlist card for every show, with Carton’s notation and footnotes.',
+  },
+};
+
+function readView() {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'detail' ? 'detail' : 'compact';
+  } catch {
+    return 'compact';
+  }
+}
+function writeView(view) {
+  try {
+    localStorage.setItem(VIEW_KEY, view);
+  } catch {
+    /* a view that does not stick is still a view */
+  }
+}
+
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
+const MONTH_SHORT = MONTH_NAMES.map((m) => m.slice(0, 3));
 
-// Module-level so the screen keeps its place across navigation.
+// The Filter sheet's words, used in three places that must agree: the group
+// chips, the pills under the bar, and the count line (docs/plan.md, (g)).
+const SETS_WORDS = { 1: '1 set', 2: '2 sets', '3+': '3+ sets' };
+const ENCORE_WORDS = { with: 'with encore', without: 'without encore' };
+const EMPTY_FILTERS = () => ({ sets: null, encore: null, state: null });
+
+// Module-level so the screen keeps its place across navigation. `view` is the
+// one piece that also survives a reload.
 const state = {
+  when: null, // null | { year } | { year, month }
+  filters: EMPTY_FILTERS(),
+  view: readView(),
   query: '',
   limit: PAGE,
 };
 
 // Routes you can only reach FROM Shows, and therefore come back from rather
-// than arrive at. Returning from one of these keeps the query; anything else --
-// the tab bar, Home, a reload -- is a fresh entry and resets to the landing.
+// than arrive at. Returning from one of these keeps When, Filter and the
+// query; anything else -- the tab bar, Home, a reload -- is a fresh entry and
+// resets to the landing (0.1.75: the tab opens on its landing state). The
+// view is not reset: it is a preference, not a place.
 const RETURNS_FROM = /^#\/(show|venue)\//;
 
 export function renderShows(ctx) {
   const { index, navigate, previousHash } = ctx;
 
-  // THE TAB OPENS ON ITS LANDING STATE (0.1.75).
-  //
-  // `state` is module-level so the screen keeps its place, and that was doing
-  // two different jobs with one variable. Keeping your place while you tap into
-  // a show and step back is right. Keeping a year filter from twenty minutes
-  // ago, so that opening the Shows tab lands you inside "2026" with the search
-  // box pre-filled and a month bar you did not ask for, is not -- and it is why
-  // the two-bar state read as the default state of this screen rather than as
-  // a drill-down. Reaching for Shows means "show me shows".
-  //
-  // Split by WHERE YOU CAME FROM rather than by a timer or a flag the view sets
-  // on the way out: the router knows the previous route, and "did I step back
-  // out of a result" is exactly what it answers.
   if (!RETURNS_FROM.test(previousHash || '')) {
+    state.when = null;
+    state.filters = EMPTY_FILTERS();
     state.query = '';
     state.limit = PAGE;
   }
@@ -92,7 +130,66 @@ export function renderShows(ctx) {
       paint();
     }, 140),
   });
-  append(screen, el('div', { style: { marginBottom: '12px' } }, search));
+  append(screen, el('div', { style: { marginBottom: '10px' } }, search));
+
+  // --- When / Filter / View: three lead chips on ONE row ---------------------
+  //
+  // The 0.1.81 pattern: each chip opens a sheet; the value wears the lead ink;
+  // nothing ellipsizes, and when the trio does not fit a value WRAPS inside a
+  // taller chip (app.css, .sortbar-leads-3). The WHEN CHIP CARRIES NO INNER
+  // LABEL, measured rather than decided (docs/plan.md, 0.1.82 (a), amended):
+  // three labelled chips are 365px of content in a 360px bar, which is the
+  // 0.1.75 off-screen-option defect. A year or a month is self-labelling. The
+  // Filter value "N on" is one token -- a non-breaking space -- so it never
+  // splits into "3" over "on" when the grid shares the shortfall out.
+  //
+  // `data-lead` names each chip for what it is, so a check can find the When
+  // chip without a label to read.
+  function leadChip(name, label, onclick) {
+    const value = el('span.chip-value');
+    const chip = el(
+      'button.chip.chip-lead',
+      { type: 'button', 'data-lead': name, onclick },
+      [label ? el('span.chip-label', { text: label }) : null, value, el('span.chip-caret', { text: '▾', 'aria-hidden': 'true' })],
+    );
+    return { chip, value };
+  }
+  const whenLead = leadChip('when', null, () => openWhenSheet());
+  const filterLead = leadChip('filter', 'Filter', () => openFilterSheet());
+  const viewLead = leadChip('view', 'View', () => openViewSheet());
+
+  const whenLabel = () =>
+    !state.when ? 'All' : state.when.month ? `${MONTH_SHORT[state.when.month - 1]} ${state.when.year}` : String(state.when.year);
+  const activeFilters = () => Object.entries(state.filters).filter(([, v]) => v !== null);
+  const filterLabel = () => {
+    const n = activeFilters().length;
+    return n ? `${n} on` : 'Off';
+  };
+
+  // The accessible name starts with the visible text so a voice user can say
+  // what they see, then says what a tap does.
+  function paintLeads() {
+    whenLead.value.textContent = whenLabel();
+    whenLead.chip.setAttribute('aria-label', `When ${whenLabel()}. Change when`);
+    filterLead.value.textContent = filterLabel();
+    filterLead.chip.setAttribute('aria-label', `Filter ${filterLabel().replace(' ', ' ')}. Change filter`);
+    viewLead.value.textContent = VIEWS[state.view].label;
+    viewLead.chip.setAttribute('aria-label', `View ${VIEWS[state.view].label}. Change view`);
+  }
+  paintLeads();
+
+  append(
+    screen,
+    el('div.sortbar.sortbar-lead.sortbar-leads.sortbar-leads-3', null, [whenLead.chip, filterLead.chip, viewLead.chip]),
+  );
+
+  // Active filters as removable pills under the bar. Each pill is one group's
+  // choice in the group's own words, and tapping it clears that group only.
+  const pills = el('div.filter-pills');
+  append(screen, pills);
+
+  const countLine = el('p.note', { style: { margin: '4px 0 8px' } });
+  append(screen, countLine);
 
   const results = el('div');
   append(screen, results);
@@ -106,302 +203,201 @@ export function renderShows(ctx) {
     return el('h2.section-title', { text: label });
   }
 
-  function showRow(show, { showVenue = true } = {}) {
-    const hasSetlist = index.setlistByShow.has(Number(show.show_id));
-    const structure = hasSetlist ? showStructure(index, show.show_id) : null;
-    const upcoming = show.showdate > index.today;
+  /** Years that actually have shows, newest first. Derived, never hardcoded. */
+  function archiveYears() {
+    return [...new Set(index.playedShows.map((s) => Number(String(s.showdate).slice(0, 4))))]
+      .filter((y) => y >= 1900 && y <= 2999)
+      .sort((a, b) => b - a);
+  }
+  /** Months of one year that have shows, ascending. */
+  function monthsOf(year) {
+    return [...new Set(
+      index.playedShows
+        .filter((s) => Number(String(s.showdate).slice(0, 4)) === year)
+        .map((s) => Number(String(s.showdate).slice(5, 7))),
+    )].sort((a, b) => a - b);
+  }
 
+  /** Every show played, newest first, narrowed to what When has picked. */
+  function whenShows() {
+    let shows = index.playedShows;
+    if (state.when) {
+      const prefix = state.when.month
+        ? `${state.when.year}-${String(state.when.month).padStart(2, '0')}-`
+        : `${state.when.year}-`;
+      shows = shows.filter((s) => String(s.showdate).startsWith(prefix));
+    }
+    return shows.slice().reverse();
+  }
+
+  /**
+   * The list the screen shows: When, then Filter, then the search box. The
+   * search narrows -- a typed date through the same parser a typed "2019" has
+   * always used, venue text through the venue matcher -- and never widens.
+   * Returned with the venue hits so the Venues section can render beside it.
+   */
+  function visible(filters = state.filters) {
+    let shows = filterShows(whenShows(), filters, index);
+    const q = state.query.trim();
+    const parsed = q ? parseDateQuery(q) : null;
+    const venueHits = q
+      ? matchVenues(index.venues, q).sort((a, b) => compareVenuesByName(a.venue, b.venue))
+      : [];
+    if (parsed) {
+      shows = matchShowsByDate(shows, parsed, index.today);
+    } else if (q) {
+      const ids = new Set(venueHits.map((h) => Number(h.venue.venue_id)));
+      shows = shows.filter((s) => ids.has(Number(s.venue_id)));
+    }
+    return { shows, venueHits, parsed, q };
+  }
+
+  /**
+   * One compact row: the date, `venue · city, ST`, and how many sets. The
+   * badge is words ("2 sets + E", "No setlist") rather than the card badge's
+   * S1+S2+E, because the row has a full width to spend and the count is the
+   * fact the Sets filter is about. Only played shows reach this list, so there
+   * is no "Upcoming" branch to get wrong.
+   */
+  function compactRow(show) {
     return el('li', null, [
       el('div.row-shell', null, [
         el(
-          'button.row',
+          'button.row.show-row',
           { type: 'button', onclick: () => navigate(`#/show/${show.show_id}`) },
           [
             el('div.row-main', null, [
               el('div.row-title', { text: formatShowDate(show.showdate) }),
-              showVenue ? venueLine(show) : null,
+              venueLine(show),
             ]),
-            // Format is shown only where setlist data establishes it. Upcoming
-            // shows assert nothing; played shows with no setlist say so.
-            structure
-              ? el('span.badge.badge-set', { text: structure })
-              : el('span.badge', {
-                  text: upcoming ? 'Upcoming' : 'No setlist recorded',
-                }),
+            el('span.badge.badge-sets', { text: setBadgeText(setSummary(index, show.show_id)) }),
           ],
         ),
-        // NO GAP CHART ACTION HERE. A search result row is an entry point to a
-        // show, and the gap chart lives on show detail one tap further in --
-        // the same reasoning that took the gap chart button off the Home and
-        // Shows cards. A second control on a row makes the row itself read as
-        // two decisions when there is only one.
-        //
-        // Four entry points remain and all of them are places you have already
-        // committed to a show: show detail, the Shows search rows, the song
-        // performance rows, and the venue show rows. scripts/smoke.mjs walks
-        // every one.
       ]),
     ]);
   }
 
-  // ------------------------------------------------------------------ paint --
-
-  /**
-   * Browse by period, ROUTED THROUGH THE SEARCH PATH.
-   *
-   * A year chip sets the query to a bare year and repaints; a month chip sets
-   * it to "August 2019". Both are shapes `parseDateQuery` already understands
-   * (kind 'year' and kind 'month'), so this adds an affordance, not a second
-   * implementation of "which shows are in 2019". If date matching changes,
-   * this changes with it, because it IS that code.
-   *
-   * The input is kept in sync so the screen never shows chips and a search box
-   * that disagree, and so clearing the box is an obvious way back.
-   */
-  function browseTo(query) {
-    state.query = query;
-    state.limit = PAGE;
-    search.value = query;
-    paint();
-    results.scrollIntoView({ block: 'start' });
-  }
-
-  /** Years that actually have shows, newest first. Derived, never hardcoded. */
-  function archiveYears() {
-    return [...new Set(index.shows.map((s) => Number(String(s.showdate).slice(0, 4))))]
-      .filter((y) => y >= 1900 && y <= 2999)
-      .sort((a, b) => b - a);
-  }
-
-  /**
-   * The LANDING bar: every year in the archive. Drilling into one replaces this
-   * bar rather than stacking a second one under it -- see periodBar.
-   *
-   * SHOWS HAS HAD FOUR ARRANGEMENTS AND THIS IS THE FOURTH. Before 0.1.62 both
-   * bars were sticky at the same 52px offset and overlapped on scroll, because
-   * .sortbar-secondary was a dead rule. Making it apply left both bars
-   * secondary, so NEITHER pinned and the year switcher scrolled away inside a
-   * long year. 0.1.64 pinned the year bar and left the month bar secondary --
-   * coherent, and still two horizontal scrollers stacked under a sticky header,
-   * styled identically, with one label between them and different scroll
-   * behaviour that only showed itself 330px down. As of 0.1.75 there is exactly
-   * ONE bar in every state, so none of that can be true again.
-   */
-  function yearBar(activeYear = null) {
-    let activeChip = null;
-    const bar = el('div.sortbar', null, [
-      // Backs out of a drill-down without clearing the field by hand, AND
-      // carries the unfiltered state. It used to render only during a
-      // drill-down, so the landing bar had no pressed chip at all and the
-      // control said nothing about what it was showing. Rendering it always,
-      // pressed when no year is active, gives this bar the same property every
-      // other chip bar in the app has: the current state is visible in the bar.
-      el(
-        'button.chip',
-        {
-          type: 'button',
-          'aria-pressed': String(!activeYear),
-          onclick: () => browseTo(''),
-        },
-        'All shows',
+  /** The full setlist card for one show -- the 0.1.75 landing card, unchanged. */
+  function detailCard(show) {
+    const rows = index.setlistByShow.get(Number(show.show_id)) || [];
+    return setlistCard({
+      style: { marginBottom: '12px' },
+      index,
+      rows,
+      onSong: (id) => navigate(`#/song/${id}`),
+      head: el(
+        'div',
+        { style: { display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'baseline' } },
+        [
+          el('div', { style: { minWidth: '0' } }, [
+            el('div', { style: { fontWeight: '650' }, text: formatShowDate(show.showdate) }),
+            venueLine(show),
+          ]),
+          rows.length
+            ? el('span.badge.badge-set', { text: showStructure(index, show.show_id) || '' })
+            : el('span.badge', { text: 'No setlist recorded' }),
+        ],
       ),
-      ...archiveYears().map((y) => {
-        const chip = el(
-          'button.chip',
-          {
-            type: 'button',
-            'aria-pressed': String(activeYear === y),
-            onclick: () => browseTo(String(y)),
-          },
-          String(y),
-        );
-        if (activeYear === y) activeChip = chip;
-        return chip;
-      }),
-    ]);
-
-    // The bar scrolls horizontally and holds fourteen years, so the selected
-    // one is usually off-screen after a repaint -- you tap 2019 and the bar
-    // still reads 2026, 2025, 2024. Bring it into view so the control shows
-    // its own state. `block: 'nearest'` so this never scrolls the page.
-    if (activeChip) {
-      queueMicrotask(() => activeChip.scrollIntoView({ inline: 'center', block: 'nearest' }));
-    }
-    return bar;
-  }
-
-  /**
-   * Every year in the archive at once, in a sheet.
-   *
-   * A 15-chip horizontal scroller shows FIVE of them in 390px and gives no hint
-   * that the other ten exist -- measured, not estimated: 993px of chips in a
-   * 390px bar. That is the part of the old design that read as broken. A grid
-   * has no hidden state: every year is on screen, and the one you are in is
-   * painted with the same selected treatment every other chip bar uses.
-   *
-   * "All shows" leads, so the way out of a drill-down is the first thing here
-   * and not something you have to know to clear the search box for.
-   */
-  function openYearSheet(activeYear = null) {
-    openSheet('Browse by year', (close) => {
-      const grid = el('div.chip-grid', null, [
-        el(
-          'button.chip.year-all',
-          {
-            type: 'button',
-            'aria-pressed': String(!activeYear),
-            onclick: () => { close(); browseTo(''); },
-          },
-          'All shows',
-        ),
-        ...archiveYears().map((y) =>
-          el(
-            'button.chip',
-            {
-              type: 'button',
-              'aria-pressed': String(activeYear === y),
-              onclick: () => { close(); browseTo(String(y)); },
-            },
-            String(y),
-          ),
-        ),
-      ]);
-      return grid;
+      showId: show.show_id,
+      navigate,
+      // The Carton link belongs to one show rather than to the section, so it
+      // sits on the card (the convention since 0.1.74).
+      extraActions: [cartonLink(showPermalink(show), 'Carton')],
     });
   }
 
-  /**
-   * Inside a year: the SAME single bar, now holding that year's months.
-   *
-   * `aria-pressed` is what DRAWS the selection -- `.chip[aria-pressed="true"]`
-   * in app.css is the only rule that paints a chip as chosen. This bar shipped
-   * without the attribute: the filter applied correctly and the chip that
-   * applied it looked untouched, so the control disagreed with the screen it
-   * had just changed.
-   *
-   * THE BACK CHIP IS ALWAYS RENDERED, INCLUDING WHEN THERE ARE NO MONTHS. A
-   * year with no shows still parses as kind 'year', and a bar built only from
-   * months would be empty -- leaving the reader inside a filter with no control
-   * on screen to leave it by. The way out cannot be conditional on there being
-   * anything to browse.
-   *
-   * It carries the year rather than the word "Back", so the bar still states
-   * its own state, which is the property every other chip bar in this app has.
-   * The chevron is what makes it a way OUT and not merely a label; tapping it
-   * opens the year sheet, whose first row is "All shows".
-   *
-   * IT SITS OUTSIDE THE SCROLLER. The bar is ~764px wide in a 390px viewport,
-   * so a back chip inside it scrolls away and the way out goes with it. The
-   * first attempt made it `position: sticky` and that half-worked: it stayed
-   * put, but the months then slid UNDER it and rendered as clipped half-pills
-   * against its edge, which reads as a rendering fault rather than as scrolling.
-   * Splitting the bar -- fixed chip, scrolling months beside it -- makes the
-   * overlap impossible instead of tidying it up.
-   */
-  function periodBar(year, activeMonth = null) {
-    const months = [...new Set(
-      index.shows
-        .filter((s) => Number(String(s.showdate).slice(0, 4)) === year)
-        .map((s) => Number(String(s.showdate).slice(5, 7))),
-    )].sort((a, b) => a - b);
-
-    let activeChip = null;
-    const back = el(
-      'button.chip.chip-back',
-      {
-        type: 'button',
-        'aria-label': `Browsing ${year}. Choose a different year, or all shows`,
-        onclick: () => openYearSheet(year),
-      },
-      `\u2039 ${year}`,
-    );
-
-    const bar = el('div.sortbar.sortbar-lead', null, [
-      back,
-      el(
-        'div.sortbar-scroll',
-        null,
-        months.map((m) => {
-          const chip = el(
-            'button.chip',
-            {
-              type: 'button',
-              'aria-pressed': String(activeMonth === m),
-              onclick: () => browseTo(`${MONTH_NAMES[m - 1]} ${year}`),
-            },
-            MONTH_NAMES[m - 1].slice(0, 3),
-          );
-          if (activeMonth === m) activeChip = chip;
-          return chip;
-        }),
-      ),
-    ]);
-
-    // Twelve months overflow the 312px left beside the back chip, so the
-    // selected month can repaint off-screen exactly as the selected year could.
-    // Same treatment, same reason -- see yearBar. This scrolls .sortbar-scroll
-    // rather than the bar itself now, which is what `inline: 'nearest'` acts on.
-    if (activeChip) {
-      queueMicrotask(() => activeChip.scrollIntoView({ inline: 'nearest', block: 'nearest' }));
-    }
-    return bar;
+  /** The words for one active filter, shared by the pills and the count line. */
+  function filterWords([key, value]) {
+    if (key === 'sets') return SETS_WORDS[value];
+    if (key === 'encore') return ENCORE_WORDS[value];
+    return `in ${value}`;
   }
+
+  function paintPills() {
+    pills.replaceChildren();
+    for (const entry of activeFilters()) {
+      const [key] = entry;
+      const words = filterWords(entry);
+      append(
+        pills,
+        el(
+          'button.chip.filter-pill',
+          {
+            type: 'button',
+            'aria-label': `Remove the filter ${words}`,
+            onclick: () => {
+              state.filters[key] = null;
+              state.limit = PAGE; // a changed filter starts Detail from the top, as apply does
+              paintLeads();
+              paint();
+            },
+          },
+          [el('span', { text: words }), el('span.pill-remove', { text: '✕', 'aria-hidden': 'true' })],
+        ),
+      );
+    }
+    pills.hidden = !pills.childElementCount;
+  }
+
+  // ------------------------------------------------------------------ paint --
 
   function paint() {
     results.replaceChildren();
-    const q = state.query.trim();
+    paintPills();
+    const { shows, venueHits, parsed, q } = visible();
 
-    if (!q) {
-      append(results, el('h2.section-title', { text: 'Browse by year' }));
-      append(results, yearBar());
-      paintRecent();
-      return;
-    }
+    // The count line says what the list IS: the count, each active filter in
+    // its own words in group order, the query if any, and the order. A
+    // month+day search is nearest-first (util/search.js), and says so.
+    const n = shows.length;
+    const parts = [`${n} show${n === 1 ? '' : 's'}`, ...activeFilters().map(filterWords)];
+    if (q) parts.push(`matching “${q}”`);
+    parts.push(parsed && parsed.kind === 'monthday' ? 'nearest first' : 'newest first');
+    countLine.textContent = parts.join(' · ');
 
-    const parsed = parseDateQuery(q);
-
-    // Drilling in REPLACES the bar, it does not stack a second one under it.
-    // The label changes with it, so the heading always names what the row below
-    // it contains -- "Browse by year" over years, "Browse by month" over months.
-    if (parsed?.kind === 'year' || parsed?.kind === 'month') {
-      append(results, el('h2.section-title', { text: 'Browse by month' }));
-      append(results, periodBar(parsed.year, parsed.kind === 'month' ? parsed.month : null));
-    }
-    const dateHits = parsed ? matchShowsByDate(index.shows, parsed, index.today) : [];
-    const venueHits = matchVenues(index.venues, q).sort((a, b) =>
-      compareVenuesByName(a.venue, b.venue),
-    );
-
-    if (!dateHits.length && !venueHits.length) {
+    if (!shows.length && !venueHits.length) {
       append(
         results,
         emptyState(
           parsed
-            ? `No shows on ${parsed.label}.`
-            : `Nothing matching “${q}”. Try a venue, city, state, or a date like 8/7/26.`,
+            ? `No shows on ${parsed.label}${state.when || activeFilters().length ? ' under this When and Filter' : ''}.`
+            : q
+              ? `Nothing matching “${q}”. Try a venue, city, state, or a date like 8/7/26.`
+              : 'No shows match this When and Filter.',
         ),
       );
       return;
     }
 
-    // Both matchers always run, and each reports its own count, so a query
-    // that hits both (like "Portland") can never silently prefer one.
-    if (dateHits.length) {
-      const section = el('div.section');
-      append(section, countedHead('Shows', dateHits.length, dateHits.length));
-      if (parsed.kind === 'monthday' && dateHits.length > 1) {
-        append(
-          section,
-          el('p.note', {
-            style: { margin: '0 0 8px' },
-            text: `${parsed.label} matches ${dateHits.length} shows across different years, nearest first.`,
-          }),
-        );
+    if (shows.length) {
+      if (state.view === 'compact') {
+        const list = el('ul.rows');
+        for (const s of shows) append(list, compactRow(s));
+        append(results, el('div.section', null, list));
+      } else {
+        const section = el('div.section');
+        const shown = shows.slice(0, state.limit);
+        for (const s of shown) append(section, detailCard(s));
+        if (shown.length < shows.length) {
+          const remaining = shows.length - shown.length;
+          append(
+            section,
+            el(
+              'button.btn.btn-block',
+              {
+                type: 'button',
+                style: { marginTop: '12px' },
+                onclick: () => {
+                  state.limit += PAGE;
+                  paint();
+                },
+              },
+              `Load ${Math.min(PAGE, remaining)} older`,
+            ),
+          );
+        }
+        append(results, section);
       }
-      const list = el('ul.rows');
-      for (const s of dateHits) append(list, showRow(s));
-      append(section, list);
-      append(results, section);
     }
 
     if (venueHits.length) {
@@ -409,15 +405,12 @@ export function renderShows(ctx) {
       append(section, countedHead('Venues', venueHits.length, venueHits.length));
       const list = el('ul.rows');
       for (const { venue, reasons } of venueHits) {
-        const shows = (index.showsByVenue.get(Number(venue.venue_id)) || []);
-        const played = shows.filter((s) => s.showdate <= index.today);
+        const played = (index.showsByVenue.get(Number(venue.venue_id)) || []).filter((s) => s.showdate <= index.today);
         const reason = matchReasonLabel(reasons);
 
         // venuePlace(), not hand-built .venue-line markup: the name is already
         // the row title, so only the place goes on this line, but it is still
-        // venue text and has to move with the helper. The match-reason badge
-        // is appended here rather than built into the helper -- it is this
-        // screen's concern, not the venue line's.
+        // venue text and has to move with the helper.
         const placeLine = venuePlace(venue);
         if (reason) {
           append(placeLine, el('span.badge', { style: { marginLeft: '6px' }, text: reason }));
@@ -431,10 +424,7 @@ export function renderShows(ctx) {
                 'button.row',
                 { type: 'button', onclick: () => navigate(`#/venue/${venue.venue_id}`) },
                 [
-                  el('div.row-main', null, [
-                    el('div.row-title', { text: venue.venuename }),
-                    placeLine,
-                  ]),
+                  el('div.row-main', null, [el('div.row-title', { text: venue.venuename }), placeLine]),
                   el('div.gap-figure', null, [
                     el('div.gap-num.num', { text: String(played.length) }),
                     el('div.gap-unit', { text: played.length === 1 ? 'show' : 'shows' }),
@@ -450,74 +440,282 @@ export function renderShows(ctx) {
     }
   }
 
+  // ----------------------------------------------------------------- sheets --
+
+  // One full-width row per option: the name, then its one-line description
+  // (0.1.81). aria-pressed is honest here: one of a set, exactly one on.
+  function optionRow(label, description, pressed, onclick) {
+    return el(
+      'button.sheet-item.sheet-option',
+      { type: 'button', 'aria-pressed': String(pressed), onclick },
+      [el('div.sheet-option-name', { text: label }), description ? el('div.sheet-option-desc', { text: description }) : null],
+    );
+  }
+
   /**
-   * Empty-query landing: the full recent-setlists view, unchanged.
-   *
-   * These are rendered as full cards WITH their setlists, not as compact rows.
-   * Seeing what has been burned recently without tapping through is the whole
-   * point of this screen -- collapsing it to a list would be a regression.
+   * WHEN: "All shows" on top, then every year at once in a grid (the 0.1.75
+   * sheet, which replaced a scroller that showed five of fifteen), then the
+   * months of the picked year. Picking a year keeps the sheet open and shows
+   * its months, with the list behind already narrowed; picking a month, or
+   * "All shows", closes. The sheet re-renders its own body in place so the
+   * month row appears the moment a year is pressed.
    */
-  function paintRecent() {
-    // Newest first, upcoming shows excluded.
-    const played = index.shows.filter((s) => s.showdate <= index.today);
-    const ordered = played.slice().reverse();
-    const shown = ordered.slice(0, state.limit);
-
-    const section = el('div.section');
-    append(section, countedHead('Recent shows', shown.length, ordered.length));
-
-    for (const show of shown) {
-      const rows = index.setlistByShow.get(Number(show.show_id)) || [];
-      append(
-        section,
-        setlistCard({
-          style: { marginBottom: '12px' },
-          index,
-          rows,
-          onSong: (id) => navigate(`#/song/${id}`),
-          head: el(
-            'div',
-            { style: { display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'baseline' } },
-            [
-              el('div', { style: { minWidth: '0' } }, [
-                el('div', { style: { fontWeight: '650' }, text: formatShowDate(show.showdate) }),
-                venueLine(show),
-              ]),
-              rows.length
-                ? el('span.badge.badge-set', { text: showStructure(index, show.show_id) || '' })
-                : el('span.badge', { text: 'No setlist recorded' }),
-            ],
+  function openWhenSheet() {
+    openSheet('When', (close) => {
+      const body = el('div');
+      const choose = (when, andClose) => {
+        state.when = when;
+        state.limit = PAGE;
+        paintLeads();
+        paint();
+        if (andClose) close();
+        else render();
+      };
+      const render = () => {
+        const year = state.when ? state.when.year : null;
+        const month = state.when ? state.when.month || null : null;
+        body.replaceChildren(
+          el('div.sheet-options', { role: 'group', 'aria-label': 'When options' }, [
+            optionRow('All shows', 'Every show played, newest first.', !state.when, () => choose(null, true)),
+          ]),
+          el('h3.sheet-group-title', { text: 'Year' }),
+          el(
+            'div.chip-grid',
+            { role: 'group', 'aria-label': 'Year' },
+            archiveYears().map((y) =>
+              el(
+                'button.chip',
+                { type: 'button', 'aria-pressed': String(year === y), onclick: () => choose({ year: y }, false) },
+                String(y),
+              ),
+            ),
           ),
-          showId: show.show_id,
-          navigate,
-          // Home used to put its own in the section head; as of 0.1.74 that
-          // head is generic ("Previous shows") and the link, which belongs to
-          // one show rather than to the section, sits here too. So this is now
-          // the convention rather than the exception it was written as.
-          extraActions: [cartonLink(showPermalink(show), 'Carton')],
-        }),
-      );
-    }
+          year
+            ? el('h3.sheet-group-title', { text: `Month in ${year}` })
+            : null,
+          year
+            ? el(
+                'div.chip-grid.month-grid',
+                { role: 'group', 'aria-label': `Month in ${year}` },
+                monthsOf(year).map((m) =>
+                  el(
+                    'button.chip',
+                    {
+                      type: 'button',
+                      'aria-pressed': String(month === m),
+                      onclick: () => choose({ year, month: m }, true),
+                    },
+                    MONTH_SHORT[m - 1],
+                  ),
+                ),
+              )
+            : null,
+        );
+      };
+      render();
+      return body;
+    });
+  }
 
-    if (shown.length < ordered.length) {
-      const remaining = ordered.length - shown.length;
-      append(
-        section,
+  /**
+   * FILTER: three groups, one choice each, "Any" is off, the groups AND. The
+   * choices are a DRAFT until "Show N shows" applies them, so the count on the
+   * button can be read before the list changes under the sheet; "Clear all"
+   * resets every group. Descriptions locked in docs/plan.md ("0.1.82 design",
+   * (d)).
+   */
+  function openFilterSheet() {
+    openSheet('Filter', (close) => {
+      const draft = { ...state.filters };
+      const body = el('div');
+
+      const chips = (name, options, selected, onPick) =>
         el(
-          'button.btn.btn-block',
-          {
-            type: 'button',
-            style: { marginTop: '12px' },
-            onclick: () => {
-              state.limit += PAGE;
-              paint();
-            },
+          'div.sheet-choices',
+          { role: 'group', 'aria-label': name },
+          [['any', 'Any'], ...options].map(([key, label]) =>
+            el(
+              'button.chip',
+              {
+                type: 'button',
+                'aria-pressed': String((selected ?? 'any') === key),
+                onclick: () => onPick(key === 'any' ? null : key),
+              },
+              label,
+            ),
+          ),
+        );
+
+      const group = (title, description, control) =>
+        el('div', null, [
+          el('h3.sheet-group-title', { text: title }),
+          el('p.sheet-group-desc', { text: description }),
+          control,
+        ]);
+
+      const render = () => {
+        const count = visible(draft).shows.length;
+        body.replaceChildren(
+          group(
+            'Sets',
+            'Sets counted from the setlist, encore not included. Shows with no setlist recorded are left out when this is set.',
+            chips('Sets', SETS_OPTIONS.map((k) => [k, k]), draft.sets, (v) => { draft.sets = v; render(); }),
+          ),
+          group(
+            'Encore',
+            'Whether the setlist has an encore set.',
+            chips('Encore', ENCORE_OPTIONS.map((k) => [k, k === 'with' ? 'With' : 'Without']), draft.encore, (v) => { draft.encore = v; render(); }),
+          ),
+          group(
+            `State · ${draft.state || 'Any'}`,
+            'Scroll the wheel. States and provinces come from the venue list; only ones Eggy has played appear.',
+            wheel(['Any', ...venueStates(index)], draft.state || 'Any', (v) => {
+              draft.state = v === 'Any' ? null : v;
+              // Only the title and the count move; re-rendering the wheel
+              // mid-scroll would fight the scroll that just happened. The
+              // state group is the third title, by position in this body.
+              body.querySelectorAll('.sheet-group-title')[2].textContent = `State · ${draft.state || 'Any'}`;
+              apply.textContent = `Show ${visible(draft).shows.length} shows`;
+            }),
+          ),
+          el('div.sheet-actions', null, [
+            apply,
+            el(
+              'button.btn',
+              {
+                type: 'button',
+                onclick: () => {
+                  draft.sets = draft.encore = draft.state = null;
+                  render();
+                },
+              },
+              'Clear all',
+            ),
+          ]),
+        );
+        apply.textContent = `Show ${count} shows`;
+      };
+      const apply = el(
+        'button.btn.btn-block',
+        {
+          type: 'button',
+          onclick: () => {
+            state.filters = { ...draft };
+            state.limit = PAGE;
+            close();
+            paintLeads();
+            paint();
           },
-          `Load ${Math.min(PAGE, remaining)} older`,
-        ),
+        },
       );
-    }
-    append(results, section);
+      render();
+      return body;
+    });
+  }
+
+  /**
+   * The state wheel: a scroll-snap listbox with a highlighted centre row.
+   *
+   * NOT a native <select>: on Android that opens a system dropdown that cannot
+   * be styled and is not a wheel. Five rows are visible; the one in the band
+   * is the choice. Two rows of padding at each end let the first and last
+   * option reach the band. Selection is read from scroll position, so a flick,
+   * a tap on a row (which scrolls it to the band) and the arrow keys all end in
+   * the same place. Keyboard-reachable: the wheel is the focusable listbox,
+   * Up/Down/Home/End move the choice, and aria-activedescendant names it.
+   */
+  function wheel(options, selected, onChange) {
+    const ROW = 44; // --tap; the option height in app.css must match
+    const ids = options.map((_, i) => `wheel-opt-${i}`);
+    let current = Math.max(0, options.indexOf(selected));
+
+    const items = options.map((label, i) =>
+      el(
+        'div.wheel-option',
+        {
+          role: 'option',
+          id: ids[i],
+          'aria-selected': String(i === current),
+          onclick: () => scrollTo(i),
+        },
+        label,
+      ),
+    );
+    const list = el(
+      'div.wheel',
+      { role: 'listbox', tabindex: '0', 'aria-label': 'State', 'aria-activedescendant': ids[current] },
+      // The padding rows are not options; presentation keeps the listbox's
+      // children all options for a screen reader.
+      [el('div.wheel-pad', { role: 'presentation' }), ...items, el('div.wheel-pad', { role: 'presentation' })],
+    );
+
+    const select = (i) => {
+      if (i === current || i < 0 || i >= options.length) return;
+      items[current].setAttribute('aria-selected', 'false');
+      current = i;
+      items[current].setAttribute('aria-selected', 'true');
+      list.setAttribute('aria-activedescendant', ids[current]);
+      onChange(options[current]);
+    };
+    // Instant, not smooth: the snap is mandatory so the position is exact, and
+    // a smooth programmatic scroll never moved in headless Chrome, which left
+    // the ArrowDown check reading option 0 (first smoke runs of 0.1.82). A hop
+    // of one or two 44px rows does not need an animation to be followed.
+    let moved = false;
+    const scrollTo = (i) => { moved = true; list.scrollTop = i * ROW; };
+
+    let frame = 0;
+    list.addEventListener('scroll', () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        // The sheet body re-renders on every chip tap, wheel included. A
+        // scroll still settling when that happens would read a DETACHED
+        // list's scrollTop -- always 0 -- and reset the draft to Any under a
+        // new wheel showing the old choice (cold review, 0.1.82).
+        if (!list.isConnected) return;
+        select(Math.round(list.scrollTop / ROW));
+      });
+    });
+    list.addEventListener('keydown', (e) => {
+      const step = { ArrowDown: 1, ArrowUp: -1 }[e.key];
+      if (step) scrollTo(Math.min(options.length - 1, Math.max(0, current + step)));
+      else if (e.key === 'Home') scrollTo(0);
+      else if (e.key === 'End') scrollTo(options.length - 1);
+      else return;
+      e.preventDefault();
+    });
+    // The sheet is not in the document until the body is returned, and a
+    // detached element cannot scroll, so the opening position is set on the
+    // next frame -- unless something has already moved the wheel. Without the
+    // guard a key or tap inside that first frame was undone by this callback,
+    // which is how the ArrowDown smoke check read option 0 (0.1.82, third run).
+    requestAnimationFrame(() => { if (!moved) list.scrollTop = current * ROW; });
+
+    return el('div.wheel-frame', null, [el('div.wheel-band', { 'aria-hidden': 'true' }), list]);
+  }
+
+  /** VIEW: Compact or Detail, with the footer line (docs/plan.md, (e)). */
+  function openViewSheet() {
+    openSheet('View', (close) =>
+      el('div', null, [
+        el(
+          'div.sheet-options',
+          { role: 'group', 'aria-label': 'View options' },
+          Object.entries(VIEWS).map(([key, v]) =>
+            optionRow(v.label, v.description, state.view === key, () => {
+              state.view = key;
+              writeView(key);
+              state.limit = PAGE;
+              close();
+              paintLeads();
+              paint();
+            }),
+          ),
+        ),
+        el('p.sheet-foot', { text: 'The view sticks until changed. Either view respects When and Filter.' }),
+      ]),
+    );
   }
 
   paint();

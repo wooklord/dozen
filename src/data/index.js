@@ -961,6 +961,112 @@ export function shortSetLabel(label) {
   return label;
 }
 
+/**
+ * How many sets a played show had, and whether it had an encore (0.1.82) --
+ * the two counts the Shows filter runs on. Read from the SAME rows
+ * showStructure() reads, so the badge and the filter cannot disagree.
+ *
+ * `setCount` is the number of distinct non-encore set labels: "One Set" is 1,
+ * "Set 1 + Set 2" is 2, encores are not sets. `hasEncore` is true when any row
+ * sits in an encore (setnumber "e" or "e2"). Returns null for a show with no
+ * setlist rows -- including every upcoming show -- because a count of zero
+ * would be an assertion about a setlist nobody has recorded.
+ */
+export function setSummary(index, showId) {
+  const rows = index.setlistByShow.get(Number(showId));
+  if (!rows || !rows.length) return null;
+  const sets = new Set();
+  let hasEncore = false;
+  for (const r of rows) {
+    const n = String(r.setnumber).toLowerCase();
+    if (n === 'e' || n === 'e2') hasEncore = true;
+    else sets.add(setLabel(r.settype, r.setnumber));
+  }
+  return { setCount: sets.size, hasEncore };
+}
+
+/**
+ * The compact row's badge text: "1 set", "2 sets + E", "No setlist" (0.1.82).
+ * Words, not the S1+S2+E form the card badge uses, because a compact row has
+ * a full row width and the count is the thing the Sets filter is about. A
+ * null summary reads "No setlist": the show is in the archive and no setlist
+ * is recorded for it, which is a fact about Carton's data and not about the
+ * show.
+ */
+export function setBadgeText(summary) {
+  if (!summary) return 'No setlist';
+  const n = summary.setCount;
+  return `${n} set${n === 1 ? '' : 's'}${summary.hasEncore ? ' + E' : ''}`;
+}
+
+/**
+ * The three Shows filter predicates (0.1.82). Each takes a show and the index
+ * and returns true/false; `filterShows` ANDs the active ones. Every test here
+ * is a Carton field or a count over Carton rows -- sets and encore from the
+ * setlist, state from the venue -- and nothing is inferred. Ruled in scope in
+ * docs/plan.md ("0.1.82 design", (d)).
+ *
+ * Sets and Encore are tests on the setlist, so a show with NO setlist rows
+ * fails both: there is nothing to count, and "zero sets" would be a claim
+ * about a setlist that was never recorded. Such shows are in the list under
+ * Any and leave it when either group is set, which is what the sheet says.
+ *
+ * State matches the VENUE row's `state` exactly, through venuesById, not the
+ * show's own copy of the field and never as a substring (CLAUDE.md: "ma" hits
+ * 18 venue names). The two agree on every played show today; the venue table
+ * is the ruling source because it is what the wheel is built from. The three
+ * venues with a blank state match no state option and are reachable under Any
+ * only.
+ */
+export const SETS_OPTIONS = ['1', '2', '3+'];
+export const ENCORE_OPTIONS = ['with', 'without'];
+
+export function matchesSets(show, want, index) {
+  const s = setSummary(index, show.show_id);
+  if (!s) return false;
+  if (want === '3+') return s.setCount >= 3;
+  return s.setCount === Number(want);
+}
+
+export function matchesEncore(show, want, index) {
+  const s = setSummary(index, show.show_id);
+  if (!s) return false;
+  return want === 'with' ? s.hasEncore : !s.hasEncore;
+}
+
+export function matchesState(show, want, index) {
+  const venue = index.venuesById.get(Number(show.venue_id));
+  const state = venue ? String(venue.state || '') : '';
+  return state !== '' && state === want;
+}
+
+/**
+ * `filters` is { sets, encore, state }, each null when that group reads Any.
+ * The groups AND: a show must pass every one that is set.
+ */
+export function filterShows(shows, filters, index) {
+  const { sets = null, encore = null, state = null } = filters || {};
+  return shows.filter(
+    (s) =>
+      (sets === null || matchesSets(s, sets, index)) &&
+      (encore === null || matchesEncore(s, encore, index)) &&
+      (state === null || matchesState(s, state, index)),
+  );
+}
+
+/**
+ * The State wheel's options: every distinct non-blank `state` in the venues
+ * table, A–Z. Derived from the table, never listed by hand, so a state Eggy
+ * plays for the first time appears on the next cold pull. Two spellings that
+ * Carton keeps apart ("DC" and "D.C.") stay apart here: matching is exact and
+ * merging them would be this app deciding they are one place.
+ */
+export function venueStates(index) {
+  return [...new Set(index.venues.map((v) => String(v.state || '')).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, 'en'),
+  );
+}
+
 /** Shows on the same month/day in previous years. */
 export function onThisDate(index, monthDay, excludeShowId) {
   return index.playedShows.filter(

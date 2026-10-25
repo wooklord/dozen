@@ -542,8 +542,8 @@ disagree with you; it locked the assumption in and then read as evidence for it.
   cards. A row is an entry point to a show, and the gap chart lives one tap further in on show
   detail. Three entry points remain — show detail, song performance rows and venue show rows — and
   removing this one **was** removing an entry point, not preserving it: the Shows tab's compact
-  rows only exist for search results, so "the Shows list rows" and "the Shows search rows" are the
-  same rows.
+  rows only existed for search results (until 0.1.82, when every show became a compact row — still
+  with no second control), so "the Shows list rows" and "the Shows search rows" were the same rows.
 - **On a narrow row, the widest thing must not be the least important one.** The set-structure
   badge read `Set 1 + Set 2 + Encore` — 22 characters beside a venue name, which is the thing the
   row is actually scanned for. It is abbreviated to `S1+S2+E`, worst case `S1+S2+S3+E` at ten
@@ -747,6 +747,12 @@ the yolk-coloured dates make each list's own order obvious. Recorded so it reads
 rather than an oversight.
 
 ### Shows browses with one chip bar, not two (0.1.75)
+
+> **Superseded in 0.1.82.** The one bar, the `‹ 2026` back chip and the month scroller described
+> here were replaced by three lead chips (When / Filter / View) and the year-then-month drill-down
+> moved into the When sheet. See "Shows gets the Songs-tab controls" (0.1.82) below. The
+> measurements and the reasoning in this section stand as the record of why the 0.1.75 shape was
+> chosen over the two-bar one; they are not a description of the current screen.
 
 Shows spent four builds arranging **two horizontal scrollers under a sticky header**, and the fourth
 was still wrong. Measured at 390×844; the two themes are geometrically identical:
@@ -1191,8 +1197,8 @@ Flex shrink is proportional to size, so both chips would have lost width and "Lo
 have wrapped at 139px to make room it did not need to make; two `auto` grid tracks start at
 min-content and grow *equally* toward max-content, so the narrower chip reaches its full width first
 and only the wider one is left short. The grid items stretch, so the two pills stay the same height.
-The class is its own, `.sortbar-leads`, because `.sortbar-lead` is also Shows' bar and its month
-scroller depends on flex. The smoke test measures the pair at **both** widths through
+The class is its own, `.sortbar-leads`, because `.sortbar-lead` was also Shows' bar and its month
+scroller depended on flex (until 0.1.82, when Shows adopted the grid too). The smoke test measures the pair at **both** widths through
 `Emulation.setDeviceMetricsOverride` and asserts, at each, that the bar does not overflow and no
 value span is wider than its box — plus that the filter value *is* on two lines at 360 and on one at
 390, because a pair that "fit" at 360 on one line could only have done so by shrinking something.
@@ -1218,6 +1224,100 @@ than clip, for the same reason the chips never ellipsize — at 390px the two lo
 gap", "Closed gaps only") run to three lines and four others to two, measured in the same smoke
 check, so "one-line description" names the register, not a height. The Shows year sheet keeps the
 three-column `.chip-grid`; years need no explaining.
+
+### Shows gets the Songs-tab controls: When, Filter, View, and a compact default (0.1.82)
+
+Locked in chat on 2026-10-25 and recorded in `plan.md` ("0.1.82 design") before any code; the
+chip amendment there was added at approval, after measuring.
+
+**The default is every show, one row each.** 795 played shows, newest first, as compact rows: the
+date, `venue · city, ST`, and a badge in words — "2 sets + E", "1 set", "No setlist" — rather than
+the card badge's mono `S1+S2+E`, because the row has a full width to spend and the count is the fact
+the Sets filter is about. The 0.1.75 landing was fifteen full setlist cards and "Load older"; that
+is now the **Detail** view, unchanged card for card, and the view sticks in `localStorage`. The
+split is the Songs split: a list you scan, and the thing you tap into. Measured on the first smoke
+run of the build: 295 one-set rows, 123 one-set-plus-encore, 17 two-set, 180 two-set-plus-encore,
+4 three-set, 1 three-set-plus-encore, 175 "No setlist" — and the 175 equals the raw tables' count
+of played shows with zero setlist rows, derived in Node from the two endpoints, not from the index.
+
+**Three lead chips on one row, and the When chip has no label.** The 0.1.81 pattern was carried
+over as written — inner uppercase label, value in the lead ink, no ellipsis, wrap fallback, a grid
+bar with `auto` tracks — and then measured with three chips instead of two, headless, with the
+app's own stylesheet:
+
+| Trio | 390px | 360px |
+|---|---|---|
+| WHEN Oct 2026 · FILTER 3 on · VIEW Compact | fits only by wrapping two values, "Oct / 2026" and "3 / on", bar 56px | **overflows, 365px of content in 360px** |
+| Oct 2026 (no label) · FILTER 3 on · VIEW Compact | one line each, bar 50px, 345px of 358 | "3 / on" wraps although space was not the cause |
+| the same, "3 on" one non-breaking token | one line each, bar 50px | only "Oct / 2026" wraps, bar 56px, no overflow |
+| the same, "Oct 2026" also non-breaking | one line each | overflows by 1px |
+
+The first row is the 0.1.75 off-screen defect, so the design moved rather than the rule: **the When
+chip carries no inner label** — a year or a month is self-labelling in a way "All", "Off" and
+"Compact" are not — and **the Filter value "N on" is joined with a non-breaking space** so the grid,
+sharing the shortfall out, cannot split it into a digit over a word. The 0.1.81 wrap rules still
+govern. Final figures from `scripts/smoke.mjs`, widest trio ("Oct 2026" + "3 on" + "Compact"):
+
+| Viewport | Bar (scroll/client) | When | Filter | View | Bar height |
+|---|---|---|---|---|---|
+| 390px | 390/390 | 95×34px, 1 line | 107×34px, 1 line | 127×34px, 1 line | 50px |
+| 360px | 360/360 | 78×40px, **2 lines** | 107×40px, 1 line | 127×40px, 1 line | 56px |
+
+The smoke test asserts, at both widths, that the bar does not overflow, no value is clipped or
+`nowrap`, the Filter value contains its non-breaking space, and the When value is on two lines at
+360 and one at 390 — a one-line When at 360 could only mean something was shortened. The bar's
+class is `.sortbar-leads-3`, three `auto` tracks on the same grid.
+
+**The year-then-month drill-down moved into the When sheet.** "All shows" leads it as a described
+row ("Every show played, newest first."), then the 0.1.75 year grid, then that year's months — four
+to a row — once a year is pressed. Picking a year keeps the sheet open with the list behind it
+already narrowed; a month or "All shows" closes it. The search box narrows whatever When has picked
+and is **no longer written to by the control**: 0.1.75 routed the chips through the search field so
+there was one implementation of "which shows are in 2019", and the smoke test still holds the sheet
+to that — When 2019 and typing "2019" are compared as row lists, as are Aug 2019 and "August 2019"
+(63 and 7 rows on 2026-10-25) — without the field itself being the mechanism. The back chip
+(`.chip-back`), the month scroller (`.sortbar-scroll`) and the spanning "All shows" chip
+(`.year-all`) are deleted, not left dormant.
+
+**Filter is three groups that AND, with a draft and an apply button.** Sets (Any / 1 / 2 / 3+),
+Encore (Any / With / Without) and State, each with the description locked in `plan.md`. The
+choices are a draft until "Show N shows" applies them, so the count is readable before the list
+moves; "Clear all" resets the groups; the active filters render as removable pills under the bar
+in the group's own words ("2 sets", "without encore", "in MI"), and the count line repeats them in
+group order. A show with no setlist rows fails Sets and Encore — there is nothing to count — and is
+in the list under Any only; State is a venue fact and keeps it. The predicates are proven on a
+fixture (`tests/showfilters.test.mjs`); the smoke test opens the first, middle and last row under
+Sets = 2 and under Encore = Without and reads the set labels on show detail, holds State = MI
+against the venues table (11 rows, 11 derived), and checks two filters together against the
+intersection of the two single-filter lists read from the screen.
+
+**The State wheel is a scroll-snap listbox, not a `<select>`.** A native select is a system
+dropdown on Android, unstylable and not a wheel. The wheel is a focusable `role="listbox"` five
+rows tall — 44px rows, `--tap` — with a band two rows down marking the choice, two rows of padding
+at each end so the first and last option can reach it, and `aria-activedescendant` naming the
+selection. Selection is read from scroll position, so a flick, a tap on a row and the arrow keys
+all end in the same place; the group title echoes it ("State · MI") so the chosen value is readable
+without scrolling. The options are the venues table's distinct non-blank states, A–Z, compared
+against the raw table by the smoke test: 50 today, with "DC" and "D.C." kept apart because The
+Carton keeps them apart. **The first smoke run found the snap points in the wrong place**: with
+`scroll-snap-align: start` and no `scroll-padding`, the browser aligned option 0 to the wheel's top
+edge, scrollTop 88, and the listbox, reading its own position, selected option 2 — "Any" applied
+as "in AR", which took thirteen checks red at once. `scroll-padding-top` equal to the padding rows
+puts the snap points at exactly `i × 44`. A proxy failure of the house kind: the position was real;
+it was the position of the wrong edge. The second run found the keyboard path reading option 0
+after ArrowDown: the wheel moved itself with a *smooth* programmatic scroll, which never advanced
+in headless Chrome. Its own scrolls are instant now — the snap lands them exactly, and a hop of one
+or two rows needs no animation to be followed.
+
+**View is two described rows and a footer** ("The view sticks until changed. Either view respects
+When and Filter."). Re-entry from another tab resets When and Filter and keeps the view; stepping
+back from a show keeps all three — both halves asserted, as in 0.1.75.
+
+**What a festival filter would need, and why it is parked.** The mockup had Festival / Regular.
+Measured against the live tables: `show_tags` is `[]` on all 804 shows, `venues` has no type or
+flag, and the only festival signal anywhere is free text — 47 venue names, 8 show titles and 8
+shows' notes contain "fest". Matching on that would be the app inferring a category Carton never
+states. Parked in `plan.md` (f), not ruled out.
 
 ## Attribution
 

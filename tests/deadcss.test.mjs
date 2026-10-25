@@ -56,10 +56,14 @@ test('class combinations are readable from the source', () => {
   // The Songs lead chips (0.1.81: sort and filter, two on one bar) and the
   // sheet option rows are the doubled chains that must be readable -- each is
   // a modifier on a base class that declares the same properties later.
-  assert.ok(joined.includes('chip.chip-lead'), 'the Songs lead chips should be readable');
-  assert.ok(joined.includes('sortbar.sortbar-lead'), 'the lead bar should be readable');
+  assert.ok(joined.includes('chip.chip-lead'), 'the lead chips should be readable');
   assert.ok(joined.includes('sortbar.sortbar-lead.sortbar-leads'), 'the Songs two-lead grid bar should be readable');
+  // Shows' three-lead bar (0.1.82) is the same chain plus one, and the only
+  // element that carries .sortbar-leads-3; its grid-template-columns beats the
+  // two-lead rule's by specificity, which is the thing this audit judges.
+  assert.ok(joined.includes('sortbar.sortbar-lead.sortbar-leads.sortbar-leads-3'), 'the Shows three-lead grid bar should be readable');
   assert.ok(joined.includes('sheet-item.sheet-option'), 'the sheet option rows should be readable');
+  assert.ok(joined.includes('chip.filter-pill'), 'the Shows filter pills should be readable');
 });
 
 test('NO DECLARATION IN app.css IS DEAD', () => {
