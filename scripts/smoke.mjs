@@ -223,7 +223,7 @@ server.listen(PORT, async () => {
       w.scrollTop = i * 44; w.dispatchEvent(new Event('scroll')); return true; })()`);
     await sleep(400);
     const applied = await evaluate(`(() => {
-      const b = [...document.querySelectorAll('.sheet .sheet-actions .btn')].find((x) => /^Show \\d+ shows$/.test(x.textContent.trim()));
+      const b = [...document.querySelectorAll('.sheet .sheet-actions .btn')].find((x) => /^Show \\d+ shows?$/.test(x.textContent.trim()));
       if (!b) return null; const t = b.textContent.trim(); b.click(); return t; })()`);
     await sleep(1200);
     if (!okSets || !okEnc || !okState || !applied) {
@@ -999,6 +999,8 @@ server.listen(PORT, async () => {
     return d;
   };
   const threeOf = (n) => (n <= 3 ? [...Array(n).keys()] : [0, Math.floor(n / 2), n - 1]);
+  // The apply button pluralises and reads "No shows match" at zero (plan.md (d), amended).
+  const applyText = (n) => (n === 0 ? 'No shows match' : `Show ${n} show${n === 1 ? '' : 's'}`);
   const readFiltered = () => evaluate(`(() => {${SHOWS_JS} return { rows: showRows(), count: countLine(), lead: leadVal('filter'), pills: [...document.querySelectorAll('.screen .filter-pill')].map((p) => p.textContent.replace('✕', '').trim()) }; })()`);
   const checkThree = async (name, filters, words, assertOn) => {
     const applied = await setShowsFilter(filters);
@@ -1007,7 +1009,7 @@ server.listen(PORT, async () => {
     const n = shot.rows.length;
     const problems = [];
     if (!n) problems.push('no rows kept');
-    if (applied !== `Show ${n} shows`) problems.push(`the apply button read ${JSON.stringify(applied)}, the list holds ${n}`);
+    if (applied !== applyText(n)) problems.push(`the apply button read ${JSON.stringify(applied)}, the list holds ${n}`);
     if (shot.count !== `${n} shows · ${words} · newest first`) problems.push(`count line ${JSON.stringify(shot.count)}, expected "${n} shows · ${words} · newest first"`);
     if (shot.lead !== '1 on') problems.push(`the Filter lead reads ${JSON.stringify(shot.lead)}, expected "1 on"`);
     if (shot.pills.join('|') !== words) problems.push(`pills ${JSON.stringify(shot.pills)}, expected ["${words}"]`);
@@ -1085,7 +1087,7 @@ server.listen(PORT, async () => {
   // Clear all, through the sheet: the lead reads Off and every row is back.
   const cleared = await evaluate(`(() => {${SHOWS_JS} const lead = leadBy('filter'); if (!lead) return null; lead.click();
     const c = [...document.querySelectorAll('.sheet .sheet-actions .btn')].find((b) => b.textContent.trim() === 'Clear all'); if (!c) { closeSheet(); return 'no Clear all'; } c.click();
-    const a = [...document.querySelectorAll('.sheet .sheet-actions .btn')].find((b) => /^Show \\d+ shows$/.test(b.textContent.trim())); if (!a) { closeSheet(); return 'no apply'; } const t = a.textContent.trim(); a.click(); return t; })()`);
+    const a = [...document.querySelectorAll('.sheet .sheet-actions .btn')].find((b) => /^Show \\d+ shows?$/.test(b.textContent.trim())); if (!a) { closeSheet(); return 'no apply'; } const t = a.textContent.trim(); a.click(); return t; })()`);
   await sleep(1000);
   const afterClear = await readFiltered();
   if (afterClear.lead !== 'Off' || afterClear.rows.length !== compact.rows.length || afterClear.pills.length) {
@@ -1292,10 +1294,19 @@ server.listen(PORT, async () => {
   // one -- a one-line When at 360 could only mean something was shortened. The
   // Filter value is one token: it contains the non-breaking space.
   console.log('\nShows: the chip bar fits its widest trio at 390px and 360px:');
-  const newest = compact.rows[0].title.match(/([A-Z][a-z]{2}) \d{1,2}, (\d{4})$/);
+  // When and all three filters are taken from the NEWEST ROW THAT HAS A BADGE,
+  // so that row itself survives the trio and the apply button is never the
+  // disabled "No shows match" (the first version typed CT / 2 sets / with,
+  // which happened to keep a show that month and would not always).
+  const widestRow = compact.rows.find((r) => r.badge !== 'No setlist') || null;
+  const newest = widestRow ? widestRow.title.match(/([A-Z][a-z]{2}) \d{1,2}, (\d{4})$/) : null;
   const widestWhen = newest ? `${newest[1]} ${newest[2]}` : null;
-  const whenOk = newest ? await setShowsWhen(Number(newest[2]), newest[1]) : 'no newest row';
-  const threeOn = await setShowsFilter({ sets: '2', encore: 'with', state: 'CT' });
+  const rowSets = widestRow ? Number((widestRow.badge.match(/^(\d+) set/) || [])[1]) : null;
+  const rowFilters = widestRow
+    ? { sets: rowSets >= 3 ? '3+' : String(rowSets), encore: /\+ E$/.test(widestRow.badge) ? 'with' : 'without', state: (widestRow.venue.match(/, ([A-Z.]{2,4})$/) || [])[1] || null }
+    : null;
+  const whenOk = newest ? await setShowsWhen(Number(newest[2]), newest[1]) : 'no badged row';
+  const threeOn = rowFilters && rowFilters.state ? await setShowsFilter(rowFilters) : false;
   const MEASURE_TRIO = `(() => {
     const t = (n) => ((n || {}).textContent || '').trim();
     const lines = (n) => n ? Math.max(1, Math.round(n.getBoundingClientRect().height / parseFloat(getComputedStyle(n).lineHeight))) : null;
@@ -1340,7 +1351,7 @@ server.listen(PORT, async () => {
   await setShowsWhen(null);
   await evaluate(`(() => {${SHOWS_JS} const lead = leadBy('filter'); if (!lead) return; lead.click();
     const c = [...document.querySelectorAll('.sheet .sheet-actions .btn')].find((b) => b.textContent.trim() === 'Clear all'); if (c) c.click();
-    const a = [...document.querySelectorAll('.sheet .sheet-actions .btn')].find((b) => /^Show \\d+ shows$/.test(b.textContent.trim())); if (a) a.click(); else closeSheet(); })()`);
+    const a = [...document.querySelectorAll('.sheet .sheet-actions .btn')].find((b) => /^Show \\d+ shows?$/.test(b.textContent.trim())); if (a) a.click(); else closeSheet(); })()`);
   await sleep(1000);
   await evaluate(`location.hash = '#/home';`);
   await sleep(700);

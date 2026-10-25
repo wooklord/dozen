@@ -111,8 +111,12 @@ export function renderShows(ctx) {
   append(screen, el('h1.screen-title', { text: 'Shows' }));
   append(
     screen,
+    // Played and upcoming, from the live counts, so this line and the count line
+    // under the bar agree (plan.md 0.1.82 (g), amended). The "·" after "played"
+    // is part of the route marker in scripts/routes.mjs: "shows played" alone
+    // also renders on Songs, song detail, Venue and Home.
     el('p.screen-sub', {
-      text: `${index.counts.shows} shows in the archive. Search a venue, city, state or date.`,
+      text: `${index.counts.playedShows} shows played · ${index.futureShows.length} upcoming. Search a venue, city, state or date.`,
     }),
   );
 
@@ -575,7 +579,7 @@ export function renderShows(ctx) {
               // mid-scroll would fight the scroll that just happened. The
               // state group is the third title, by position in this body.
               body.querySelectorAll('.sheet-group-title')[2].textContent = `State · ${draft.state || 'Any'}`;
-              apply.textContent = `Show ${visible(draft).shows.length} shows`;
+              paintApply(visible(draft).shows.length);
             }),
           ),
           el('div.sheet-actions', null, [
@@ -593,7 +597,14 @@ export function renderShows(ctx) {
             ),
           ]),
         );
-        apply.textContent = `Show ${count} shows`;
+        paintApply(count);
+      };
+      // "Show N shows" pluralises, and at zero the button reads "No shows match"
+      // and is disabled: the lock in plan.md (d) was the form, not the grammar
+      // (amended 2026-10-25). Nothing is applied from a button that says no.
+      const paintApply = (n) => {
+        apply.textContent = n === 0 ? 'No shows match' : `Show ${n} show${n === 1 ? '' : 's'}`;
+        apply.disabled = n === 0;
       };
       const apply = el(
         'button.btn.btn-block',

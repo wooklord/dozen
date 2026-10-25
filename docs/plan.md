@@ -601,6 +601,11 @@ An apply button reads "Show N shows" with the live count; "Clear all" resets eve
 filters render as removable pills under the chip bar, and the chip reads "N on". A show with no
 setlist rows has no set count: it is excluded whenever Sets or Encore is set, included under Any.
 
+> **Amended 2026-10-25, third commit under 0.1.82: the apply button pluralises** — "Show 1 show",
+> "Show 17 shows" — **and at zero reads "No shows match" and is disabled.** The lock above was the
+> form of the button, a verb and the live count, not its grammar; "Show 1 shows" and "Show 0 shows"
+> both shipped in the first commit and were raised by the cold review as a wording question.
+
 **(e) View sheet:** Compact ("One row per show: date, venue, and how many sets. Tap a row for the
 setlist.") and Detail ("The full setlist card for every show, with Carton's notation and
 footnotes."). Footer line: "The view sticks until changed. Either view respects When and Filter."
@@ -614,6 +619,14 @@ rather than trusting that line.)
 
 **(g) Count line:** "N shows · newest first". With filters on, each active filter in its own words,
 in group order: "N shows · 2 sets · in MI · newest first".
+
+> **Amended 2026-10-25, third commit under 0.1.82: the sub-line reads "N shows played · M
+> upcoming"** from the live counts (795 · 9 today), replacing "804 shows in the archive", so the
+> sub-line and the count line agree instead of sitting three lines apart with different numbers for
+> what reads as the same thing (the 804 counted upcoming shows). The route marker in
+> `scripts/routes.mjs` moves with it, to `shows played ·` — with the separator, because bare "shows
+> played" also renders on Songs, song detail, Venue and Home — and the smoke test, the deploy check
+> and the layout diff all read the marker from that one file.
 
 ### Gap convention — REVERSED to match The Carton's Show Gap column (2026-10-24)
 

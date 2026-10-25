@@ -34,7 +34,12 @@
 export const ROUTES = [
   { hash: '#/home', expect: 'On this date' },
   { hash: '#/songs', expect: 'songs played live' },
-  { hash: '#/shows', expect: 'Search a venue, city, state or date' },
+  // "shows played ·", WITH the separator (0.1.82, third commit). The sub-line
+  // reads "795 shows played · 9 upcoming", and bare 'shows played' also renders
+  // on Songs ("shows played so far"), song detail, Venue's stat label and
+  // Home's venue card -- the uniqueness check would catch it, so the marker
+  // carries the one character the other four do not.
+  { hash: '#/shows', expect: 'shows played ·' },
   { hash: '#/jams', expect: 'as listed by The Carton' },
   { hash: '#/picks', expect: 'Your picks' },
   { hash: '#/song/49', expect: 'Where it has landed' },

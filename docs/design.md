@@ -1281,8 +1281,9 @@ to that — When 2019 and typing "2019" are compared as row lists, as are Aug 20
 
 **Filter is three groups that AND, with a draft and an apply button.** Sets (Any / 1 / 2 / 3+),
 Encore (Any / With / Without) and State, each with the description locked in `plan.md`. The
-choices are a draft until "Show N shows" applies them, so the count is readable before the list
-moves; "Clear all" resets the groups; the active filters render as removable pills under the bar
+choices are a draft until "Show N shows" applies them — pluralised, and reading "No shows match",
+disabled, when the draft keeps nothing — so the count is readable before the list moves; "Clear all"
+resets the groups; the active filters render as removable pills under the bar
 in the group's own words ("2 sets", "without encore", "in MI"), and the count line repeats them in
 group order. A show with no setlist rows fails Sets and Encore — there is nothing to count — and is
 in the list under Any only; State is a venue fact and keeps it. The predicates are proven on a
