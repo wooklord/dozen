@@ -901,6 +901,44 @@ Running it repeatedly trips The Carton's documented 60/minute limit, which
 surfaces as an error boundary and reads like a harness bug. Wait a minute
 between runs.
 
+### The Bash tool on this machine halves backslashes (found 2026-10-25)
+
+**A heredoc or `sed` pattern written through the Bash tool arrives with every
+`\\` collapsed to `\`.** Same family as the `core.autocrlf` faults above: a
+layer between the text you wrote and the file on disk rewrites bytes, and
+nothing in the tool's output says so.
+
+It cost twice in one session, in opposite directions:
+
+- **It corrupted a regex literal.** A heredoc meant to write `/BUILD = (\d+)/`
+  into a script lost the escape, so the pattern matched a literal `d` and the
+  check it belonged to could never pass. The file looked right in the tool's
+  echo; only reading it back showed the missing backslash.
+- **It silently failed to stage a red-proof fault.** A `sed` substitution whose
+  pattern carried `\(` and `\)` arrived without them, matched nothing, changed
+  nothing, and exited 0. The "fault" was never applied, the suite stayed green,
+  and the green was about to be recorded as proof the check could go red. The
+  sha256 taken afterwards is what showed the file had not moved.
+
+Both are the house failure again: a step that reports success for a reason
+other than the one intended, here "the command ran" standing in for "the bytes
+landed". The second is the worse of the two because it passes.
+
+**The rule.**
+
+- **Any edit that carries a regex, or any backslash at all, goes through the
+  Edit tool**, which writes the string it was given byte for byte. Not a
+  heredoc, not `sed -i`, not `printf` — even when the auto-mode instruction
+  says to prefer Bash; "Bash cannot do the job" includes "Bash will do a
+  different job and say it did this one".
+- **Any heredoc that writes a backslash has its result checked before anything
+  depends on it** — `grep -c` for the exact escaped sequence, or `sha256sum`
+  against the expected bytes. The command's exit status is not that check.
+- **A red-proof is not staged until the staged file is read back and differs
+  from the byte copy.** The hash comparison the proofs above already use is the
+  guard; it was taken after the fact that day and should be taken before the
+  suite runs.
+
 ### The checks, and when to run each
 
 | Command | Speed | Network | Run it |
