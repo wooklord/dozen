@@ -428,9 +428,13 @@ then passes for the wrong reason, and reports health it never established.
 | `layout-diff` reporting "identical" (again) | that **a change moved nothing else** | both builds served from **one origin at the same urls**: the second boot fetched the new CSS and rendered the OLD parsed stylesheet |
 | `fetch` `/song/thorns` and count the rows (2026-10-24) | that **Carton's Thorns page** lists N performances | the **all-songs index**, reached by a 302 — a page with a table and 360 rows that looked like a song page and wasn't. The count was cited as evidence for a ruling before anyone noticed. Caught when `scripts/gap-oracle.mjs` started identifying songs by the page's `data-song-id` instead of the URL it asked for. The struck figure is in `docs/plan.md`, decision 2 under "Decisions settled 2026-10-24"; the slug behaviour is in `docs/carton_schema.md`, "A song's slug is not always its name" |
 | Read `window.innerWidth` after `Emulation.setDeviceMetricsOverride` to 360 (2026-10-24, 0.1.81) | that the **emulated viewport** was 360px before measuring the chip bar | the **page overflowing horizontally**: under mobile emulation an over-wide document widens the layout viewport, so a nowrap fault that pushed the bar to 366px made the check report "the override did not take" and skip the overflow measurement it existed for. A layout fault, reported as a harness fault, by a check that was going red for the wrong reason. It reports the viewport and the bar's figures together now |
+| Poll the live `version.js` for the string `0.1.82` after a push (2026-10-25, 0.1.82) | that **the Pages build had landed** | **nothing** — the inverse case. `src/version.js` stores `BUILD = 82`, a bare integer, and never contains the label, so the loop ran its full four minutes against a host that had already flipped and reported "still not 0.1.82". A check that cannot pass is as useless as one that cannot fail, and it reads the same from outside: a red run, a plausible cause, and a deploy wrongly presumed stalled. It is `scripts/wait-deploy.mjs` now, reading the integer with the same regex `verify-deploy.mjs` uses, proved green against the live host (exit 0 in under a second) and red against a build it does not serve (timeout, exit 1) |
 
 The shape is always a **proxy**: the check tests a side effect rather than the
-thing itself, and the side effect has more than one cause.
+thing itself, and the side effect has more than one cause. The last row is the
+mirror image — a check whose condition has **no** cause — and the rule covers
+it too: ask what could satisfy this, and if the answer is "nothing", the check
+is not a check.
 
 **The rule.** When adding or changing any verification, ask *what else could
 satisfy this?* The answer has to be **nothing**. If something else can, the
@@ -521,6 +525,14 @@ checks were verified this way:
     (`ArrowDown left option 0 selected`). Both are recorded in `docs/design.md`.
   Restored, by hash the same files: 222 passing, smoke 190 ok with 0 skips,
   gap oracle 1119 of 1119, layout-diff `#/shows` changed and 8 routes identical.
+- `scripts/wait-deploy.mjs` and its regex-parity test in `tests/hygiene.test.mjs`
+  (2026-10-25, after 0.1.82). The script itself: green against the live host,
+  exit 0 in under a second; red told to expect build 83 with a 15s timeout,
+  "TIMEOUT after 15s: served BUILD is 82, expected 83", exit 1. The test, two
+  faults staged one at a time and the file restored from a byte copy, sha256
+  confirmed: the comparison rewritten against the `0.1.N` label fails "compares
+  the two integers"; the regex loosened to `/BUILD = (\d+)/` fails "must read
+  BUILD with the same regex". Restored: 223 passing.
 
 Do this for every new check. It costs one minute and it is the only thing that
 separates a real check from a comforting one.
@@ -899,6 +911,7 @@ between runs.
 | `node scripts/contrast.mjs` | instant | none | when eyeballing a colour; the assertions already run in `node --test` |
 | `node scripts/deadcss.mjs` | instant | none | when a CSS rule looks inert; lists every declaration the cascade can never let win. The assertions already run in `node --test` (`tests/deadcss.test.mjs`) |
 |  `node scripts/layout-diff.mjs [ref] [width] [theme]` | ~3 min | Carton (two cold boots) | after a deliberate layout change, to see what else moved |
+| `node scripts/wait-deploy.mjs` | until the build lands, ~1–3 min | live host | after every push, before `verify-deploy` — polls the served `version.js` for the BUILD integer so the three-place check is not run against a build still in progress. It proves one file at one edge and nothing more |
 | `node scripts/verify-deploy.mjs` | ~1 min | live host | **after every push** |
 
 `scripts/make-run-overlap-fixture.mjs` is in that directory and is **not** a check — it regenerates
@@ -1061,9 +1074,24 @@ Pages builds **can fail with a perfectly clean local tree** — the first build 
 at both URLs until `.nojekyll` was added. So a clean `git status` proves nothing about the deploy.
 
 If the number does not match after a reasonable wait, or the fetch 404s: **check the Actions run
-and report what it says.** `gh run list` / `gh run view --log-failed`. Do not leave a failed
-deploy unreported — the live BUILD marker is the only deploy signal the user has; they do not
-watch the Actions tab and do not use dev tools.
+and report what it says.** The GitHub CLI is installed on this machine and authenticated:
+
+```sh
+gh run list --limit 3          # the Pages build for the push: status, duration, start time
+gh run view <id> --log-failed  # when the status is not "success"
+```
+
+The run is named `pages build and deployment`. A `completed / success` row whose start time is
+after the push, while the three-place check still disagrees, is CDN skew — wait and re-run. No row
+for the push, or a failed one, is a real deploy failure. Do not leave a failed deploy unreported —
+the live BUILD marker is the only deploy signal the user has; they do not watch the Actions tab
+and do not use dev tools.
+
+> **If `gh` is "not recognized", check the PATH before concluding it is absent.** A shell started
+> before the install does not see it: on 2026-10-25 it was on the machine PATH at
+> `C:\Program Files\GitHub CLI\` and invisible to both shells of the running session. Call it by
+> that full path, or open a new shell. "Not on this shell's PATH" and "not installed" are different
+> claims, and only the second one is a reason to skip the Actions check.
 
 ### What stays the user's
 

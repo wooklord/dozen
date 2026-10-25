@@ -78,6 +78,7 @@ releases in a row. Run it before pushing.
 | `node scripts/smoke.mjs` | ~1 min | Chrome, network | **before every push** |
 | `node scripts/contrast.mjs` | instant | — | eyeballing a colour |
 | `node scripts/layout-diff.mjs` | ~3 min | Chrome, git, network | after a deliberate layout change |
+| `node scripts/wait-deploy.mjs` | until the build lands | live host | after every push, before `verify-deploy` |
 | `node scripts/verify-deploy.mjs` | ~1 min | Chrome, live host | **after every push** |
 
 **`contrast.mjs`** — measures WCAG contrast for every foreground/background
@@ -108,6 +109,12 @@ node scripts/layout-diff.mjs HEAD 1440  # desktop
 
 It is **not** part of the smoke run: it goes red on any intended layout change,
 which is most commits, and as a gate that would train you to ignore it.
+
+**`wait-deploy.mjs`** — polls the live `src/version.js` every ten seconds
+until its `BUILD` integer matches the working tree, then exits 0; exits 1 on
+timeout. It is the wait that goes before the verdict, so the three-place check
+is not run against a Pages build still in progress. It compares the bare
+integer the file actually stores, not the `0.1.N` label it never contains.
 
 **`verify-deploy.mjs`** — reads the BUILD number back off the live host in
 three independent places, then walks every route on the live site and requires

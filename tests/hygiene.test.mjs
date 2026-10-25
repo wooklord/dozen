@@ -206,3 +206,25 @@ test('the row step-down carries the size and the truncation together', () => {
   const rules = css.replace(/\/\*[\s\S]*?\*\//g, '');
   assert.doesNotMatch(rules, /\.venue-line-sm/, '.venue-line-sm is the flag-driven class the DOM now replaces');
 });
+
+// --- deploy wait ---------------------------------------------------------------
+
+test('the deploy wait compares the BUILD integer version.js stores, never the label', () => {
+  // src/version.js holds `BUILD = 82`; "0.1.82" is assembled from it and never
+  // appears in the file. The first post-push poll grepped the served file for
+  // the label, could not match, and ran out its timeout against a host that had
+  // already flipped. A check that cannot pass is as useless as one that cannot
+  // fail, so the wait reads the integer with the regex verify-deploy.mjs uses.
+  const wait = read('scripts/wait-deploy.mjs');
+  const verify = read('scripts/verify-deploy.mjs');
+  // Matches the regex LITERAL as it appears in the source, i.e. the text
+  // /BUILD\s*=\s*(\d+)/ with its backslashes, so a drift in either file fails.
+  const re = (src) => src.match(/\/BUILD\\s\*=\\s\*\(\\d\+\)\//g) || [];
+  assert.ok(re(verify).length >= 1, 'verify-deploy.mjs reads BUILD with /BUILD\\s*=\\s*(\\d+)/');
+  assert.ok(re(wait).length >= 1, 'wait-deploy.mjs must read BUILD with the same regex');
+  assert.doesNotMatch(wait, /got\s*===?\s*['"`]0\.1\./, 'wait-deploy.mjs compares against a "0.1.N" string, which version.js never contains');
+  assert.match(wait, /got === expected/, 'wait-deploy.mjs compares the two integers');
+  const local = read('src/version.js');
+  assert.match(local, /BUILD\s*=\s*\d+;/, 'version.js stores a bare integer');
+  assert.doesNotMatch(local, /BUILD\s*=\s*['"`]/, 'version.js stores the integer, not the label');
+});
