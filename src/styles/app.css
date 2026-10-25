@@ -662,47 +662,6 @@ button.gap-figure:active {
   color: var(--yolk);
 }
 
-/* Filter row sits under the sort row and reads quieter -- sort is the
-   primary control on the Songs screen.
- *
- * SELECTOR IS `.sortbar.sortbar-secondary`, AND THE DOUBLED CLASS IS THE
- * WHOLE POINT. As plain `.sortbar-secondary` this rule was inert for its
- * entire life: `.sortbar` below declares all four of these properties at
- * EQUAL specificity and later in the file, and its `padding` and `margin`
- * shorthands reset the longhands here too. Every secondary bar computed
- * position:sticky, top:52px, padding-top:8px, margin-bottom:12px -- the
- * defaults this rule exists to override.
- *
- * What that cost: on Songs the sort row and the filter row BOTH pinned to
- * top:52px and overlapped on scroll, and on Shows the year and month bars did
- * the same. "They do not compete as sticky headers because of
- * .sortbar-secondary" was an argument about a rule that never applied.
- *
- * Order would fix it too and would be the fragile fix -- someone moves a block
- * and it silently dies again. Specificity survives reordering.
- *
- * SHOWS NO LONGER USES THIS CLASS AT ALL, AS OF 0.1.75, and the four
- * arrangements it went through are why. Before 0.1.62 both its bars were
- * sticky at the same 52px offset and overlapped on scroll, because this rule
- * was dead. Making the rule apply left both of them secondary, so NEITHER
- * pinned and the year switcher scrolled away inside a long year. 0.1.64 pinned
- * the year bar and left the month bar secondary -- one pinned control, and
- * still two identical horizontal scrollers under a sticky header with a single
- * label between them. Shows drills down by REPLACING its bar now, so it has
- * exactly one in every state and nothing to mark as secondary.
- *
- * SONGS IS THE ONLY CALLER LEFT, which is what this rule was written for: a
- * filter row under a sort row, on a screen where sort is the primary control.
- * The class still means "a bar that is NOT the pinned control", and a screen
- * with two bars should carry it on exactly one of them -- but note what Shows
- * concluded, which is that a screen is usually better off not having two. */
-.sortbar.sortbar-secondary {
-  top: auto;
-  position: static;
-  padding-top: 0;
-  margin-bottom: var(--s-2);
-}
-
 /* A BAR WITH A FIXED LEAD CHIP AND A SCROLLING REMAINDER (0.1.75).
  *
  * Shows drills down by REPLACING its one chip bar rather than stacking a second
@@ -765,9 +724,9 @@ button.gap-figure:active {
  * tokens as .chip[aria-pressed="true"], so the two cannot drift apart.
  *
  * Two classes, one rule. .chip-back is Shows' way out of a year and carries a
- * chevron; .chip-lead (0.1.76) is Songs' sort selector and carries a caret.
- * They are named for what they do, not for how they paint, so a check reading
- * one is not satisfied by the other.
+ * chevron; .chip-lead (0.1.76) is a Songs selector -- the sort, and since
+ * 0.1.79 the filter -- and carries a caret. They are named for what they do,
+ * not for how they paint, so a check reading one is not satisfied by the other.
  *
  * SELECTOR IS `.chip.chip-back` for the reason above, and tests/deadcss.test.mjs
  * caught it when it was not -- four declarations "beaten by .chip". Third time
@@ -781,8 +740,70 @@ button.gap-figure:active {
   border-color: var(--chip-sel-line);
 }
 
-/* Every option at once, in a sheet: the years on Shows, the five sorts on
- * Songs (0.1.76). The year bar it first replaced showed 5 of 15.
+/* THE TWO SONGS LEADS SHARE ONE ROW (0.1.81), AND EACH NAMES ITS CONTROL.
+ *
+ * Until 0.1.80 the sort lead and the filter lead stacked as two bars, the
+ * second marked .sortbar-secondary and weighted down with .chip-quiet so it
+ * read a step below. Side by side, "All ▾" next to "A–Z ▾" says nothing about
+ * which is which, so each chip carries a small uppercase label -- SORT, FILTER
+ * -- in --ink-label, the dedicated label token, measured 4.88:1 dark and
+ * 5.09:1 light against --chip-sel-fill (scripts/contrast.mjs, PAIRS). The
+ * value keeps the lead ink from the rule above.
+ *
+ * NO ELLIPSIS. A chip that fits by truncating its own value is the
+ * off-screen-option defect wearing a different hat. When the pair does not
+ * fit, the VALUE WRAPS to a second line inside a taller chip -- never a
+ * shorter label, never an ellipsis (docs/plan.md, 0.1.81 design, (e)). The
+ * widest pair, "Longest gap" + "Passed longest gap", is 350px of content at
+ * 390px (358px between the bar's paddings) and fits; at 360px, the width of
+ * many Android phones, it is 22px over and the filter value wraps.
+ *
+ * THE BAR IS A GRID, NOT A FLEX ROW, FOR WHICH CHIP WRAPS. Flex shrink is
+ * proportional to size, so both chips would lose width and "Longest gap"
+ * would wrap too, at 139px, to make room it did not need to make. Two auto
+ * grid tracks start at min-content and grow EQUALLY toward max-content, so
+ * the narrower chip reaches its full width first and only the wider one is
+ * left short: at 360px the sort chip stays one line and the filter chip
+ * wraps. The grid items stretch, so the two pills stay the same height. The
+ * class is its own (.sortbar-leads), because .sortbar-lead is also Shows'
+ * bar, whose scroller depends on flex.
+ *
+ * scripts/smoke.mjs measures the widest pair at BOTH 390px and 360px: the bar
+ * never overflows, and no .chip-value is wider than its box, at either width.
+ * Red proofs: white-space: nowrap on the value -- at 360px the bar reads
+ * "366px of content in 360px" and the filter value sits on one line where
+ * two are required; a 60px max-width with overflow hidden -- "73px in 60px,
+ * 113px in 60px".
+ *
+ * The uppercase is CSS, so the source and textContent read "Sort" -- a check
+ * that compares text compares what was written, not what was rendered. */
+.sortbar.sortbar-leads {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: start;
+}
+.chip.chip-lead .chip-label {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-label);
+}
+.chip.chip-lead .chip-value {
+  color: var(--chip-sel-ink);
+  /* A flex item's floor is its longest word, so the value can wrap between
+     words and never breaks inside one. */
+  min-width: 0;
+  text-align: left;
+}
+.chip.chip-lead .chip-caret {
+  flex: none;
+}
+
+/* Every option at once, in a sheet: the years on Shows. The year bar it first
+ * replaced showed 5 of 15. Songs' sort and filter sheets used this grid from
+ * 0.1.76 to 0.1.80 and are .sheet-option rows now, because each option
+ * carries a description a 34px chip has no room for.
  *
  * ROW GAP IS --s-3, NOT --s-2, AND THAT IS NOT A TASTE DECISION. .chip's hit
  * region is a 44px ::after centred on a 34px box, so it overhangs 5px above and
@@ -806,18 +827,6 @@ button.gap-figure:active {
   grid-column: 1 / -1;
 }
 
-/* Same trap, same fix: `.chip` sets font-weight 600 later at equal
- * specificity, so plain `.chip-quiet` never applied a single declaration. The
- * call site (songs.js, the filter row) always carried both classes, so the
- * filter chips rendered at 600 alongside the sort chips for as long as the
- * rule was dead. See the note above .chip[aria-pressed="true"] for the design
- * decision this silently invalidated. Since 0.1.79 the only call site is the
- * filter row's single LEAD chip, `chip.chip-lead.chip-quiet`: the lead paint
- * from .chip.chip-lead, the 500 weight from here, so the filter row still
- * reads a step below the sort row. */
-.chip.chip-quiet {
-  font-weight: 500;
-}
 .stat-tappable:active {
   background: var(--surface-up);
 }
@@ -1021,9 +1030,8 @@ button.gap-figure:active {
  *
  * BORDER ONLY. The 34px box, the --s-3 padding, the --t-sm/600 type and the
  * pill radius are all untouched -- a chip is a different size from a button
- * and that is established, not something to normalise here. Note the tap
- * target is therefore still 34px, unlike .btn.btn-small's 44px: a real gap,
- * deliberately left alone in this change.
+ * and that is established, not something to normalise here. The VISUAL box
+ * is 34px; the hit region is the 44px ::after below, same as .btn.btn-small.
  *
  * This rule is shared by the Home "Change" button, the "Back" chip and the
  * sort/filter chips, so all of them gain the stronger edge together.
@@ -1058,9 +1066,10 @@ button.gap-figure:active {
  * 44px is the floor for one-handed use in a dark venue and it applies to the
  * Change button and the sort/filter chips just as much as to a full button.
  * The chips sit in horizontal rows with an 8px gap, so a VERTICAL-only
- * expansion cannot collide with a neighbour; the vertical gap between the two
- * stacked chip rows on Songs is measured in the smoke test rather than assumed,
- * because overlapping hit regions would be worse than a small target.
+ * expansion cannot collide with a neighbour in the same row. Stacked rows of
+ * chips exist only in the Shows year sheet, whose grid row gap is measured in
+ * the smoke test rather than assumed (see .chip-grid), because overlapping hit
+ * regions would be worse than a small target.
  */
 .chip::after {
   content: "";
@@ -1090,7 +1099,8 @@ button.gap-figure:active {
  *
  * THE SECOND HALF OF THAT REASON WAS NEVER REAL, and the decision now stands
  * on the first half alone. It used to continue "and .chip-quiet's 500 made the
- * jump bigger on the filter row than the sort row." `.chip-quiet` was dead at
+ * jump bigger on the filter row than the sort row." `.chip-quiet` (deleted in
+ * 0.1.81 with the second bar it weighted) was dead at
  * the time (see its rule above), so both rows were rendering at 600 and that
  * observation compared two identical weights. It is recorded as withdrawn
  * rather than quietly reworded: it was cited as measurement, it was wrong, and
@@ -1200,6 +1210,51 @@ button.gap-figure:active {
 }
 .sheet-item:last-child {
   border-bottom: none;
+}
+
+/* ONE ROW PER OPTION, WITH ITS DESCRIPTION (0.1.81): the Songs sort and filter
+ * sheets. The name is the chip's old label; the second line says what the
+ * order or the subset IS, in words locked in docs/plan.md, so "Passed longest
+ * gap" no longer needs a note under a grid of bare names. The description is
+ * one sentence or two and WRAPS -- it is never clipped, for the same reason
+ * the lead chips never ellipsize.
+ *
+ * aria-pressed is honest here: each row is one of a set of toggles and
+ * exactly one is on. The selected row wears the same three chip-sel tokens as
+ * a selected chip so the two states cannot drift; the description sits in
+ * --ink-label on both grounds, measured against each in scripts/contrast.mjs.
+ *
+ * Doubled selector as reorder insurance: .sheet-item declares padding and
+ * font-size, and these rules happen to sit after it today, so a single-class
+ * .sheet-option would currently win -- until someone moves a block. The
+ * doubled class makes the order irrelevant, which is the lesson .chip-quiet
+ * and .sortbar-secondary taught (see tests/deadcss.test.mjs). */
+.sheet-options {
+  display: grid;
+}
+.sheet-item.sheet-option {
+  padding: var(--s-2) var(--s-2);
+  border-radius: var(--r-cell);
+  color: var(--ink);
+}
+.sheet-item.sheet-option[aria-pressed="true"] {
+  background: var(--chip-sel-fill);
+  color: var(--chip-sel-ink);
+}
+/* After the pressed rule at equal specificity, so tapping the row that is
+   already selected still shows a press. */
+.sheet-item.sheet-option:active {
+  background: var(--surface-up);
+}
+.sheet-option-name {
+  font-size: var(--t-md);
+  font-weight: 600;
+}
+.sheet-option-desc {
+  margin-top: 2px;
+  font-size: var(--t-sm);
+  line-height: 1.4;
+  color: var(--ink-label);
 }
 
 /* --------------------------------------------------------------- setlist --- */

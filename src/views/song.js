@@ -20,7 +20,7 @@ import {
   venueLine,
   heatFor,
 } from '../ui/components.js';
-import { SLOT_LABELS, SLOTS, setLabel } from '../data/index.js';
+import { SLOT_LABELS, SLOTS, setLabel, longestGap } from '../data/index.js';
 import { formatShowDate, formatShowDateShort } from '../util/dates.js';
 import { isPicked, togglePick } from '../scratchpad.js';
 
@@ -75,9 +75,10 @@ export function renderSong(ctx, songId) {
 
   append(screen, el('div', { style: { marginTop: '4px' } }, cartonLink(songPermalink(song))));
 
-  // Precomputed in buildIndex; the same value the Songs list ranks by under
-  // "Longest gap", so a figure seen there never changes on tap.
-  const longest = song.longestObservedGap;
+  // The same figure the Songs list ranks by under "Longest gap" -- the larger
+  // of the longest closed gap and the current one -- so a figure seen there
+  // never changes on tap (docs/plan.md, decision 3).
+  const longest = longestGap(song);
 
   // --- Headline stats -------------------------------------------------------
   append(
@@ -106,17 +107,16 @@ export function renderSong(ctx, songId) {
         gapExplainerLink(index),
       ]),
 
-      // Longest OBSERVED gap: the longest span between two performances, a max
+      // Longest OBSERVED gap: the longest gap the song has been through, a max
       // over per-performance gaps each of which Carton renders on its own gap
-      // charts. Closed gaps only; the current gap is the figure above it. It
-      // describes something that happened -- never a "record", never a
-      // due-status. Rendered for every song this screen can show, listed or
-      // reached by deep link, labelled with the two dates that bound it. A
-      // song played at only one show has no gap between two performances and
-      // reads a dash, so a dash seen on the Songs list under "Longest gap"
-      // reads the same here; a song with no Eggy performance at all (hidden
-      // from the list, still reachable by id) reads a dash with its own
-      // reason, not the one-show one.
+      // charts, and the current gap when that is the longest. It describes
+      // something that happened -- never a "record", never a due-status.
+      // Rendered for every song this screen can show, listed or reached by
+      // deep link, labelled with the two dates that bound it, or with "still
+      // open" when the gap running now is the longest -- the same words the
+      // Songs list uses, so what was tapped is what is read. A song with no
+      // Eggy performance at all (hidden from the list, still reachable by id)
+      // has neither figure and reads a dash with its reason.
       el('div', { style: { marginTop: '12px' } }, [
         el(
           'button.stat.stat-tappable.stat-wide',
@@ -128,11 +128,16 @@ export function renderSong(ctx, songId) {
           [
             statValue(longest ? longest.gap : '—'),
             el('div.stat-label', {
+              // Two "none" cases, kept apart: no Eggy performance at all, or
+              // performances none of which is in the counted universe (a
+              // setlist dated after today, or a show missing from the count)
+              // -- the second is listed with its plays and must not read
+              // "never played" beside "1 time played".
               text: longest
-                ? `longest observed gap — ${formatShowDateShort(longest.fromDate)} → ${formatShowDateShort(longest.toDate)}`
+                ? `longest observed gap — ${formatShowDateShort(longest.fromDate)} → ${longest.open ? 'still open' : formatShowDateShort(longest.toDate)}`
                 : song.timesPlayed === 0
                   ? 'longest observed gap — none, never played'
-                  : 'longest observed gap — none, played at one show only',
+                  : 'longest observed gap — none, no performance in the counted shows',
             }),
           ],
         ),

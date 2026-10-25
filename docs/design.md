@@ -961,12 +961,13 @@ rendering that as **0 SHOWS** — which reads as *never played*, the exact oppos
 because a check that only confirmed a number was present would have been green through the whole
 life of the bug.
 
-**A–Z shows times played, and renders identically to "Most played".** A–Z orders by name, so
+**A–Z shows times played, and renders identically to "Most played"** — and to "Least played",
+since 0.1.81. A–Z orders by name, so
 neither number ranks the list; it shows plays because that is the one fact about a song that does
 not move when the archive gains a show — what you want when you have *looked a song up* rather than
-scanned a ranking. The two sorts therefore differ in row order and in nothing else, which is
-exactly what the chips claim. The smoke test isolates one song with the search box and compares the
-two figure columns' markup, paint and width, rather than comparing first rows — the two sorts put
+scanned a ranking. The three sorts therefore differ in row order and in nothing else, which is
+exactly what the sheet says they do. The smoke test isolates one song with the search box and compares the
+three figure columns' markup, paint and width, rather than comparing first rows — the sorts put
 different songs first, so a first-row comparison would pass or fail for reasons unrelated to the
 treatment.
 
@@ -980,12 +981,18 @@ boolean with one reachable value is the shape this repo has been bitten by often
 
 ### "Longest gap" is a fifth sort, and the sort moved into a sheet (0.1.76)
 
-> **Withdrawn in part, 0.1.79.** The rule that the figure is the larger of the closed gaps and the
-> current gap, the tie rule, the "still open" span and the open-case marker were withdrawn on
-> 2026-10-24 (`plan.md`, withdrawal of decisions 2 and 6). The figure is the longest **closed** gap
-> now. The sort itself, the span-as-date-line rule, and the lead-chip-and-sheet selector all
-> stand, and the filter bar this entry calls "unchanged" became a lead chip and sheet of its own
-> in 0.1.79. See the 0.1.79 entry below; this entry is left as decided.
+> **Withdrawn in part, 0.1.79 — and that withdrawal reversed in part, 0.1.81.** The rule that
+> the figure is the larger of the closed gaps and the current gap, the tie rule, the "still open"
+> span and the open-case marker were withdrawn on 2026-10-24 (`plan.md`, withdrawal of decisions
+> 2 and 6) and the figure became the longest **closed** gap for 0.1.79 and 0.1.80. Later the same
+> day, after a day on 0.1.80, the figure rule, the tie rule and the "still open" line were
+> **reinstated** (`plan.md`, "0.1.81 design"); the sections (0.1.77) stay withdrawn. So the
+> paragraphs below describing the figure and the span are current again, with two exceptions: the
+> sheet no longer lists the sorts in the three-column chip grid — each option is a full-width row
+> with a description (0.1.81) — and the tie paragraph's "0 equal" was that day's count; two songs
+> tie today (Sussudio and Silver Steed (My Blue), both at their current gap), so the rule is
+> exercised live as well as in the test. The filter bar this entry calls "unchanged" became a lead chip and
+> sheet of its own in 0.1.79, and shares the sort's row since 0.1.81. See both entries below.
 
 The longest gap a song has been through — the maximum of the per-show gaps the gap charts already
 render, compared against the current gap, which is the same computation at the newest show
@@ -1065,6 +1072,15 @@ Songs on the A–Z default and never sees these headers, so their not echoing th
 
 ### Longest gap is the closed gap, the list is what Carton lists, and a fifth filter (0.1.79)
 
+> **Withdrawn in part, 0.1.81.** The first paragraph — the closed-only figure, the dash tail, and
+> "nothing on screen says open any more" — described 0.1.79 and 0.1.80 only. After a day on
+> 0.1.80 the closed-only figure was withdrawn in turn: it dropped 103 songs to a dash and hid every
+> gap still running, when the thing the morning withdrawal had actually found redundant was the
+> **section**, not the figure (`plan.md`, "0.1.81 design", (a)). The second and third paragraphs
+> stand. In the fourth, the filter row no longer "reads a step below the sort row": the two leads
+> share one row as equals, `.chip-quiet` is gone with the second bar, there are no longer "both
+> bars" to fit, and the sheet is option rows rather than the `.chip-grid`. See the 0.1.81 entry.
+
 Three changes from one phone session on 0.1.78, each ruled in `plan.md` on 2026-10-24.
 
 **The 0.1.76 larger-of-both rule and the 0.1.77 sections are withdrawn.** The "Still open" section
@@ -1109,6 +1125,99 @@ both lists by name, asserts the name sets are identical and current > longest fo
 opens three rows and asserts the detail's two stats match what the lists showed. Proved red by
 flipping the predicate's comparison to greater-or-equal: the tied songs appear, and the check names
 them.
+
+### The longest gap is the longest gap again, two leads on one row, and sheets that explain themselves (0.1.81)
+
+Five decisions from a day on 0.1.80, locked in chat and recorded in `plan.md` ("0.1.81 design")
+before any code.
+
+**The "Longest gap" figure is the larger of the closed gap and the current one again.** With closed
+gaps only, 103 songs read a dash and every gap still running was invisible under the one sort named
+for it. The redundancy the morning withdrawal found was real, but it was the *section* — a "Still
+open" group in current-gap order *is* "Coldest first" under a header — not the figure. So the
+figure comes back (`longestGap()` in `data/index.js`, the max with a tie reading open), the date
+line reads `Feb 7, 2025 → still open` when the open gap is the longest, and the sections do not
+come back: one flat list, and **separating open from closed is the filter's job**. Song detail
+shows the same figure with the same words, because a number seen in the list must not change on tap
+(decision 3). The stored closed field is untouched — both gap filters are strict comparisons of it
+against the current gap, so folding the max into it would have broken the thing it feeds.
+
+**"Closed gaps only" is a sixth filter, the mirror of "Passed longest gap".** It keeps the songs
+whose longest gap has ended: a closed gap exists and is strictly longer than the one running now.
+The two filters partition the songs that have both a closed gap and a current gap; a song whose two
+figures tie is in neither, because a tie reads open and open is not closed; a one-play song is in
+neither, because it has nothing that has ended. Under the "Longest gap" sort each filter has a signature the screen can
+show without a derived number: every Passed row's figure **equals** its Coldest-first figure and
+reads "still open"; every Closed row's figure is **strictly greater** and carries two dates. That is
+what the smoke test reads, by song name across the two sorts, and it is why the filters needed no
+note under a grid any more. The other reading offered — a *figure mode* showing the closed gap for
+every song — was rejected: it changes the number rather than the rows, does nothing under the other
+sorts, and so is not a filter.
+
+**"Least played" is a sixth sort**, times played ascending then name. Roughly a hundred songs tie at
+one play, so the top of the list is a long A–Z run; that is the order the sheet promises, recorded
+so it is not read as a bug. It renders the times-played figure identically to A–Z and "Most played",
+and the parity check now compares all three.
+
+**The cover credit leaves the date line under "Longest gap" only.** The span truncated it on every
+cover row at 390px — `Feb 7, 2025 → Oct 17, 2026 · Phil Collins cov…` — and a credit that is always
+cut is a credit that reads as a rendering fault. The other sorts keep it exactly as they were. Both
+halves are asserted: no `.cover-note` on any row under the span, and the credit present on a known
+cover under A–Z, because "no credit under Longest gap" alone would pass if the credit had vanished
+everywhere.
+
+**Sort and filter are two lead chips on one row, and each names its control.** Stacked as two bars,
+the filter row was marked secondary and weighted down with `.chip-quiet` to read "a step below";
+side by side, `All ▾` beside `A–Z ▾` says nothing about which chip is which, so each carries a small
+uppercase label — SORT, FILTER — in `--ink-label`, the dedicated label token, measured **4.88:1 dark
+and 5.09:1 light** against the lead fill and added to `PAIRS` by hand, because the coverage check
+only asks whether a token is audited *somewhere* and `--ink-label` already was. The value keeps the
+lead ink. **The chips do not ellipsize, and when the pair does not fit the value wraps.** A chip
+that fits by truncating its own value is the off-screen-option defect wearing a different hat —
+`FILTER Passed longe…` is what it would render. The first cut made the chips nowrap and measured
+only at 390px, where the widest pair fits; the approval added that many Android phones are **360**
+CSS px wide, where it does not, so the wrap is the implementation rather than a note. **Measured
+2026-10-24, headless, widest pair "Longest gap" + "Passed longest gap":**
+
+| Viewport | Bar (scroll/client) | Sort chip | Filter chip | Bar height |
+|---|---|---|---|---|
+| 390px | 390/390 | 148×34px, 1 line | 194×34px, 1 line | 50px |
+| 360px | 360/360 | 148×40px, 1 line | 172×40px, **2 lines** | 56px |
+
+At 390 the two chips are 350px of content in the 358px between the bar's paddings. At 360 they
+would be 22px over, and the filter value wraps — "Passed longest" over "gap" — while the sort chip
+keeps its one line at its full 148px. **That asymmetry is why the bar is a grid, not a flex row.**
+Flex shrink is proportional to size, so both chips would have lost width and "Longest gap" would
+have wrapped at 139px to make room it did not need to make; two `auto` grid tracks start at
+min-content and grow *equally* toward max-content, so the narrower chip reaches its full width first
+and only the wider one is left short. The grid items stretch, so the two pills stay the same height.
+The class is its own, `.sortbar-leads`, because `.sortbar-lead` is also Shows' bar and its month
+scroller depends on flex. The smoke test measures the pair at **both** widths through
+`Emulation.setDeviceMetricsOverride` and asserts, at each, that the bar does not overflow and no
+value span is wider than its box — plus that the filter value *is* on two lines at 360 and on one at
+390, because a pair that "fit" at 360 on one line could only have done so by shrinking something.
+Proved red two ways. `white-space: nowrap` on the value: at 360 the bar reads **366px of content
+in 360px**, the document widens to 366px, and the filter value sits on one line where the check
+requires two. A 60px `max-width` with `overflow: hidden` and nowrap: the values read **73px in 60px**
+and **113px in 60px** at both widths. (The first run of the nowrap proof went red for the wrong
+reason — the widened layout viewport made the check report "the override did not take" and skip
+the overflow measurement, a harness verdict on a layout fault; it now reports the viewport and the
+bar's figures together, and the 372px this paragraph first quoted for the overflow was a prediction,
+not a reading. 366 is the reading.) The second bar, `.sortbar-secondary` and `.chip-quiet` are
+deleted, not left dormant: the dead-CSS test's literal class-chain assertions moved to the chains
+that exist now.
+
+**The sheets list each option as a row with a description.** A chip grid of bare names left
+"Passed longest gap" needing a paragraph under the grid, and a description inside a 34px pill has
+nowhere to go. Each option is now a full-width `.sheet-item.sheet-option` row — name, then one line
+of description in `--ink-label` — with `aria-pressed`, which is honest here (one of a set of toggles,
+exactly one on) in a way it is not on the lead chip. The selected row wears the three chip-sel
+tokens so a selected row and a selected chip cannot drift apart; the derived same-rule pair check
+measures that rule as written. The descriptions are locked verbatim in `plan.md` and wrap rather
+than clip, for the same reason the chips never ellipsize — at 390px the two long ones ("Longest
+gap", "Closed gaps only") run to three lines and four others to two, measured in the same smoke
+check, so "one-line description" names the register, not a height. The Shows year sheet keeps the
+three-column `.chip-grid`; years need no explaining.
 
 ## Attribution
 

@@ -1,7 +1,7 @@
 // Shared UI pieces used across screens.
 
 import { el, icon, ICONS, append, openSheet } from './dom.js';
-import { parseFootnotes, setLabel, isCustomEntry } from '../data/index.js';
+import { parseFootnotes, setLabel, isCustomEntry, longestGap } from '../data/index.js';
 import { formatShowDateShort } from '../util/dates.js';
 import { isPicked, togglePick } from '../scratchpad.js';
 
@@ -289,13 +289,15 @@ export function heatFor(value, max) {
  * sort is about. Nothing is lost: the other number is one tap away on song
  * detail.
  *
- * Under figure 'longest' (0.1.76, narrowed to closed gaps in 0.1.79) the date
- * line is the SPAN the figure bounds -- "Feb 7, 2025 → Oct 17, 2026", the two
- * performances either side of the longest observed gap -- because a longest
- * gap without its dates is a number with no universe. That is still one
- * figure and one date line; the span states the figure's dates and does not
- * repeat its value. A song with no closed gap renders a dash and keeps the
- * ordinary "Last {date}" line.
+ * Under figure 'longest' (0.1.76; closed gaps only in 0.1.79–0.1.80; the
+ * larger of closed and open again from 0.1.81) the date line is the SPAN the
+ * figure bounds -- "Feb 7, 2025 → Oct 17, 2026" for a closed gap, or
+ * "Feb 7, 2025 → still open" when the gap still running is the longest --
+ * because a longest gap without its dates is a number with no universe. That
+ * is still one figure and one date line; the span states the figure's dates
+ * and does not repeat its value. The cover credit is NOT appended under this
+ * figure: the span truncated it on every cover row at 390px (0.1.81, (d)).
+ * Every other figure keeps the credit.
  *
  * @param {object} opts
  * @param {boolean} [opts.jamBadge=false]  Show a "Jam" badge on the meta line.
@@ -322,13 +324,17 @@ export function songRow(
     unit = song.timesPlayed === 1 ? 'time' : 'times';
     spoken = `played ${value} ${unit}`;
   } else if (figure === 'longest') {
-    // The longest observed gap: the longest span between two performances, a
-    // max over the per-show gaps Carton's Show Gap column prints -- see
-    // longestObservedGap() in data/index.js. Null when the song has been
-    // played at only one show.
-    value = song.longestObservedGap ? song.longestObservedGap.gap : null;
+    // The longest gap the song has been through, closed or still open: the
+    // larger of the longest span between two performances and the current
+    // gap -- see longestGap() in data/index.js. Null only for a song with
+    // neither figure, which no listed song is.
+    const lg = longestGap(song);
+    value = lg ? lg.gap : null;
     unit = 'longest gap';
-    spoken = value === null ? 'no observed gap' : `longest observed gap of ${value} shows`;
+    spoken =
+      value === null
+        ? 'no observed gap'
+        : `longest gap of ${value} shows${lg.open ? ', still open' : ''}`;
   } else {
     // "SINCE PLAYED", not "SHOWS". A song played at the most recent show has
     // a gap of 0, and "0 SHOWS" reads as never played -- the opposite
@@ -343,16 +349,17 @@ export function songRow(
   // longest observed gap. Every other case is the last-played date.
   const meta = el('div.row-meta');
   let dateText;
-  if (figure === 'longest' && song.longestObservedGap) {
-    const { fromDate, toDate } = song.longestObservedGap;
-    dateText = `${formatShowDateShort(fromDate)} → ${formatShowDateShort(toDate)}`;
+  const span = figure === 'longest' ? longestGap(song) : null;
+  if (span) {
+    dateText = `${formatShowDateShort(span.fromDate)} → ${span.open ? 'still open' : formatShowDateShort(span.toDate)}`;
   } else {
     dateText = song.lastPlayed ? `Last ${formatShowDateShort(song.lastPlayed)}` : 'Never played';
   }
   append(meta, el('span', { text: dateText }));
   // Cover attribution is plain text, not a bordered badge: a badge wraps onto
-  // its own line and costs a row of density on the app's busiest list.
-  if (!song.isOriginal) {
+  // its own line and costs a row of density on the app's busiest list. Not
+  // under the longest figure, where the span took the whole line (see above).
+  if (!song.isOriginal && figure !== 'longest') {
     append(meta, el('span.sep', { text: '·' }));
     append(
       meta,

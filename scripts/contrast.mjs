@@ -342,6 +342,12 @@ export const PAIRS = [
   // exist on screen; keeping the passing one was recording a pass that means
   // nothing. The measured figures are kept here so they are not re-derived.
   { fg: 'chip-sel-ink', bg: 'chip-sel-fill', min: 4.5, where: 'selected sort/filter chip label' },
+  // The lead chips' SORT / FILTER labels and the selected sheet-option row's
+  // description (0.1.81) are --ink-label on the selected fill. Listed, not
+  // trusted to the coverage check: --ink-label is audited on shell and
+  // surface, so membership alone would pass this pair without measuring it.
+  // Measured 4.88:1 dark, 5.09:1 light.
+  { fg: 'ink-label', bg: 'chip-sel-fill', min: 4.5, where: 'lead-chip SORT/FILTER label and the selected sheet option description' },
   { fg: 'chip-sel-line', bg: 'chip-sel-fill', min: 3, where: 'selected chip border against its own fill' },
   { fg: 'chip-sel-line', bg: 'shell', min: 3, where: 'selected chip border against the sortbar ground' },
 

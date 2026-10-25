@@ -492,12 +492,12 @@ This is a reversal of a reversal, and both are kept with their dates and reasons
 **(b) New filter: "Closed gaps only."** Keeps the songs whose longest gap is a closed one — a
 closed gap exists **and is strictly longer than the current gap**. One-play songs are out (no
 closed gap). A tie is out: it reads open, per (a). With "Passed longest gap" (current gap strictly
-longer than the longest closed gap) the two filters **partition the songs that have a closed
-gap**; the tied songs appear only under All. Measured 2026-10-24: 2 tie.
+longer than the longest closed gap) the two filters **partition the songs that have both a closed
+gap and a current gap**; the tied songs appear only under All. Measured 2026-10-24: 2 tie.
 
 Two readings were offered and this is reading (1). Reading (2), a *figure mode* that would show
 the closed gap for every song, was rejected: it changes the number rather than the rows, and does
-nothing under the other four sorts, so it is not a filter.
+nothing under the other five sorts, so it is not a filter.
 
 **(c) New sort: "Least played."** Times played ascending, then name A–Z. Ties at one play put
 roughly a hundred songs alphabetically at the top of the list. That is correct and is noted here
@@ -509,17 +509,42 @@ as they render it now.
 
 **(e) Controls: sort and filter are two lead chips on one row.** Each chip carries its own
 small uppercase label inside it, muted, with the value in the lead paint: "SORT Longest gap ▾"
-and "FILTER All ▾". Each opens its bottom sheet, which lists every option as a full-width row:
-the name, then a one-line description beneath it. Descriptions locked verbatim in chat:
+and "FILTER All ▾". The chips do **not** ellipsize: a chip that fits by truncating its own value
+is the thing the bar-fit assertion exists to catch. **The widest pair fits at 390px and does not
+fit at 360px**, the width of many Android phones — added at approval, 2026-10-24 — so the fallback
+is implemented, not noted: the value wraps to a second line inside a taller chip, the bar follows,
+never ellipsis, never a shorter label. The smoke test measures the widest pair at both widths; the
+numbers are in `design.md` (0.1.81). Each chip opens its bottom sheet, which lists every option as a full-width row:
+the name, then a one-line description beneath it. Descriptions locked verbatim, filters in this
+order:
 
 | Sheet | Option | Description |
 |---|---|---|
 | Sort | A–Z | Alphabetical. The number is times played. |
 | Sort | Coldest first | Most shows since last played, first. The number is shows since played. |
+| Sort | Hottest first | Fewest shows since last played, first. The number is shows since played. |
+| Sort | Most played | Times played, highest first. |
+| Sort | Least played | Times played, lowest first. |
+| Sort | Longest gap | The longest gap each song has been through, biggest first — closed or still open. The number is that gap; the date line shows the two shows that bound it, or "still open". |
+| Filter | All | Every song played live, as listed by The Carton. |
+| Filter | Originals | Eggy originals only. |
+| Filter | Covers | Covers only. |
+| Filter | Jam charts | Songs with at least one jam chart entry. |
+| Filter | Closed gaps only | Songs whose longest gap has ended — a gap between two performances, longer than the one running now. A song played at only one show is left out. |
+| Filter | Passed longest gap | Songs whose current gap is longer than any gap they have closed before. A song played at only one show is left out. |
 
-The handoff that carried this design into the build session ended after those two rows. The
-remaining descriptions — the other sorts and every filter — are proposed in the 0.1.81 change
-plan and are recorded here, verbatim, in the commit that ships them.
+Count lines, locked with them:
+
+| State | Count line |
+|---|---|
+| Longest gap sort, All | `N songs · the longest gap each song has been through, open or closed` |
+| Closed gaps only, any sort | `N songs whose longest gap has ended` |
+| Passed longest gap, any sort | unchanged from 0.1.79: `N songs whose current gap is longer than their longest observed gap` |
+
+> The handoff that carried this design into the build session was cut off after the first two
+> sort descriptions; the rest arrived with the approval of the change plan, which also ruled
+> that **song detail shows the same max figure as the list, with "still open" when open** —
+> decision 3 requires it, and the handoff had not said so.
 
 ### Gap convention — REVERSED to match The Carton's Show Gap column (2026-10-24)
 

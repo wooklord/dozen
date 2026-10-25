@@ -53,10 +53,13 @@ test('class combinations are readable from the source', () => {
   const sets = readClassSets();
   assert.ok(sets.length > 100, `only ${sets.length} class combinations found in src/`);
   const joined = sets.map((s) => s.classes.join('.'));
-  // The Songs filter lead chip (0.1.79) wears the lead paint AND the quiet
-  // weight, so the three-class chain is the one that must be readable.
-  assert.ok(joined.includes('chip.chip-lead.chip-quiet'), 'the Songs filter lead chip should be readable');
-  assert.ok(joined.includes('sortbar.sortbar-secondary'), 'the secondary bar should be readable');
+  // The Songs lead chips (0.1.81: sort and filter, two on one bar) and the
+  // sheet option rows are the doubled chains that must be readable -- each is
+  // a modifier on a base class that declares the same properties later.
+  assert.ok(joined.includes('chip.chip-lead'), 'the Songs lead chips should be readable');
+  assert.ok(joined.includes('sortbar.sortbar-lead'), 'the lead bar should be readable');
+  assert.ok(joined.includes('sortbar.sortbar-lead.sortbar-leads'), 'the Songs two-lead grid bar should be readable');
+  assert.ok(joined.includes('sheet-item.sheet-option'), 'the sheet option rows should be readable');
 });
 
 test('NO DECLARATION IN app.css IS DEAD', () => {

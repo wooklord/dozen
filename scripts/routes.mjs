@@ -12,7 +12,8 @@
 // "Unique" IS NOW CHECKED, NOT ASSERTED. Two markers in this file were not:
 // 'shows in the archive' also renders on song detail and in the gap explainer
 // sheet, and 'Jam charts' also rendered as a filter chip on Songs (it has been
-// in the Songs filter sheet since 0.1.79, off-screen at rest). Both passed
+// a row in the Songs filter sheet since 0.1.79, and the sheet mounts on
+// document.body only while open, so it is not in #main at rest). Both passed
 // only because of the order of this array -- reorder it and they pass for the
 // wrong reason, in the file whose entire job is to prevent exactly that.
 // smoke.mjs now captures every route's rendered text and cross-checks each

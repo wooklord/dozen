@@ -427,6 +427,7 @@ then passes for the wrong reason, and reports health it never established.
 | Waiting for `!document.querySelector('.loader')` | that **the app had finished booting** | the document **not having parsed yet**. `Page.navigate` resolves early, so the first poll saw no loader and declared success on a blank page |
 | `layout-diff` reporting "identical" (again) | that **a change moved nothing else** | both builds served from **one origin at the same urls**: the second boot fetched the new CSS and rendered the OLD parsed stylesheet |
 | `fetch` `/song/thorns` and count the rows (2026-10-24) | that **Carton's Thorns page** lists N performances | the **all-songs index**, reached by a 302 — a page with a table and 360 rows that looked like a song page and wasn't. The count was cited as evidence for a ruling before anyone noticed. Caught when `scripts/gap-oracle.mjs` started identifying songs by the page's `data-song-id` instead of the URL it asked for. The struck figure is in `docs/plan.md`, decision 2 under "Decisions settled 2026-10-24"; the slug behaviour is in `docs/carton_schema.md`, "A song's slug is not always its name" |
+| Read `window.innerWidth` after `Emulation.setDeviceMetricsOverride` to 360 (2026-10-24, 0.1.81) | that the **emulated viewport** was 360px before measuring the chip bar | the **page overflowing horizontally**: under mobile emulation an over-wide document widens the layout viewport, so a nowrap fault that pushed the bar to 366px made the check report "the override did not take" and skip the overflow measurement it existed for. A layout fault, reported as a harness fault, by a check that was going red for the wrong reason. It reports the viewport and the bar's figures together now |
 
 The shape is always a **proxy**: the check tests a side effect rather than the
 thing itself, and the side effect has more than one cause.
@@ -477,6 +478,28 @@ checks were verified this way:
     failures — unit tests cannot see layout — and the smoke bar check reads
     "609px of content in 390px".
   Restored: 208 passing, smoke green with 0 skips.
+- The 0.1.81 checks, seven faults applied one at a time, each file restored
+  from a byte copy and confirmed by sha256 before the next:
+  - `longestGap` tie reading closed (`>` to `>=`): 1 unit failure, "an exact tie
+    reads OPEN". Smoke cannot see this one -- the two tied songs are in neither
+    filter -- which is why the unit test exists.
+  - `isClosedGapLongest` loosened to `>=`: 2 unit failures; smoke names them,
+    "Sussudio current 51 vs longest 51; Silver Steed (My Blue) current 6 vs
+    longest 6", and their "→ still open" lines under Closed gaps only.
+  - `compareByTimesAsc` with its sign flipped: 1 unit failure; smoke reads
+    `figure column reads "times", expected "time"` on the Least played top row.
+  - the cover credit left on the date line under the longest figure: 0 unit
+    failures -- unit tests cannot see a row -- and smoke reads `row 4 "Feel Like
+    A Stranger" carries a cover credit under the span`.
+  - `.chip-value` renamed: 1 unit failure (an emitted class no rule mentions);
+    13 smoke failures, the lead reading `"SortA–Z▾"` and then `null`.
+  - `white-space: nowrap` on the value: smoke at 360px, "366px of content in
+    360px", the document widened to 366px, the filter value on 1 line where 2
+    are required. The first run of this proof is the table row above.
+  - a 60px `max-width` with `overflow: hidden` and nowrap: "73px in 60px, 113px
+    in 60px" at both widths.
+  Restored, by hash the same files: 214 passing, smoke 195 ok with 0 skips,
+  gap oracle 1119 of 1119.
 
 Do this for every new check. It costs one minute and it is the only thing that
 separates a real check from a comforting one.

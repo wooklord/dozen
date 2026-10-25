@@ -513,13 +513,16 @@ export function buildIndex(raw) {
     });
   }
 
-  // Longest observed gap, once per load. gapAtShow needs only songsById and
-  // showOrdinal, both of which exist now, so this is computed here rather than
-  // in the sort comparator -- the Songs list re-sorts on every debounced
+  // Longest observed CLOSED gap, once per load. gapAtShow needs only songsById
+  // and showOrdinal, both of which exist now, so this is computed here rather
+  // than in the sort comparator -- the Songs list re-sorts on every debounced
   // keystroke and would otherwise walk every performance of every song each
-  // time. CLOSED gaps only: the span between two performances. The current gap
-  // is a different figure (showsSinceLastPlayed) and is not folded in; the
-  // 0.1.76 wrapper that did so was withdrawn (docs/plan.md, 2026-10-24).
+  // time. This field is the closed gap only: the span between two
+  // performances. The current gap (showsSinceLastPlayed) is NOT folded in
+  // here, because both Songs filters compare the two -- "Passed longest gap"
+  // and "Closed gaps only" are each a strict inequality between this field
+  // and the current gap. The figure the "Longest gap" sort shows is the larger
+  // of the two, read through longestGap() below (0.1.81, docs/plan.md).
   // A song played at only one show has no closed gap and stores null.
   const gapView = { songsById: bySong, showOrdinal };
   for (const entry of bySong.values()) {
@@ -800,19 +803,54 @@ export function longestObservedGap(index, songId) {
 }
 
 /**
- * Sort for the Songs "Longest gap" mode: longest observed (closed) gap
- * descending, then the current gap descending, then the shared name order.
- * Songs with no closed gap -- played at only one show -- have nothing to rank
- * on and sort last, as never-played songs do under the other gap sorts.
+ * The longest gap a song has been through, open or closed: the larger of the
+ * stored closed gap and the current gap (showsSinceLastPlayed, still
+ * growing). This is the figure the Songs "Longest gap" sort shows and song
+ * detail repeats, so a figure seen in the list never changes on tap
+ * (docs/plan.md, "Longest observed gap", decisions 2 and 3; reinstated
+ * 2026-10-24 for 0.1.81 after the closed-only 0.1.79 rule dropped 103 songs
+ * to dashes and hid every gap still running).
  *
- * Reads the entry's stored `longestObservedGap`, set once in buildIndex.
+ * Returns `{ gap, fromDate, toDate, open }` or null:
+ *   - closed:  `open` false, the two bounding dates;
+ *   - open:    `open` true, `fromDate` the last performance, `toDate` null --
+ *              the span has no second date yet, and the row says "still open";
+ *   - a one-play song has only its open gap;
+ *   - an EXACT TIE reads open: the open one is the same length and still
+ *     counting (decision 2);
+ *   - a listed song whose current gap is null (its last performance outside
+ *     the counted universe) falls back to its closed gap; null when it has
+ *     neither.
+ *
+ * Both filters stay on the stored closed field, not on this: they are each a
+ * strict comparison OF the closed gap WITH the current one, and this is the
+ * max of the two.
+ */
+export function longestGap(song) {
+  if (!song) return null;
+  const closed = song.longestObservedGap || null;
+  const current = song.showsSinceLastPlayed;
+  const hasCurrent = current !== null && current !== undefined && song.lastPlayed;
+  if (!hasCurrent) return closed ? { ...closed, open: false } : null;
+  if (closed && closed.gap > current) return { ...closed, open: false };
+  return { gap: current, fromDate: song.lastPlayed, toDate: null, open: true };
+}
+
+/**
+ * Sort for the Songs "Longest gap" mode: longestGap() descending -- open or
+ * closed -- then the current gap descending, then the shared name order. A
+ * song with neither figure (no closed gap and no current gap, which no listed
+ * song has) sorts last.
+ *
  * Exported so the tie-break is unit-tested rather than living inline in the
- * view; dozens of adjacent pairs in the live archive tie on the closed gap, so
+ * view; dozens of adjacent pairs in the live archive tie on the figure, so
  * the current-gap and name fallbacks are not theoretical branches.
  */
 export function compareByLongestGap(a, b) {
-  const av = a.longestObservedGap ? a.longestObservedGap.gap : null;
-  const bv = b.longestObservedGap ? b.longestObservedGap.gap : null;
+  const la = longestGap(a);
+  const lb = longestGap(b);
+  const av = la ? la.gap : null;
+  const bv = lb ? lb.gap : null;
   if (av === null && bv === null) return compareSongsByName(a, b);
   if (av === null) return 1;
   if (bv === null) return -1;
@@ -821,6 +859,16 @@ export function compareByLongestGap(a, b) {
     (b.showsSinceLastPlayed ?? -1) - (a.showsSinceLastPlayed ?? -1) ||
     compareSongsByName(a, b)
   );
+}
+
+/**
+ * Sort for the Songs "Least played" mode: times played ascending, then the
+ * shared name order. Roughly a hundred songs in the live archive tie at one
+ * play, so the top of the list is a long A–Z run; that is the order the chip
+ * promises, not a defect (docs/plan.md, 0.1.81 design, (c)).
+ */
+export function compareByTimesAsc(a, b) {
+  return a.timesPlayed - b.timesPlayed || compareSongsByName(a, b);
 }
 
 /**
@@ -839,6 +887,23 @@ export function isPastLongestGap(song) {
   const current = song.showsSinceLastPlayed;
   if (current === null || current === undefined) return false;
   return current > song.longestObservedGap.gap;
+}
+
+/**
+ * The "Closed gaps only" filter (0.1.81): true when the song's longest gap has
+ * ENDED -- a closed gap exists and is STRICTLY longer than the current gap.
+ * The mirror of isPastLongestGap over the same two figures: the two filters
+ * partition the songs that have both a closed gap and a current gap, and a
+ * song whose two figures tie is in neither, because a tie reads open
+ * (longestGap()) and open is not closed. A song played at only one show has no closed gap and is not kept.
+ * A song with no current gap has nothing to compare against and is not kept
+ * either -- it cannot be shown to have ended.
+ */
+export function isClosedGapLongest(song) {
+  if (!song || !song.longestObservedGap) return false;
+  const current = song.showsSinceLastPlayed;
+  if (current === null || current === undefined) return false;
+  return song.longestObservedGap.gap > current;
 }
 
 /**

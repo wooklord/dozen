@@ -12,11 +12,11 @@ back to the corresponding page there.
 | Screen | What it shows |
 |---|---|
 | **Home** | The next show (or any upcoming one), what was played last time at that venue, "On This Date", and the venue's play count |
-| **Songs** | Every song played live, as listed by The Carton, searchable. Each row carries one date line plus one figure — the one the active sort is about: times played under A–Z and "Most played", shows since played under "Coldest"/"Hottest", and under "Longest gap" the longest gap between two of the song's performances, with the two dates that bound it in place of the date. Filter by original/cover/jam chart, or to songs whose current gap is longer than their longest observed gap |
+| **Songs** | Every song played live, as listed by The Carton, searchable. Each row carries one date line plus one figure — the one the active sort is about: times played under A–Z, "Most played" and "Least played", shows since played under "Coldest"/"Hottest", and under "Longest gap" the longest gap the song has been through, closed or still open, with the two dates that bound it in place of the date, or "still open". Filter by original/cover/jam chart, to songs whose longest gap has ended ("Closed gaps only"), or to songs whose current gap is longer than any they have closed ("Passed longest gap") |
 | **Shows** | The recent shows with Carton's setlist notation preserved exactly and footnotes as tappable markers, plus search by venue, city, state or date, and "load older" back through the archive. Browse by year, then by month in the same chip bar |
 | **Jams** | Jam chart membership, A–Z or by entry count |
 | **Picks** | A local shortlist you can reorder and copy as plain text |
-| **Song detail** | Gap, times played, first/last, longest observed gap, where it has landed, album membership, jam entries, and every performance |
+| **Song detail** | Gap, times played, first/last, longest observed gap (the same figure as the list, dated or "still open"), where it has landed, album membership, jam entries, and every performance |
 | **Show detail** | One show's full setlist, show notes, and a link to its gap chart |
 | **Gap chart** | Every song in one night's setlist with its gap *as of that date* |
 | **Venue** | Every show at a venue, newest first, with play count and first/most recent |
