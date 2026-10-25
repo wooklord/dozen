@@ -862,6 +862,33 @@ export function compareByLongestGap(a, b) {
 }
 
 /**
+ * Sort for the Songs "Shortest gap" mode (0.1.82): the SAME longestGap()
+ * figure as "Longest gap", ascending -- then the current gap ascending, then
+ * the shared name order. The two sorts are mirrors, as Coldest/Hottest and
+ * Most/Least played are, and a song with neither figure sorts last under
+ * both: it has nothing to rank by in either direction, so it does not get to
+ * lead the ascending list by default.
+ *
+ * NOT `-compareByLongestGap(a, b)`. Negating that would put the no-figure
+ * songs FIRST and reverse the name tie-break to Z–A; the sheet promises
+ * smallest first and otherwise the order every other sort uses.
+ */
+export function compareByShortestGap(a, b) {
+  const la = longestGap(a);
+  const lb = longestGap(b);
+  const av = la ? la.gap : null;
+  const bv = lb ? lb.gap : null;
+  if (av === null && bv === null) return compareSongsByName(a, b);
+  if (av === null) return 1;
+  if (bv === null) return -1;
+  return (
+    av - bv ||
+    (a.showsSinceLastPlayed ?? Infinity) - (b.showsSinceLastPlayed ?? Infinity) ||
+    compareSongsByName(a, b)
+  );
+}
+
+/**
  * Sort for the Songs "Least played" mode: times played ascending, then the
  * shared name order. Roughly a hundred songs in the live archive tie at one
  * play, so the top of the list is a long A–Z run; that is the order the chip

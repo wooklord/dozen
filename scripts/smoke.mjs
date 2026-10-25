@@ -929,6 +929,7 @@ server.listen(PORT, async () => {
   // the fixture test fails; matchesEncore's branches swapped -- "Encore =
   // Without" opens a row whose detail has an encore; matchesState as a
   // substring -- "State = MI" count disagrees with the venues table;
+  // compareByShortestGap's sign flipped -- the Songs list "drops at row 2";
   // white-space: nowrap on .chip-value -- the bar at 360 reads wider than
   // 360 and the When value sits on one line where two are required.
   console.log('\nShows: compact rows and the No setlist count:');
@@ -1534,6 +1535,7 @@ server.listen(PORT, async () => {
   //   Most played  -> times played        meta: Last {date}
   //   Least played -> times played (top row: 1 time)   meta: Last {date}
   //   Longest gap  -> longest gap         meta: {date} → {date}, or {date} → still open
+  //   Shortest gap -> longest gap         meta: the same span line (0.1.82)
   //
   // The sort is picked through the LEAD CHIP AND THE SHEET (0.1.76), the same
   // two taps a thumb makes. The state is read from the lead chip's .chip-value
@@ -1602,6 +1604,7 @@ server.listen(PORT, async () => {
     // many-play song first would read 'times' and a larger number.
     ['Least played', 'time', '1', META_LAST],
     ['Longest gap', 'longest gap', null, META_SPAN],
+    ['Shortest gap', 'longest gap', null, META_SPAN],
   ]) {
     if (!(await clickSort(label))) { fail(`sort: no "${label}" in the sort sheet`); continue; }
     await sleep(900);
@@ -1713,6 +1716,45 @@ server.listen(PORT, async () => {
     if (!flat.rows.length) fail('longest gap: no rows rendered under the sort');
     else if (problems.length) for (const p of problems) fail(`longest gap: ${p}`);
     else pass(`${flat.rows.length} rows in one list = count line, non-increasing: ${open} still open, ${closed} closed; no dashes, no cover credits`);
+  }
+
+  // --- "Shortest gap" (0.1.82): the same figure, the other direction ----------
+  //
+  // Same figure, same span line, same no-cover-credit rule, so the same
+  // readFlat probe: (b) non-DEcreasing, every figure a number; (c) every row a
+  // span with both ends; (d) no cover credit; (e) the count line equals the
+  // rows and carries the same words as Longest gap, because the figure is the
+  // same figure. Plus the mirror itself: the two sorts hold the same songs,
+  // and the first figure of one is the last of the other. The top three rows
+  // are printed for the eye. Red proof: the comparator's sign flipped --
+  // "(b) drops at row 2".
+  console.log('\n"Shortest gap" is the same list in the other direction:');
+  if (!(await clickSort('Shortest gap'))) fail('shortest gap: no "Shortest gap" in the sort sheet');
+  else {
+    await sleep(900);
+    const asc = await readFlat();
+    if (!(await clickSort('Longest gap'))) fail('shortest gap: could not re-read Longest gap for the mirror check');
+    await sleep(900);
+    const desc = await readFlat();
+    const problems = [];
+    const OPEN_SPAN = new RegExp(`^${DATE} → still open`);
+    const CLOSED_SPAN = new RegExp(`^${DATE} → ${DATE}`);
+    const values = asc.rows.map((r) => Number(r.num));
+    if (!values.length) problems.push('(b) no rows at all -- nothing was ordered');
+    if (values.some((n) => !Number.isFinite(n))) problems.push('(b) a non-numeric figure');
+    for (let i = 1; i < values.length; i++) if (values[i] < values[i - 1]) { problems.push(`(b) drops at row ${i + 1}: ${values[i]} after ${values[i - 1]}`); break; }
+    const badMeta = asc.rows.findIndex((r) => !OPEN_SPAN.test(r.meta) && !CLOSED_SPAN.test(r.meta));
+    if (badMeta !== -1) problems.push(`(c) row ${badMeta + 1} is neither a two-date span nor "→ still open": ${JSON.stringify(asc.rows[badMeta])}`);
+    const covered = asc.rows.findIndex((r) => r.cover);
+    if (covered !== -1) problems.push(`(d) row ${covered + 1} "${asc.rows[covered].title}" carries a cover credit under the span`);
+    if (asc.countLine !== asc.rows.length) problems.push(`(e) the count line says ${asc.countLine}, the list holds ${asc.rows.length}`);
+    if (!/the longest gap each song has been through, open or closed/.test(asc.countText)) problems.push(`(e) the count line reads ${JSON.stringify(asc.countText)}`);
+    if (desc.rows.length !== asc.rows.length) problems.push(`mirror: ${asc.rows.length} rows ascending, ${desc.rows.length} descending`);
+    else if (asc.rows.length && (asc.rows[0].num !== desc.rows[desc.rows.length - 1].num || asc.rows[asc.rows.length - 1].num !== desc.rows[0].num)) {
+      problems.push(`mirror: ascending runs ${asc.rows[0].num}..${asc.rows[asc.rows.length - 1].num}, descending ${desc.rows[0].num}..${desc.rows[desc.rows.length - 1].num}`);
+    }
+    if (problems.length) for (const p of problems) fail(`shortest gap: ${p}`);
+    else pass(`${asc.rows.length} rows, non-decreasing ${asc.rows[0].num}..${asc.rows[asc.rows.length - 1].num}, every row spanned, no cover credits; top 3: ${asc.rows.slice(0, 3).map((r) => `${r.title} (${r.num}, ${r.meta})`).join('; ')}`);
   }
 
   // --- A–Z, "Most played" and "Least played" show the SAME FACT, so they must
@@ -2935,12 +2977,13 @@ server.listen(PORT, async () => {
     const f390 = ((widths[390] || {}).bars || [])[0];
     if (f390 && f390.chips.length === 2 && f390.chips.some((c) => c.valueLines !== 1)) barProblems.push(`at 390px: a value wrapped (${f390.chips.map((c) => c.valueLines).join('/')} lines) -- the pair fits at 390 and should not need to`);
 
-    // The 6s are the spec, typed: SORTS and FILTERS live inside the view and
-    // are not exported, and the only other source of "how many options" is
-    // the sheet being measured, which would be checking the list against
-    // itself. docs/plan.md ("0.1.81 design", (e)) lists six of each.
+    // The 7 and 6 are the spec, typed: SORTS and FILTERS live inside the view
+    // and are not exported, and the only other source of "how many options"
+    // is the sheet being measured, which would be checking the list against
+    // itself. docs/plan.md ("0.1.81 design", (e)) lists six of each, and
+    // "Shortest gap" (added 2026-10-25) makes seven sorts.
     const sheetProblems = [];
-    for (const [name, sheet, want] of [['sort sheet', sheets.sortSheet, 6], ['filter sheet', sheets.filterSheet, 6]]) {
+    for (const [name, sheet, want] of [['sort sheet', sheets.sortSheet, 7], ['filter sheet', sheets.filterSheet, 6]]) {
       if (!sheet) { sheetProblems.push(`${name}: did not open`); continue; }
       if (sheet.rows.length !== want) sheetProblems.push(`${name}: ${sheet.rows.length} option(s), expected ${want}`);
       if (sheet.scroll > sheet.client + 1) sheetProblems.push(`${name}: the list is ${sheet.scroll}px in ${sheet.client}px`);
@@ -2952,7 +2995,7 @@ server.listen(PORT, async () => {
     }
     if (barProblems.length) for (const p of barProblems) fail(`chip bar ${p}`);
     else if (sheetProblems.length) for (const p of sheetProblems) fail(p);
-    else pass(`widest pair fits, no value clipped — ${summary.join('; ')}; sort sheet 6 rows, filter sheet 6 rows, every name unclipped, every row described (desc lines: ${[...sheets.sortSheet.rows, ...sheets.filterSheet.rows].map((r) => r.descLines).join(',')})`);
+    else pass(`widest pair fits, no value clipped — ${summary.join('; ')}; sort sheet 7 rows, filter sheet 6 rows, every name unclipped, every row described (desc lines: ${[...sheets.sortSheet.rows, ...sheets.filterSheet.rows].map((r) => r.descLines).join(',')})`);
     await clickFilter('Closed gaps only');
     await sleep(300);
   } else {

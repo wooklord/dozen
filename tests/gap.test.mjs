@@ -17,6 +17,7 @@ import {
   longestObservedGap,
   longestGap,
   compareByLongestGap,
+  compareByShortestGap,
   compareByTimesAsc,
   isPastLongestGap,
   isClosedGapLongest,
@@ -468,6 +469,43 @@ test('longest gap sort: longestGap descending, then current gap descending, then
   assert.ok(compareByLongestGap(mk('x', null, 50), mk('y', 9, 0)) < 0);
   // Neither figure sorts last.
   assert.ok(compareByLongestGap(mk('x', null, null), mk('y', 1, 0)) > 0);
+});
+
+test('shortest gap sort: longestGap ascending, then current gap ascending, then name', () => {
+  // Same figure as the longest-gap sort, mirrored: C 2 closed, B 3 open, A 5 closed.
+  const order = index.songs.slice().sort(compareByShortestGap).map((x) => x.name);
+  assert.deepEqual(order, ['C', 'B', 'A']);
+
+  // D's open 5 ties A's closed 5 on the figure; ascending, the SMALLER current
+  // gap leads -- A's 0 before D's 5 -- so A then D, the reverse of the
+  // longest-gap tie.
+  const withDIdx = buildIndex(withD());
+  assert.deepEqual(withDIdx.songs.slice().sort(compareByShortestGap).map((x) => x.name), ['C', 'B', 'A', 'D']);
+
+  const mk = (name, closed, current) => ({
+    name,
+    sortkey: name.toLowerCase(),
+    longestObservedGap: closed === null ? null : { gap: closed, fromDate: 'f', toDate: 't' },
+    showsSinceLastPlayed: current,
+    lastPlayed: current === null ? null : 'l',
+  });
+  // Tie on the figure: the smaller current gap first.
+  assert.deepEqual(
+    [mk('Ann', 5, 4), mk('Zed', 5, 1)].sort(compareByShortestGap).map((x) => x.name),
+    ['Zed', 'Ann'],
+  );
+  // Tie on both: name order A–Z, NOT reversed -- this is not the longest sort negated.
+  assert.deepEqual(
+    [mk('Zed', 5, 1), mk('Ann', 5, 1)].sort(compareByShortestGap).map((x) => x.name),
+    ['Ann', 'Zed'],
+  );
+  // The sign is the one the sheet promises: a smaller gap comes FIRST.
+  assert.ok(compareByShortestGap(mk('x', 1, 0), mk('y', 9, 0)) < 0);
+  // Neither figure still sorts LAST, not first: nothing to rank by.
+  assert.ok(compareByShortestGap(mk('x', null, null), mk('y', 1, 0)) > 0);
+  // The two sorts are exact mirrors on every pair that has figures.
+  const pairs = [[mk('p', 2, 1), mk('q', 7, 3)], [mk('p', 4, 4), mk('q', 4, 2)]];
+  for (const [p, q] of pairs) assert.equal(Math.sign(compareByShortestGap(p, q)), -Math.sign(compareByLongestGap(p, q)));
 });
 
 test('least played sort: times played ascending, then name', () => {

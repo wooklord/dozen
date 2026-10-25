@@ -500,7 +500,7 @@ checks were verified this way:
     in 60px" at both widths.
   Restored, by hash the same files: 214 passing, smoke 195 ok with 0 skips,
   gap oracle 1119 of 1119.
-- The 0.1.82 checks, seven faults applied one at a time, each file restored
+- The 0.1.82 checks, eight faults applied one at a time, each file restored
   from a byte copy and confirmed by sha256:
   - `matchesSets` reading `3+` as `> 3`: 1 unit failure (the three-set show
     leaves 3+).
@@ -509,6 +509,9 @@ checks were verified this way:
     plus `badge "2 sets + E": badge shows an encore` -- the row-to-detail tie.
   - `matchesState` as a substring: 1 unit failure, "a prefix is not a match".
   - `setSummary` counting encores as sets: 4 unit failures.
+  - `compareByShortestGap` with its sign flipped: 1 unit failure; smoke reads
+    `(b) drops at row 2: 781 after 792` and the mirror check `ascending runs
+    792..2, descending 792..2`.
   - `white-space: nowrap` on `.chip-value`: 9 smoke failures across both bars
     -- Shows at 360 "the layout viewport reads 361px", the When value on 1 line
     where 2 are required; Songs at 360 "366px of content in 360px".

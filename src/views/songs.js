@@ -14,6 +14,7 @@ import { normalizeQuery, matchesQuery } from '../data/normalize.js';
 import {
   compareSongsByName,
   compareByLongestGap,
+  compareByShortestGap,
   compareByTimesAsc,
   isPastLongestGap,
   isClosedGapLongest,
@@ -56,8 +57,14 @@ const state = {
 // songs to dashes and hid every gap still running (docs/plan.md, 0.1.81
 // design). One flat list; separating open from closed is the FILTER's job.
 //
+// "Shortest gap" (0.1.82) is the same figure ascending -- added for parity, so
+// every figure has both directions: Coldest/Hottest, Most/Least played,
+// Longest/Shortest gap. Same figure key, so the row, its span date line and
+// the no-cover-credit rule are the Longest-gap ones with nothing re-decided.
+//
 // The descriptions are the sheet's second line, locked verbatim in
-// docs/plan.md ("0.1.81 design", (e)). The language test applies to each.
+// docs/plan.md ("0.1.81 design", (e); Shortest gap added 2026-10-25). The
+// language test applies to each.
 const SORTS = [
   ['alpha', 'A–Z', 'times', 'Alphabetical. The number is times played.'],
   ['gap-desc', 'Coldest first', 'gap', 'Most shows since last played, first. The number is shows since played.'],
@@ -69,6 +76,13 @@ const SORTS = [
     'Longest gap',
     'longest',
     'The longest gap each song has been through, biggest first — closed or still open. ' +
+      'The number is that gap; the date line shows the two shows that bound it, or “still open”.',
+  ],
+  [
+    'shortest',
+    'Shortest gap',
+    'longest',
+    'The longest gap each song has been through, smallest first — closed or still open. ' +
       'The number is that gap; the date line shows the two shows that bound it, or “still open”.',
   ],
 ];
@@ -167,7 +181,8 @@ export function renderSongs(ctx) {
   //
   // The lead chips wear the selected paint from their class (.chip-lead), not
   // from aria-pressed: that attribute means a toggle's state and would be a
-  // lie on a button that opens a sheet. Same reasoning as .chip-back on Shows.
+  // lie on a button that opens a sheet. Shows' three leads (0.1.82) follow the
+  // same pattern; its When chip carries no label, measured in docs/plan.md.
   const sortOf = (key) => SORTS.find(([k]) => k === key) || SORTS[0];
   const filterOf = (key) => FILTERS.find(([k]) => k === key) || FILTERS[0];
 
@@ -298,6 +313,8 @@ export function renderSongs(ctx) {
         }
         case 'longest':
           return compareByLongestGap(a, b);
+        case 'shortest':
+          return compareByShortestGap(a, b);
         case 'alpha':
         default:
           return compareSongsByName(a, b);
@@ -319,7 +336,8 @@ export function renderSongs(ctx) {
     let suffix = '';
     if (state.filter === 'past') suffix = ' whose current gap is longer than any gap they have closed before';
     else if (state.filter === 'closed') suffix = ' whose longest gap has ended';
-    else if (state.sort === 'longest' && state.filter === 'all') {
+    else if ((state.sort === 'longest' || state.sort === 'shortest') && state.filter === 'all') {
+      // The same words under both directions: the figure is the same figure.
       suffix = ' · the longest gap each song has been through, open or closed';
     }
     countLine.textContent =
