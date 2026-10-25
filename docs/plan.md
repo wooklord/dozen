@@ -526,6 +526,7 @@ order:
 | Sort | Most played | Times played, highest first. |
 | Sort | Least played | Times played, lowest first. |
 | Sort | Longest gap | The longest gap each song has been through, biggest first — closed or still open. The number is that gap; the date line shows the two shows that bound it, or "still open". |
+| Sort | Shortest gap | The longest gap each song has been through, smallest first — closed or still open. The number is that gap; the date line shows the two shows that bound it, or "still open". **Added 2026-10-25, for parity** (Coldest/Hottest, Most/Least played, Longest/Shortest gap): the same `longestGap()` figure ascending, ties by current gap ascending, then name. Same figure column, same span date line, same no-cover-credit rule as Longest gap. Ships in 0.1.82, its own commit. |
 | Filter | All | Every song played live, as listed by The Carton. |
 | Filter | Originals | Eggy originals only. |
 | Filter | Covers | Covers only. |
