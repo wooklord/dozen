@@ -539,7 +539,7 @@ Count lines, locked with them:
 |---|---|
 | Longest gap sort, All | `N songs · the longest gap each song has been through, open or closed` |
 | Closed gaps only, any sort | `N songs whose longest gap has ended` |
-| Passed longest gap, any sort | unchanged from 0.1.79: `N songs whose current gap is longer than their longest observed gap` |
+| Passed longest gap, any sort | `N songs whose current gap is longer than any gap they have closed before` — the filter description's own words. **The lock of 2026-10-24 said "unchanged", and is withdrawn as an oversight:** it was written before the max figure came back into song detail's "longest observed gap" label, where for every Passed song that figure equals the current gap, so the 0.1.79 wording would have told the reader one of two equal numbers was longer than the other. Ruled 2026-10-24 on the cold review's finding, second commit under 0.1.81 |
 
 > The handoff that carried this design into the build session was cut off after the first two
 > sort descriptions; the rest arrived with the approval of the change plan, which also ruled

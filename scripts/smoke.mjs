@@ -2868,7 +2868,7 @@ server.listen(PORT, async () => {
     if (badSpan.length) filterProblems.push(`${tag} (b) ${badSpan.length} row(s) whose date line is not "${spanWord}": ${badSpan.slice(0, 3).map((r) => `${r.title}: ${r.meta}`).join('; ')}`);
     return { names: new Set(longNames), current, longest };
   };
-  const passed = checkPair('passed:', passedShots, 'Passed longest gap', /current gap is longer than their longest observed gap/, (cur, lng) => cur === lng, DATE_SPAN_OPEN, '→ still open');
+  const passed = checkPair('passed:', passedShots, 'Passed longest gap', /whose current gap is longer than any gap they have closed before/, (cur, lng) => cur === lng, DATE_SPAN_OPEN, '→ still open');
   const closed = checkPair('closed:', closedShots, 'Closed gaps only', /whose longest gap has ended/, (cur, lng) => lng > cur, DATE_SPAN_CLOSED, '{date} → {date}');
   if (passed && closed && allShot) {
     const both = [...passed.names].filter((n) => closed.names.has(n));

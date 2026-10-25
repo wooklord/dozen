@@ -317,7 +317,7 @@ export function renderSongs(ctx) {
     // say their subset. Wording locked in docs/plan.md ("0.1.81 design").
     const n = songs.length;
     let suffix = '';
-    if (state.filter === 'past') suffix = ' whose current gap is longer than their longest observed gap';
+    if (state.filter === 'past') suffix = ' whose current gap is longer than any gap they have closed before';
     else if (state.filter === 'closed') suffix = ' whose longest gap has ended';
     else if (state.sort === 'longest' && state.filter === 'all') {
       suffix = ' · the longest gap each song has been through, open or closed';
