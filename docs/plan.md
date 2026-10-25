@@ -546,6 +546,55 @@ Count lines, locked with them:
 > that **song detail shows the same max figure as the list, with "still open" when open** —
 > decision 3 requires it, and the handoff had not said so.
 
+#### 0.1.82 design — the Shows tab gets the Songs-tab control pattern (locked 2026-10-25)
+
+Seven decisions, made in chat and recorded before any code. The language test in `CLAUDE.md`
+was applied to every string below. Everything here is scope-clean: set count, encore presence and
+state are Carton fields or counts over Carton rows, and nothing is inferred.
+
+**(a) Three lead chips on ONE row:** "WHEN All ▾", "FILTER Off ▾", "VIEW Compact ▾" — the 0.1.81
+labelled-chip pattern exactly (inner uppercase label, value in lead ink, no ellipsis, wrap
+fallback, grid bar with `auto` tracks). The values are deliberately short. When reads "All", a year
+("2026") or a month ("Oct 2026"); Filter reads "Off" or "N on"; View reads "Compact" or "Detail".
+
+**(b) The DEFAULT is every played show, newest first, in COMPACT view:** one row per show — the
+date, `venue · city, ST`, and a set-structure badge ("2 sets + E", "1 set", or "No setlist" when
+none is recorded). Tapping a row opens show detail. "Detail" is the current setlist-card list,
+unchanged, and **the view choice persists in localStorage.** When and Filter are session state,
+like Songs' sort.
+
+**(c) When sheet:** "All shows" on top (description: "Every show played, newest first."), then the
+existing year grid, then the month row, which activates once a year is picked — the 0.1.75
+year-then-month drill-down relocated into one sheet. The search box narrows whatever When has
+picked.
+
+**(d) Filter sheet: THREE groups, one choice per group, "Any" is the off position, and the groups
+AND together.**
+
+| Group | Options | Description |
+|---|---|---|
+| Sets | Any / 1 / 2 / 3+ | Sets counted from the setlist, encore not included. Shows with no setlist recorded are left out when this is set. |
+| Encore | Any / With / Without | Whether the setlist has an encore set. |
+| State | a scroll wheel, "Any" on top, populated from the `venues` table | Scroll the wheel. States and provinces come from the venue list; only ones Eggy has played appear. |
+
+An apply button reads "Show N shows" with the live count; "Clear all" resets every group. Active
+filters render as removable pills under the chip bar, and the chip reads "N on". A show with no
+setlist rows has no set count: it is excluded whenever Sets or Encore is set, included under Any.
+
+**(e) View sheet:** Compact ("One row per show: date, venue, and how many sets. Tap a row for the
+setlist.") and Detail ("The full setlist card for every show, with Carton's notation and
+footnotes."). Footer line: "The view sticks until changed. Either view respects When and Filter."
+
+**(f) A Festival / Regular filter was in the mockup and is PARKED, not ruled out.** It needs a
+Carton field that marks a festival show. The diagnosis that decides whether it ever comes back is
+the first step of the 0.1.82 build session: does any Carton field mark one — `show_tags` on
+`shows`, a venue flag, anything on `setlists`? If nothing does, it stays parked. (The schema
+already records `show_tags: []` on every show; the diagnosis re-measures against the live API
+rather than trusting that line.)
+
+**(g) Count line:** "N shows · newest first". With filters on, each active filter in its own words,
+in group order: "N shows · 2 sets · in MI · newest first".
+
 ### Gap convention — REVERSED to match The Carton's Show Gap column (2026-10-24)
 
 **Ruling:** the counted-shows convention is withdrawn. From BUILD 0.1.78, *gap* in this app
