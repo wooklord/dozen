@@ -558,6 +558,25 @@ labelled-chip pattern exactly (inner uppercase label, value in lead ink, no elli
 fallback, grid bar with `auto` tracks). The values are deliberately short. When reads "All", a year
 ("2026") or a month ("Oct 2026"); Filter reads "Off" or "N on"; View reads "Compact" or "Detail".
 
+> **Amended 2026-10-25, at approval of the change plan, after measuring.** Three labelled chips
+> do not fit. Measured headless with the app's own CSS, a grid bar with three `auto` tracks, the
+> widest trio ("Oct 2026" / "3 on" / "Compact"); the bar has 358px between its paddings at 390 and
+> 328px at 360:
+>
+> | Trio | 390px | 360px |
+> |---|---|---|
+> | WHEN Oct 2026 · FILTER 3 on · VIEW Compact | fits only by wrapping two values, "Oct / 2026" and "3 / on", bar 56px | **overflows, 365px of content in 360px** |
+> | Oct 2026 (no label) · FILTER 3 on · VIEW Compact | one line each, bar 50px, 345px of 358 | "3 / on" wraps although space was not the cause |
+> | the same, "3 on" one non-breaking token | one line each, bar 50px | only "Oct / 2026" wraps, bar 56px, no overflow |
+> | the same, "Oct 2026" also non-breaking | one line each | overflows by 1px |
+>
+> The overflow in the first row is the 0.1.75 defect and is not allowed, so: **the When chip
+> carries no inner label** — a year or a month is self-labelling — **and the Filter value "N on" is
+> one token**, joined with a non-breaking space (U+00A0) so it never splits into "3" over "on". The
+> 0.1.81 wrap rules still govern: no ellipsis, no CSS `nowrap`, the value wraps inside a taller
+> chip. **The When value wraps at 360** ("Oct" over "2026") and sits on one line at 390; the Filter
+> and View values sit on one line at both. The smoke test asserts all of that at both widths.
+
 **(b) The DEFAULT is every played show, newest first, in COMPACT view:** one row per show — the
 date, `venue · city, ST`, and a set-structure badge ("2 sets + E", "1 set", or "No setlist" when
 none is recorded). Tapping a row opens show detail. "Detail" is the current setlist-card list,
