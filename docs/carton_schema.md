@@ -261,7 +261,7 @@ One row per show, including **future shows**. `/v2/shows.json?order_by=showdate&
 | `location` | string | `"Toronto, ON, Canada"` — also entity-encoded. **`shows` ONLY, and the UI does not use it** — see below |
 | `city` / `state` / `country` | string | |
 | `timezone` | null | |
-| `tour_id` / `tourname` | number / string | |
+| `tour_id` / `tourname` | number / string | `tour_id` 1 is `"Not Part of a Tour"`, Carton's null — see **Tours** below |
 | `showorder` | number | |
 | `show_year` | number | **`show_year`**, not `showyear` as in `setlists` |
 | `show_day` | number | day of month |
@@ -325,6 +325,69 @@ date**. `show_tags` is empty and `tourname` is `"Not Part of a Tour"`.
 **Carton does not know the format of an upcoming show.** Set structure must not be presented as
 known for a future show — it can only be shown as history (what this venue has done before, what
 the recent run has looked like). Anything else would be a prediction.
+
+### Tours (measured 2026-10-25)
+
+`tour_id` (number) and `tourname` (string) are on every `shows` row and every `setlists` row. On
+the day this was measured: 804 shows and 6483 setlist rows (a full pull, ending 2026-10-23, which
+the per-year recount matched).
+
+- **No row lacks either field**, on either table.
+- **`tour_id` and `tourname` are one-to-one**: no id carries two names, no name sits on two ids.
+- **The setlist rows agree with their show's row on all 6483 rows**, and none points at a
+  `show_id` that `shows` does not have. The show row is the canonical one to read.
+- **No `tourname` is entity-encoded and none carries stray whitespace**: `cleanDisplayText` returns
+  all twelve unchanged.
+- **`tour_id` 1, `"Not Part of a Tour"`, is Carton's null**: the value a show carries when it is on
+  no tour, not a tour. Every upcoming show carries it.
+- **Ids are not in date order.** `tour_id` 2 is Summer Tour 2021 and 8 is Summer Tour 2019.
+
+Ordered by first date. "With setlist rows" counts shows with at least one setlist row of any kind
+— it does not say the setlist is complete, and most Fall Tour 2021 shows have 3 or 4 rows.
+
+| `tour_id` | `tourname` | Shows | First | Last | With setlist rows |
+|---|---|---|---|---|---|
+| 8 | Summer Tour 2019 | 17 | 2019-06-08 | 2019-09-02 | 6 |
+| 7 | Fall Tour 2019 | 13 | 2019-09-13 | 2019-11-01 | 10 |
+| 4 | Fall Tour 2021 | 25 | 2019-10-25 | 2021-11-27 | 25 |
+| 6 | Winter 2020 | 14 | 2019-12-11 | 2020-02-14 | 13 |
+| 5 | Quarantine Streams | 10 | 2020-03-28 | 2021-03-05 | 10 |
+| 3 | Spring Tour 2021 | 5 | 2021-05-07 | 2021-10-16 | 5 |
+| 2 | Summer Tour 2021 | 4 | 2021-06-26 | 2021-08-07 | 4 |
+| 9 | Winter 2022 | 13 | 2022-01-14 | 2022-02-06 | 13 |
+| 10 | Summer Tour 2024 | 1 | 2024-06-13 | 2024-06-13 | 1 |
+| 11 | Waiting Game Tour 2024 | 22 | 2024-09-27 | 2024-11-02 | 22 |
+| 12 | Here and How Tour 2025 | 36 | 2025-02-05 | 2025-04-26 | 36 |
+| | **11 named tours** | **160** | | | **145** |
+
+**`tour_id` 1** holds the other **644**: 2013-02-23 to 2026-12-05, 475 with setlist rows, 160
+played with none, 9 upcoming. That includes the one `artist_id` 2 show (Dani Battat, 2026-02-10,
+`show_id` 1770761863) — it carries no tour of its own. Every show dated after 2025-04-26 is on
+`tour_id` 1.
+
+**Assignments that look like filing slips.** Recorded as Carton stores them; the app renders them
+that way and does not correct them.
+
+- **Fall Tour 2021 holds two 2019 shows**: 2019-10-25 Melody's, Beckley WV, and 2019-10-31
+  Electric Haze, Worcester MA — inside the Fall Tour 2019 dates. They are why that tour's first
+  date reads 2019.
+- **Spring Tour 2021 holds 2021-10-16**, Headliners Music Hall, Louisville KY — between Fall Tour
+  2021's 2021-10-15 and 2021-10-20.
+- **Summer Tour 2024 is one show**, the second of the two on 2024-06-13 at Bonnaroo.
+- **Fall Tour 2021 has two shows on 2021-10-15 in two cities**: The Vogue, Indianapolis, and The
+  Magic Stick, Detroit.
+
+**One date, two tours.** 28 dates carry more than one show. On two of them the shows are on
+different tours, and both are a two-show festival date where only one show is on the tour:
+
+| Date | Venue | On the tour | On `tour_id` 1 |
+|---|---|---|---|
+| 2024-06-13 | Bonnaroo Music And Arts Festival | `showorder` 2, `show_id` 1717548310, Summer Tour 2024 | `showorder` 1, `show_id` 1718383277 |
+| 2025-04-04 | My Morning Jacket's One Big Holiday | `showorder` 1, `show_id` 1740287030, Here and How Tour 2025 | `showorder` 2, `show_id` 1743862253 |
+
+These are one day's figures, kept as the record of what the decision in `plan.md` ("Tours
+(2026-10-25)") rested on. The `tour_id` 1 count grows with every show; a check derives its expected
+values from the live pull, never from this table.
 
 ## `songs` — 7 fields
 

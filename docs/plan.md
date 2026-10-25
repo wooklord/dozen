@@ -731,6 +731,47 @@ explainer, and `tests/gap.test.mjs` all describe the withdrawn rule** and are re
 0.1.78 change, not here. This ruling lands first so the two records cannot disagree without one of
 them saying so.
 
+### Tours (2026-10-25)
+
+**Ruling.** Show detail gains one line naming the show's tour, read from `tourname` on the show's
+own `shows` row. **A Tour filter is parked, not ruled out.** Both sit inside the scope rule —
+`tour_id` / `tourname` are Carton fields, and showing or filtering on them is repackaging — so this
+is a product choice, not a scope one. The user chose the detail line over the filter after seeing
+the inventory below.
+
+**What the field holds**, measured 2026-10-25 against the live API. The full table and every
+oddity are in `carton_schema.md` under "Tours"; these are the figures the decision rested on.
+
+- **12 `tour_id`s: 11 named tours and `tour_id` 1.** The eleven carry **160 of 804 shows**, 20% of
+  the archive. Eight of them fall between June 2019 and February 2022; the other three are Summer
+  Tour 2024, Waiting Game Tour 2024 and Here and How Tour 2025.
+- **644 of 804 shows are `tour_id` 1, "Not Part of a Tour"** — including every show dated after
+  2025-04-26 (the last Here and How Tour 2025 show), every upcoming show, and the 2026-02-10 Dani
+  Battat show.
+
+**Why the filter is parked.** It would offer eleven tours reaching a fifth of the archive and
+nothing since April 2025, and several of Carton's assignments would come back as results:
+
+- two 2019 shows (2019-10-25 and 2019-10-31) are filed under **Fall Tour 2021**, inside the Fall
+  Tour 2019 dates;
+- **Spring Tour 2021** holds 2021-10-16, in the middle of Fall Tour 2021;
+- **Summer Tour 2024 is one show** — the second of two Bonnaroo shows on 2024-06-13, whose first is
+  "Not Part of a Tour".
+
+**Rules for the line:**
+
+1. **The name renders exactly as Carton stores it** — never merged, reordered or corrected. Fall
+   Tour 2019 and Fall Tour 2021 stay two tours, and a 2019 show filed under Fall Tour 2021 reads
+   "Fall Tour 2021". Measured the same day: no `tourname` carries an HTML entity or stray
+   whitespace, so the ingest decode every display string goes through changes none of them.
+2. **`tour_id` 1 renders nothing.** It is Carton's null — the value a show carries when it is on
+   no tour — not a tour called "Not Part of a Tour".
+
+**Already in the app.** The Venue screen's show rows have carried `tourname` in their meta line
+since 0.1.23, suppressed by comparing the name with the string "Not Part of a Tour" rather than by
+`tour_id`. On the 2026-10-25 data the two tests agree, because `tour_id` 1 and that name are
+one-to-one, so that screen renders what rule 2 says without being keyed the way rule 2 states.
+
 ## Out of scope — parked
 
 Anything crossing the scope rule goes to [`phase3_ideas.md`](phase3_ideas.md), not into the app.
