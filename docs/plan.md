@@ -772,6 +772,44 @@ since 0.1.23, suppressed by comparing the name with the string "Not Part of a To
 `tour_id`. On the 2026-10-25 data the two tests agree, because `tour_id` 1 and that name are
 one-to-one, so that screen renders what rule 2 says without being keyed the way rule 2 states.
 
+### Gap history (2026-10-26)
+
+**Ruling.** A per-song **Gap history** screen is in scope. It lists every gap a song has been
+through, and **every number on it is the Show Gap figure The Carton prints** on that song's page,
+plus the current gap Carton states as "which was N show(s) ago" — the same figures the app already
+renders through `gapAtShow()`, laid out in one place. That is repackaging. Designed in chat and
+recorded before any code; the language test in `CLAUDE.md` applies to every string on it.
+
+**How it is reached.** Tapping the "longest observed gap" tile on song detail, which today opens
+the gap explainer. The "shows since last" tile and the "How this is counted" link keep the
+explainer.
+
+**One entry per show, not per performance.** The user's call, in their words: the per-show gap is
+the number jamband fans look at, not in-show repeats. It is the same unit the gap chart uses —
+`gapChartForShow()` folds a song's repeats within a night into one entry — so a row here and that
+night's gap chart carry the same figure for the same song. In detail:
+
+- A song played more than once at a show is **one row**, carrying "×N" and every set label it was
+  played in ("Set 1, Encore"). Its number is the gap at that show. **Carton's 0 on the repeat row
+  never appears.**
+- **Two different shows on the same date are still two rows**, and the second can read 0. That is
+  a real gap between two shows, not an in-show repeat.
+- **A debut row shows the Debut badge, never Carton's number** — Carton prints the debut date's
+  position there, not a gap (decision 1 of the 2026-10-24 gap-convention ruling).
+
+**"Longest" follows `longestGap()`:** the larger of the longest closed gap and the current gap, an
+exact tie reading open (0.1.81 design, (a)). When the open gap is the longest, the "Longest" tag
+and the bright strip bar go on the "Now · still open" row and the dashed bar, not on a closed row.
+
+**Out of scope, and why:**
+
+- **No average line.** Carton's own average formula has not been reproduced (stated in chat; no
+  measurement of it is recorded in this repo), and a reference line drawn across a gap chart reads
+  as "due" whatever it is labelled.
+- **No days between performances.** No derived number is rendered — the line the "Passed longest
+  gap" ruling (2026-10-24, shipped in 0.1.79) draws.
+- **No trend line, no expected next.** Both describe what will happen.
+
 ## Out of scope — parked
 
 Anything crossing the scope rule goes to [`phase3_ideas.md`](phase3_ideas.md), not into the app.
