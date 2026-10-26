@@ -3203,6 +3203,433 @@ server.listen(PORT, async () => {
     fail(`free-text entry: the real songs beside it are not controls either (role=${custom.siblingRole}) — the setlist stopped being tappable`);
   } else pass('the entry still renders in the setlist, as text, beside songs that are still tappable');
 
+  // --- Gap history (0.1.83) ---------------------------------------------------
+  //
+  // docs/plan.md, "Gap history (2026-10-26)". Every check here holds one thing
+  // the app renders against ANOTHER thing it renders -- the tiles against the
+  // rows, the rows against the strip, a row against that night's gap chart --
+  // so none restates a figure from today's archive and none goes stale when
+  // Shadow plays again. The per-row figures against Carton's own column are
+  // scripts/gap-oracle.mjs's fold check. Red proofs are recorded in CLAUDE.md.
+  console.log('\ngap history:');
+  const HIST_JS = `
+    const t = (n) => ((n || {}).textContent || '').trim();
+    const tile = (start) => { const s = [...document.querySelectorAll('.screen .stat')].find((x) => t(x.querySelector('.stat-label')).startsWith(start)); return s ? t(s.querySelector('.stat-value')) : null; };
+    const histRows = () => [...document.querySelectorAll('.screen .rows li .history-row')].map((r) => {
+      const badges = [...r.querySelectorAll('.badge')].map(t);
+      const n = r.querySelector('.gap-num');
+      return {
+        order: Number(r.dataset.order), now: r.dataset.now === 'true', showId: r.dataset.showId ? Number(r.dataset.showId) : null,
+        title: t(r.querySelector('.row-title')), num: n ? Number(t(n)) : null, unit: t(r.querySelector('.gap-unit')),
+        badges, longest: badges.includes('Longest'), debut: badges.includes('Debut'),
+        times: Number((badges.find((b) => /^×\\d+$/.test(b)) || '×1').slice(1)),
+        action: !!r.querySelector('button.row-action'),
+      };
+    });
+    const histCount = () => [...document.querySelectorAll('.screen .note')].map(t).find((x) => /^\\d+ shows? · /.test(x)) || '';
+    const histLead = () => t(document.querySelector('.screen .sortbar .chip-lead .chip-value'));`;
+  const readHistory = async () => evaluate(`(() => {${HIST_JS}
+    const open = document.querySelector('.screen .gap-strip .gap-strip-open');
+    const box = document.querySelector('.screen .gap-strip .gap-strip-bars');
+    return {
+      hash: location.hash,
+      title: t(document.querySelector('.screen h1')),
+      tiles: { since: tile('shows since last'), longest: tile('longest gap'), times: tile('time') },
+      rows: histRows(), count: histCount(), lead: histLead(),
+      stripH: box ? box.getBoundingClientRect().height : 0,
+      bars: [...document.querySelectorAll('.screen .gap-strip .gap-strip-bar')].map((b) => ({ order: Number(b.dataset.order), longest: b.dataset.longest === 'true', h: b.getBoundingClientRect().height })),
+      open: open ? { order: Number(open.dataset.order), longest: open.dataset.longest === 'true', h: open.getBoundingClientRect().height } : null,
+    };
+  })()`);
+  const openHistory = async (id) => {
+    await evaluate(`location.hash = '#/song/${id}/gaps';`);
+    await sleep(1100);
+    return readHistory();
+  };
+
+  // The ruling, applied to what one screen rendered. "Longest" is derived from
+  // the rendered figures by longestGap()'s own rule -- the larger of the
+  // biggest closed figure and the open one, a tie reading open, nothing at 0
+  // -- and then compared with the tile, the tags and the strip, each of which
+  // the app computes separately.
+  const historyProblems = (tag, h) => {
+    const p = [];
+    const shows = h.rows.filter((r) => !r.now);
+    const now = h.rows.find((r) => r.now) || null;
+    if (!shows.length) return [`${tag}: no show rows rendered (hash ${h.hash})`];
+    const ids = shows.map((r) => r.showId);
+    if (new Set(ids).size !== ids.length) p.push(`${tag}: ${ids.length - new Set(ids).size} show(s) listed more than once -- the list is one entry per show (${shows.length} rows)`);
+    const sumTimes = shows.reduce((s, r) => s + r.times, 0);
+    if (sumTimes !== Number(h.tiles.times)) p.push(`${tag}: the rows' ×N add up to ${sumTimes}, the times-played tile reads ${h.tiles.times}`);
+    if (!new RegExp(`^${shows.length} shows? · `).test(h.count)) p.push(`${tag}: count line ${JSON.stringify(h.count)} against ${shows.length} show rows`);
+    const debuts = shows.filter((r) => r.debut);
+    const oldest = shows.reduce((a, b) => (a.order < b.order ? a : b));
+    if (debuts.length !== 1 || debuts[0] !== oldest) p.push(`${tag}: ${debuts.length} Debut row(s); the oldest row, ${oldest.title}, ${oldest.debut ? 'has' : 'lacks'} the badge`);
+    if (debuts.some((r) => r.num !== null)) p.push(`${tag}: the Debut row carries a number (${debuts.map((r) => r.num).join(', ')}) -- Carton prints a position there, not a gap`);
+    if (shows.some((r) => !r.debut && (r.num === null || r.unit !== 'show gap'))) p.push(`${tag}: a show row without a "show gap" figure`);
+    if (shows.some((r) => !r.action)) p.push(`${tag}: a show row without its gap-chart action`);
+    if (now && (now.unit !== 'shows since' || now.action || now.title !== 'Now · still open')) p.push(`${tag}: the Now row reads ${JSON.stringify(now.title)} / unit ${JSON.stringify(now.unit)}${now.action ? ' and carries an action' : ''}`);
+    if (now && Number(h.tiles.since) !== now.num) p.push(`${tag}: Now reads ${now.num}, the shows-since tile ${h.tiles.since}`);
+    const closedMax = Math.max(-1, ...shows.filter((r) => r.num !== null).map((r) => r.num));
+    const open = !!now && now.num >= closedMax;
+    const longest = open ? now.num : closedMax;
+    if (Number(h.tiles.longest) !== longest) p.push(`${tag}: longest tile ${h.tiles.longest}, the rows give ${longest} (${open ? 'open' : 'closed'})`);
+    const want = (longest <= 0 ? [] : open ? [now.order] : shows.filter((r) => r.num === longest).map((r) => r.order)).sort((a, b) => a - b);
+    const tagged = h.rows.filter((r) => r.longest).map((r) => r.order).sort((a, b) => a - b);
+    if (JSON.stringify(tagged) !== JSON.stringify(want)) p.push(`${tag}: "Longest" on order(s) ${tagged.join(',') || 'none'}, expected ${want.join(',') || 'none'} (${open ? `the open gap, ${longest}, is the longest` : `closed ${closedMax}`})`);
+    if (h.bars.length !== shows.length) p.push(`${tag}: ${h.bars.length} strip bars for ${shows.length} show rows`);
+    if (!!h.open !== !!now) p.push(`${tag}: open bar ${h.open ? 'present' : 'absent'}, Now row ${now ? 'present' : 'absent'}`);
+    const bright = [...h.bars.filter((b) => b.longest), ...(h.open && h.open.longest ? [h.open] : [])];
+    const brightOrders = bright.map((b) => b.order).sort((a, b) => a - b);
+    if (JSON.stringify(brightOrders) !== JSON.stringify(want)) p.push(`${tag}: bright strip bars at ${brightOrders.join(',') || 'none'}, tagged rows at ${want.join(',') || 'none'}`);
+    // Every bar's height against ITS OWN row's figure: the gap over the
+    // longest, of the strip's height, with the 2px floor; a debut is the
+    // floor. NOT "the bright bar is the tallest" -- that was the first version
+    // of this check, and it passed with every bar at 2px, because the bars'
+    // --h never reached the page (el()'s style prop drops custom properties;
+    // docs/design.md, 0.1.83). Equal heights satisfy "tallest" trivially.
+    const byOrder = new Map(h.rows.map((r) => [r.order, r]));
+    const wantH = (r) => (r.debut || r.num === null || longest <= 0 ? 2 : Math.max(2, (Math.min(r.num, longest) / longest) * h.stripH));
+    const offH = [...h.bars, ...(h.open ? [h.open] : [])].filter((b) => {
+      const r = byOrder.get(b.order);
+      return !r || Math.abs(b.h - wantH(r)) > 0.6;
+    });
+    if (offH.length) p.push(`${tag}: ${offH.length} strip bar(s) not at their row's height, e.g. order ${offH[0].order}: ${Math.round(offH[0].h * 100) / 100}px, the row's ${byOrder.get(offH[0].order) ? byOrder.get(offH[0].order).num : 'nothing'} of ${longest} in ${h.stripH}px wants ${byOrder.get(offH[0].order) ? Math.round(wantH(byOrder.get(offH[0].order)) * 100) / 100 : '?'}px`);
+    return p;
+  };
+  const histSummary = (h) => {
+    const shows = h.rows.filter((r) => !r.now);
+    return `${shows.length} shows, ${shows.filter((r) => r.times > 1).length} folding a repeat, longest ${h.tiles.longest} tagged ×${h.rows.filter((r) => r.longest).length}${h.rows.some((r) => r.now && r.longest) ? ' (open)' : ''}`;
+  };
+
+  // (a) Shadow, the worst case for the strip: the rules, then the strip at 390
+  // and 360. Shadow has repeats (169 performances at 141 shows when this was
+  // written), so the fold is exercised; "a row folding a repeat" is asserted,
+  // because a song without one would pass the fold checks vacuously.
+  const shadow = await openHistory(54);
+  const shadowProblems = historyProblems('Shadow', shadow);
+  if (shadow.title !== 'Gap history') shadowProblems.unshift(`Shadow: the screen's title reads ${JSON.stringify(shadow.title)}`);
+  if (!shadow.rows.some((r) => !r.now && r.times > 1)) shadowProblems.push('Shadow: no row carries ×N, so the fold was not exercised');
+  if (shadowProblems.length) for (const p of shadowProblems) fail(`gap history ${p}`);
+  else pass(`Shadow: ${histSummary(shadow)}; ×N adds to the ${shadow.tiles.times} on the tile`);
+
+  // The strip's fit. Every bar at least 1px, and the last bar's right edge
+  // inside the strip -- NOT scrollWidth: measured while designing this, a flex
+  // strip whose bars had shrunk past its edge reported no overflow through
+  // scrollWidth (CLAUDE.md, the proxy table). A synthetic 300-bar strip in the
+  // same card is held to the same edge, because no real song has enough shows
+  // to reach the case the shrinking gap exists for: a fixed 1px gap passes on
+  // Shadow at 360 today (141 bars in 288px) and fails at 145 bars, four more
+  // shows with Shadow in them.
+  const MEASURE_STRIP = `(() => {
+    const strip = document.querySelector('.screen .gap-strip');
+    const box = strip && strip.querySelector('.gap-strip-bars');
+    if (!box) return null;
+    const rs = [...box.children].map((b) => b.getBoundingClientRect());
+    const br = box.getBoundingClientRect();
+    const sr = strip.getBoundingClientRect();
+    const open = strip.querySelector('.gap-strip-open');
+    const gaps = rs.slice(1).map((r, i) => r.left - rs[i].right);
+    const s2 = strip.cloneNode(false);
+    s2.removeAttribute('role');
+    const probe = box.cloneNode(false);
+    probe.style.setProperty('--n', '300');
+    for (let i = 0; i < 300; i++) { const b = document.createElement('span'); b.className = 'gap-strip-bar'; b.style.setProperty('--h', '0.5'); probe.append(b); }
+    s2.append(probe);
+    strip.after(s2);
+    const ps = [...probe.children].map((b) => b.getBoundingClientRect());
+    const pr = probe.getBoundingClientRect();
+    const synth = { n: 300, width: pr.width, barMin: Math.min(...ps.map((r) => r.width)), lastRight: ps[ps.length - 1].right, right: pr.right };
+    s2.remove();
+    return {
+      viewport: window.innerWidth, docScroll: document.documentElement.scrollWidth,
+      n: rs.length, stripW: sr.width, barsW: br.width,
+      barMin: Math.min(...rs.map((r) => r.width)), barMax: Math.max(...rs.map((r) => r.width)),
+      gapMin: gaps.length ? Math.min(...gaps) : 0, gapMax: gaps.length ? Math.max(...gaps) : 0,
+      lastRight: rs[rs.length - 1].right, boxRight: br.right,
+      openW: open ? open.getBoundingClientRect().width : null, openRight: open ? open.getBoundingClientRect().right : null, stripRight: sr.right,
+      tiles: [...document.querySelectorAll('.screen .stat-grid-3 .stat')].map((s) => ({ text: s.textContent.trim(), client: s.clientWidth, scroll: s.scrollWidth })),
+      synth,
+    };
+  })()`;
+  const stripAt = {};
+  for (const w of [390, 360]) {
+    await send('Emulation.setDeviceMetricsOverride', { width: w, height: 844, deviceScaleFactor: 2, mobile: true });
+    await sleep(400);
+    stripAt[w] = await evaluate(MEASURE_STRIP);
+  }
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+  await sleep(400);
+  const r3 = (x) => Math.round(x * 1000) / 1000;
+  for (const w of [390, 360]) {
+    const m = stripAt[w];
+    if (!m) { fail(`gap history strip at ${w}px: no strip on Shadow's screen`); continue; }
+    const p = [];
+    if (m.viewport !== w) p.push(`the layout viewport reads ${m.viewport}px, the document ${m.docScroll}px -- the page overflows horizontally (or the override did not take)`);
+    if (m.barMin < 0.999) p.push(`the narrowest bar is ${r3(m.barMin)}px -- under 1px`);
+    // The spacing is the fluid gap's own formula over THIS strip: 1px until the
+    // bars would fall under 1px, then shrinking. A strip whose --n never
+    // reached the page spaces its bars at 0 and passes every edge check, so
+    // the spacing is asserted, not just the fit.
+    const wantGap = m.n > 1 ? Math.max(0, Math.min(1, (m.barsW - m.n) / (m.n - 1))) : 0;
+    if (m.n > 1 && (Math.abs(m.gapMin - wantGap) > 0.05 || Math.abs(m.gapMax - wantGap) > 0.05)) p.push(`bars spaced ${r3(m.gapMin)}–${r3(m.gapMax)}px, the fluid gap gives ${r3(wantGap)}px for ${m.n} bars in ${r3(m.barsW)}px`);
+    if (m.lastRight > m.boxRight + 0.5) p.push(`the last bar ends at ${r3(m.lastRight)}, past the strip's edge at ${r3(m.boxRight)}`);
+    if (m.openRight !== null && m.openRight > m.stripRight + 0.5) p.push(`the open bar ends at ${r3(m.openRight)}, past ${r3(m.stripRight)}`);
+    if (m.synth.lastRight > m.synth.right + 0.5) p.push(`a ${m.synth.n}-bar strip runs to ${r3(m.synth.lastRight)}, past its edge at ${r3(m.synth.right)}`);
+    if (!(m.synth.barMin > 0)) p.push(`a ${m.synth.n}-bar strip has bars ${r3(m.synth.barMin)}px wide -- invisible`);
+    // While the strip has a pixel per bar, the fluid gap's promise is a bar of
+    // at least 1px; past that the bars may thin, and only the edge holds.
+    else if (m.synth.width >= m.synth.n && m.synth.barMin < 0.999) p.push(`a ${m.synth.n}-bar strip ${r3(m.synth.width)}px wide has bars ${r3(m.synth.barMin)}px wide -- the gap did not give way`);
+    const clipped = m.tiles.filter((x) => x.scroll > x.client + 1);
+    if (clipped.length) p.push(`a tile overflows: ${clipped.map((x) => `"${x.text}" ${x.scroll}px in ${x.client}px`).join(', ')}`);
+    if (p.length) for (const x of p) fail(`gap history strip at ${w}px: ${x}`);
+    else pass(`strip at ${w}px: ${m.n} bars in ${r3(m.barsW)}px, ${r3(m.barMin)}–${r3(m.barMax)}px wide, gaps ${r3(m.gapMin)}–${r3(m.gapMax)}px, open bar ${m.openW}px; 300 synthetic bars ${r3(m.synth.barMin)}px, inside the edge`);
+  }
+
+  // (b) A song with a TIE at its longest closed gap: every tied show tagged.
+  // Candidates are the eight with a closed tie on 2026-10-26 (Smile, Cicada
+  // Sings, Between You and Me, Come Up Slow, Evergreen, Finding and Losing,
+  // Time Escaping, You); the first still tied is used, and if none is, that is
+  // a FAIL naming the cause -- the rule would otherwise go unexercised.
+  //
+  // "Still tied" is read from the rendered FIGURES -- two or more show rows at
+  // the largest closed figure, and that figure above the open one -- never
+  // from the tags under test. Chosen by its tags, a song whose ties went
+  // untagged was skipped, and a fault that tagged one tied show of each read
+  // "the data moved" instead of a defect (cold review, 0.1.83).
+  let tieDone = null;
+  for (const id of [277, 16, 9, 276, 189, 20, 234, 274]) {
+    const h = await openHistory(id);
+    const figures = h.rows.filter((r) => !r.now && r.num !== null).map((r) => r.num);
+    const closedMax = Math.max(-1, ...figures);
+    const nowRow = h.rows.find((r) => r.now);
+    if (closedMax <= 0 || figures.filter((n) => n === closedMax).length < 2 || (nowRow && nowRow.num >= closedMax)) continue;
+    const p = historyProblems(`song ${id}`, h);
+    if (p.length) for (const x of p) fail(`gap history ${x}`);
+    else pass(`closed tie, song ${id}: ${histSummary(h)} -- every show at ${h.tiles.longest} tagged`);
+    tieDone = id;
+    break;
+  }
+  if (!tieDone) fail('gap history: none of the eight tie candidates still has two shows at its longest closed gap in its rendered figures -- the data moved; re-measure and update the list, the tie rule went unchecked');
+
+  // (c) A song whose OPEN gap is the longest, taken from the Songs tab's
+  // "Passed longest gap" filter so it is one on the day the test runs. The
+  // tag and the bright bar go on the Now row and nowhere else. Then Silver
+  // Steed, an exact open/closed tie on 2026-10-26: reported as exercised or
+  // not, because the unit test pins the tie and the data may move on.
+  await evaluate(`location.hash = '#/songs';`);
+  await sleep(1000);
+  let openId = null;
+  if (await clickFilter('Passed longest gap')) {
+    await sleep(900);
+    openId = await evaluate(`(() => { const r = document.querySelector('.screen .rows li .row-shell[data-song-id]'); return r ? Number(r.dataset.songId) : null; })()`);
+  }
+  if (!(await clickFilter('All'))) fail('gap history: could not reset the Songs filter to "All"');
+  await sleep(500);
+  if (!openId) fail('gap history: the "Passed longest gap" filter gave no song, so the open case went unchecked');
+  else {
+    const h = await openHistory(openId);
+    const p = historyProblems(`song ${openId}`, h);
+    if (!h.rows.some((r) => r.now && r.longest)) p.push(`song ${openId}: the Now row is not tagged although the song passed its longest closed gap`);
+    if (p.length) for (const x of p) fail(`gap history ${x}`);
+    else pass(`open longest, song ${openId}: ${histSummary(h)}; no closed row tagged`);
+  }
+  {
+    const h = await openHistory(347);
+    const p = historyProblems('Silver Steed', h);
+    const now = h.rows.find((r) => r.now);
+    const closedMax = Math.max(-1, ...h.rows.filter((r) => !r.now && r.num !== null).map((r) => r.num));
+    if (p.length) for (const x of p) fail(`gap history ${x}`);
+    else pass(`Silver Steed: ${histSummary(h)}; ${now && now.num === closedMax ? `an exact open/closed tie at ${closedMax}, read open` : 'no longer an exact tie -- the tie case is the unit test\'s alone today'}`);
+  }
+
+  // (d) Tapping the strip finds the row: a bar a third of the way along, an
+  // old show far down a newest-first list, so the scroll has to move.
+  {
+    await openHistory(54);
+    const tap = await evaluate(`(() => {
+      const strip = document.querySelector('.screen .gap-strip');
+      const bars = strip ? [...strip.querySelectorAll('.gap-strip-bar')] : [];
+      if (!bars.length) return null;
+      const bar = bars[Math.floor(bars.length / 3)];
+      const r = bar.getBoundingClientRect();
+      strip.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }));
+      const row = document.querySelector('.screen .history-row[data-order="' + bar.dataset.order + '"]');
+      const rr = row ? row.getBoundingClientRect() : null;
+      return {
+        order: Number(bar.dataset.order),
+        flashed: [...document.querySelectorAll('.screen .history-row[data-flash="true"]')].map((x) => Number(x.dataset.order)),
+        inView: rr ? rr.top >= 0 && rr.bottom <= window.innerHeight : false,
+        scrollY: Math.round(window.scrollY),
+      };
+    })()`);
+    if (!tap) fail('gap history: no strip to tap on Shadow');
+    else if (tap.flashed.length !== 1 || tap.flashed[0] !== tap.order) fail(`gap history: tapped the bar for order ${tap.order}, flashed ${JSON.stringify(tap.flashed)}`);
+    else if (!tap.inView || tap.scrollY === 0) fail(`gap history: the row for order ${tap.order} is ${tap.inView ? 'in view' : 'NOT in view'} at scrollY ${tap.scrollY}`);
+    else pass(`a tap on the strip flashes its own row (order ${tap.order}) and scrolls it into view (scrollY ${tap.scrollY})`);
+    await evaluate('window.scrollTo(0, 0);');
+  }
+
+  // (e) A row against that night's gap chart: the same song, the same figure.
+  // A FOLDED row -- one carrying ×N -- because that is the case where the two
+  // screens could disagree: Carton's own page prints 0 on the repeat, and the
+  // gap chart folds the night's repeats the way this list does.
+  {
+    await openHistory(54);
+    const row = await evaluate(`(() => {${HIST_JS}
+      const r = histRows().find((x) => !x.now && !x.debut && x.times > 1);
+      if (!r) return null;
+      document.querySelector('.screen .history-row[data-order="' + r.order + '"] button.row-action').click();
+      return r;
+    })()`);
+    await sleep(1100);
+    const chart = await evaluate(`(() => {
+      const t = (n) => ((n || {}).textContent || '').trim();
+      const li = [...document.querySelectorAll('.screen .rows li')].find((x) => t(x.querySelector('.row-title')) === 'Shadow');
+      return { hash: location.hash, num: li && li.querySelector('.gap-num') ? Number(t(li.querySelector('.gap-num'))) : null };
+    })()`);
+    if (!row) fail('gap history: Shadow has no ×N row to compare -- the fold went unchecked against the gap chart');
+    else if (chart.hash !== `#/gapchart/${row.showId}`) fail(`gap history: the row action for show ${row.showId} went to ${chart.hash}`);
+    else if (chart.num !== row.num) fail(`gap history: ${row.title} (×${row.times}) reads ${row.num} here and ${chart.num} on that night's gap chart`);
+    else pass(`${row.title}, played ×${row.times}: ${row.num} here, ${chart.num} for Shadow on that night's gap chart`);
+  }
+
+  // (f) Song detail: the longest tile opens the history, carries the same
+  // figure, no ⓘ; the shows-since tile still opens the explainer. The history
+  // links home to the same Carton page song detail does.
+  //
+  // Then the back link, whose two paths BOTH land on the song, so the hash
+  // after the tap cannot tell them apart (cold review, 0.1.83). What the
+  // browser's own stack holds afterwards can:
+  //   opened from the song, it STEPS BACK, so forward() returns to the
+  //     history -- and still does after a reload, because the fact is stored
+  //     on the history entry, not in module memory;
+  //   reached by deep link, it REPLACES itself with the song, so back() from
+  //     the song reaches what was there before -- not the history (a step
+  //     back) and not the song twice (a push).
+  {
+    const hashNow = () => evaluate('location.hash');
+    const tapBack = () => evaluate(`(() => { const b = document.querySelector('.screen button.chip[aria-label^="Back to"]'); if (!b) return false; b.click(); return true; })()`);
+    // Waits for a NEW document: the flag is set on the old one before the
+    // reload, so the old page still on screen cannot satisfy the wait.
+    const reloadHistory = async () => {
+      await evaluate('window.__beforeReload = true; location.reload();');
+      for (let i = 0; i < 50; i++) {
+        await sleep(300);
+        if (await evaluate(`!window.__beforeReload && !!document.querySelector('#main .screen .gap-strip-caption')`)) return true;
+      }
+      return false;
+    };
+    await evaluate(`location.hash = '#/song/54';`);
+    await sleep(1100);
+    const tileRead = await evaluate(`(() => {
+      const t = (n) => ((n || {}).textContent || '').trim();
+      const b = document.querySelector('.screen button.stat-nav');
+      if (!b) return null;
+      const label = b.querySelector('.stat-label');
+      const carton = [...document.querySelectorAll('.screen a.carton-link')].find((a) => a.href.includes('/song/'));
+      return { value: t(b.querySelector('.stat-value')), label: t(label), link: t(b.querySelector('.stat-link')), info: getComputedStyle(label, '::after').content, carton: carton ? carton.href : null };
+    })()`);
+    const navigated = tileRead && (await evaluate(`(() => { document.querySelector('.screen button.stat-nav').click(); return true; })()`));
+    await sleep(1100);
+    const there = await readHistory();
+    const historyCarton = await evaluate(`(() => { const a = [...document.querySelectorAll('.screen a.carton-link')].find((x) => x.textContent.trim() === 'Song page on The Carton'); return a ? a.href : null; })()`);
+    const reloaded = there.hash === '#/song/54/gaps' && (await reloadHistory());
+    const backed = await tapBack();
+    await sleep(1100);
+    const backHash = await hashNow();
+    await evaluate('history.forward();');
+    await sleep(1100);
+    const forwardHash = await hashNow();
+    // The deep link: something else first, then the history pushed straight
+    // on top of it, as a pasted URL or a bookmark would.
+    await evaluate(`location.hash = '#/home';`);
+    await sleep(1100);
+    await evaluate(`location.hash = '#/song/54/gaps';`);
+    await sleep(1100);
+    const deepBacked = await tapBack();
+    await sleep(1100);
+    const deepBackHash = await hashNow();
+    await evaluate('history.back();');
+    await sleep(1100);
+    const beneathHash = await hashNow();
+    await evaluate(`location.hash = '#/song/54';`);
+    await sleep(1100);
+    const explainer = await evaluate(`(() => {
+      const s = [...document.querySelectorAll('.screen button.stat')].find((x) => (x.querySelector('.stat-label') || {}).textContent.trim() === 'shows since last');
+      if (!s) return null; s.click();
+      const h = document.querySelector('.sheet h2'); const text = h ? h.textContent.trim() : null;
+      const bd = document.querySelector('.sheet-backdrop'); if (bd) bd.click();
+      return text;
+    })()`);
+    const p = [];
+    if (!tileRead) p.push('song detail has no navigating longest tile');
+    else {
+      if (tileRead.link !== 'Gap history ›') p.push(`the tile's link line reads ${JSON.stringify(tileRead.link)}`);
+      if (!tileRead.label.startsWith('longest observed gap — ')) p.push(`the tile's label reads ${JSON.stringify(tileRead.label)}`);
+      if (tileRead.info !== 'none') p.push(`the tile still draws the ⓘ (::after ${tileRead.info})`);
+      if (!navigated || there.hash !== '#/song/54/gaps') p.push(`tapping the tile landed on ${there.hash}`);
+      else if (Number(there.tiles.longest) !== Number(tileRead.value)) p.push(`song detail's longest reads ${tileRead.value}, the history's ${there.tiles.longest}`);
+    }
+    if (!tileRead || !tileRead.carton) p.push('song detail carries no Carton song link to compare with');
+    else if (historyCarton !== tileRead.carton) p.push(`the history's Carton link is ${JSON.stringify(historyCarton)}, song detail's ${tileRead.carton}`);
+    if (!reloaded) p.push('the history did not render again after a reload');
+    if (!backed || backHash !== '#/song/54') p.push(`opened from the song and reloaded, the back link went to ${backHash}`);
+    else if (forwardHash !== '#/song/54/gaps') p.push(`opened from the song and reloaded, the back link did not step back: forward() reached ${forwardHash}, not the history`);
+    if (!deepBacked || deepBackHash !== '#/song/54') p.push(`from a deep link, the back link went to ${deepBackHash}, not the song`);
+    else if (beneathHash !== '#/home') p.push(`from a deep link, back() from the song reached ${beneathHash}, not #/home -- the link ${beneathHash === '#/song/54/gaps' ? 'pushed the song instead of replacing' : 'did not replace'} the history`);
+    if (explainer !== 'How gap is counted') p.push(`the shows-since tile opened ${JSON.stringify(explainer)}, not the explainer`);
+    if (p.length) for (const x of p) fail(`gap history: ${x}`);
+    else pass(`song detail's tile reads ${tileRead.value} and opens the history, which agrees and links to the same Carton page; back steps back to the song even after a reload, and replaces a deep link with it; the shows-since tile still explains`);
+  }
+
+  // (g) The three sorts, through the lead chip's sheet: names and
+  // descriptions as locked, the count line following the sort, and each
+  // order checked against the rows' own figures and positions. Back to
+  // "Newest first" at the end, the screen's default.
+  {
+    await openHistory(54);
+    const sheet = await evaluate(`(() => {
+      const t = (n) => ((n || {}).textContent || '').trim();
+      const lead = document.querySelector('.screen .sortbar .chip-lead'); if (!lead) return null;
+      lead.click();
+      const rows = [...document.querySelectorAll('.sheet .sheet-option')].map((o) => [t(o.querySelector('.sheet-option-name')), t(o.querySelector('.sheet-option-desc'))]);
+      const bd = document.querySelector('.sheet-backdrop'); if (bd) bd.click();
+      return rows;
+    })()`);
+    const LOCKED = [['Newest first', 'Most recent show first.'], ['Oldest first', 'The debut first.'], ['Largest gap', 'Biggest gap first; ties newest first.']];
+    if (JSON.stringify(sheet) !== JSON.stringify(LOCKED)) fail(`gap history sort sheet reads ${JSON.stringify(sheet)}`);
+    const sortProblems = [];
+    for (const [label, phrase, check] of [
+      ['Oldest first', 'oldest first', (rows) => {
+        if (!rows[0] || !rows[0].debut) return `the first row is ${rows[0] ? rows[0].title : 'missing'}, not the debut`;
+        const bad = rows.findIndex((r, i) => i && r.order < rows[i - 1].order);
+        return bad > 0 ? `order drops at row ${bad + 1}` : null;
+      }],
+      ['Largest gap', 'largest gap first', (rows) => {
+        const v = (r) => (r.num === null ? -Infinity : r.num);
+        const bad = rows.findIndex((r, i) => i && (v(r) > v(rows[i - 1]) || (v(r) === v(rows[i - 1]) && r.order > rows[i - 1].order)));
+        return bad > 0 ? `rises at row ${bad + 1}: ${rows[bad].num} (order ${rows[bad].order}) after ${rows[bad - 1].num} (order ${rows[bad - 1].order})` : null;
+      }],
+      ['Newest first', 'newest first', (rows) => {
+        if (!rows[0] || !rows[0].now) return `the first row is ${rows[0] ? rows[0].title : 'missing'}, not the gap still open`;
+        const bad = rows.findIndex((r, i) => i && r.order > rows[i - 1].order);
+        return bad > 0 ? `order rises at row ${bad + 1}` : null;
+      }],
+    ]) {
+      if (!(await clickSort(label))) { sortProblems.push(`no "${label}" in the sheet`); continue; }
+      await sleep(700);
+      const h = await readHistory();
+      if (h.lead !== label) sortProblems.push(`${label}: the lead reads ${JSON.stringify(h.lead)}`);
+      if (!h.count.endsWith(`· ${phrase}`)) sortProblems.push(`${label}: the count line reads ${JSON.stringify(h.count)}`);
+      const bad = check(h.rows);
+      if (bad) sortProblems.push(`${label}: ${bad}`);
+      for (const x of historyProblems(`Shadow under ${label}`, h)) sortProblems.push(x);
+    }
+    if (sortProblems.length) for (const x of sortProblems) fail(`gap history sort: ${x}`);
+    else pass('three sorts as locked: Oldest first opens on the debut, Largest gap never rises and breaks ties newest first, Newest first opens on the gap still open; the count line follows each');
+  }
+
   // --- The set-structure badge is compact, and the row is one control -------
   //
   // "Set 1 + Set 2 + Encore" was pushing venue names into ellipsis on the

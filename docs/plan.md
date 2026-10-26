@@ -780,9 +780,13 @@ plus the current gap Carton states as "which was N show(s) ago" — the same fig
 renders through `gapAtShow()`, laid out in one place. That is repackaging. Designed in chat and
 recorded before any code; the language test in `CLAUDE.md` applies to every string on it.
 
-**How it is reached.** Tapping the "longest observed gap" tile on song detail, which today opens
-the gap explainer. The "shows since last" tile and the "How this is counted" link keep the
+**How it is reached.** Tapping the "longest observed gap" tile on song detail, which until 0.1.83
+opened the gap explainer. The "shows since last" tile and the "How gap is counted" link keep the
 explainer.
+
+> **Corrected in 0.1.83:** this paragraph first named the link "How this is counted". Song detail's
+> link reads **"How gap is counted"**, the label `gapExplainerLink()` defaults to. The name was
+> wrong; what the sentence rules — that link keeps the explainer — was not.
 
 **One entry per show, not per performance.** The user's call, in their words: the per-show gap is
 the number jamband fans look at, not in-show repeats. It is the same unit the gap chart uses —
@@ -809,6 +813,39 @@ and the bright strip bar go on the "Now · still open" row and the dashed bar, n
 - **No days between performances.** No derived number is rendered — the line the "Passed longest
   gap" ruling (2026-10-24, shipped in 0.1.79) draws.
 - **No trend line, no expected next.** Both describe what will happen.
+
+**Defaults approved with the change plan (2026-10-26), shipped in 0.1.83.** Seven questions the
+plan answered by default; all seven approved as proposed, the sixth with one change:
+
+1. **Every tied show is tagged.** When two or more closed gaps tie at the longest, each carries
+   "Longest" and each has a bright bar — a tie is a fact about every one of them, and tagging one
+   would be choosing. Measured 2026-10-26: 9 songs have two or more shows tied at their longest
+   closed gap, and in 8 of them that closed gap is the song's longest (Smile, song 277, ties three
+   shows at 14). Silver Steed (347) and Sussudio (241) tie open against closed and read open, per
+   `longestGap()`.
+2. **The strip's gap shrinks.** 1px between bars until the bars would fall under 1px, then the gap
+   shrinks toward 0 so the bars do not — one CSS expression over the bar count, no JavaScript
+   layout. A fixed 1px gap fits Shadow's 141 shows at 360px today and stops fitting at 145.
+3. **Song detail keeps its tile label** ("longest observed gap — {from} → {to | still open}") and
+   adds a "Gap history ›" line under it; the tile's ⓘ goes, because it no longer opens the
+   explainer.
+4. **A new token, `--yolk-muted`,** for every bar that is not the longest. The longest is
+   `--yolk`; the bars read as one family with the longest lifted out. A token, not a reuse,
+   because `--yolk-deep` is the quieter accent only in dark: in light it is darker than `--yolk`
+   on white and would read as the louder bar. Dark aliases `--dk-yolk-deep`; light has its own
+   hex. Figures are in `tokens.css` and `docs/design.md`, 0.1.83.
+5. **Under "Largest gap", the "Now · still open" row sorts by its own figure**, and the debut,
+   which has no gap, goes last. Ties newest first.
+6. **The count line follows the active sort:** "141 shows · newest first", "· oldest first",
+   "· largest gap first". It counts shows, not performances — times played above it counts
+   performances, so the two can differ, and the line says which one it is.
+7. **No "Longest" tag when the longest gap is 0.** A song whose only gaps are 0 has no longest gap
+   worth naming; none existed on 2026-10-26, and the rule is pinned by a unit test rather than
+   left to the data.
+
+The sort sheet's three options and their second lines are locked with these: **Newest first** —
+"Most recent show first."; **Oldest first** — "The debut first."; **Largest gap** — "Biggest gap
+first; ties newest first."
 
 ## Out of scope — parked
 

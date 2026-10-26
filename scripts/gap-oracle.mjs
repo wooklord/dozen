@@ -18,6 +18,9 @@
 //   - every other row is a closed gap, compared against gapAtShow().gap
 //   - the page's play count is compared against timesPlayed, and its "N show(s)
 //     ago" against showsSinceLastPlayed
+//   - the gap history's one-entry-per-show fold (0.1.83) against the rows
+//     grouped by show: same shows, same order, each show's first row, "×N"
+//     equal to the rows at that show -- compareHistory() below
 //
 // The song is identified by the data-song-id on the page's upvote buttons, NOT
 // by the URL slug. The list below holds the slugs from the songs table, and
@@ -40,7 +43,7 @@
 
 import { pathToFileURL } from 'node:url';
 import { fetchFullArchive } from '../src/data/source.js';
-import { buildIndex, gapAtShow } from '../src/data/index.js';
+import { buildIndex, gapAtShow, gapHistory } from '../src/data/index.js';
 
 export const SLUGS = [
   'feel-like-a-stranger', 'the-harder-they-come', 'franklins-tower', 'helpless',
@@ -110,6 +113,42 @@ export function compareSong(index, song, page) {
   return { checked, problems };
 }
 
+/**
+ * The gap history's FOLD against the same page (0.1.83). Carton prints one row
+ * per performance; the history has one entry per show. Grouped by the page's
+ * data-show-id, the two must list the same shows in the same order, each
+ * show's FIRST row must carry the entry's gap (Carton's 0 on a repeat row is
+ * the row the fold drops), the group's size must be the entry's "×N", and the
+ * debut must be the first entry and only the first. Reads gapHistory(), the
+ * function the screen renders, not a reimplementation of the fold.
+ */
+export function compareHistory(index, song, page) {
+  const problems = [];
+  const groups = [];
+  for (const row of page.rows) {
+    const last = groups[groups.length - 1];
+    if (last && last.showId === row.showId) last.rows.push(row);
+    else groups.push({ showId: row.showId, date: row.date, rows: [row] });
+  }
+  const { entries } = gapHistory(index, song.song_id);
+  if (entries.length !== groups.length) {
+    problems.push(`history: ${entries.length} entries against ${groups.length} shows on Carton (${page.rows.length} rows)`);
+    return { checked: 1, problems };
+  }
+  let checked = 0;
+  groups.forEach((g, i) => {
+    const e = entries[i];
+    checked++;
+    if (e.show_id !== g.showId) { problems.push(`history entry ${i + 1}: show ${e.show_id}, Carton's show ${g.showId} (${g.date})`); return; }
+    if (e.count !== g.rows.length) problems.push(`history ${g.date}: ×${e.count}, Carton lists ${g.rows.length} row(s) at that show`);
+    if (i === 0) {
+      if (!e.isDebut || e.gap !== null) problems.push(`history ${g.date}: the first show is not a debut with no number (isDebut ${e.isDebut}, gap ${e.gap})`);
+    } else if (e.isDebut) problems.push(`history ${g.date}: a debut after the first show`);
+    else if (e.gap !== g.rows[0].gap) problems.push(`history ${g.date}: gap ${e.gap}, Carton's first row at that show reads ${g.rows[0].gap}`);
+  });
+  return { checked, problems };
+}
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function main() {
@@ -142,7 +181,10 @@ async function main() {
     if (!page.songId) { failures++; console.log(`  FAIL  ${slug}: no data-song-id on the page -- not a song page (a redirect to the index?)`); continue; }
     const song = index.songsById.get(page.songId);
     if (!song) { failures++; console.log(`  FAIL  ${slug}: page says song_id ${page.songId}, which is not in the index`); continue; }
-    const { checked, problems } = compareSong(index, song, page);
+    const rows = compareSong(index, song, page);
+    const fold = compareHistory(index, song, page);
+    const checked = rows.checked + fold.checked;
+    const problems = [...rows.problems, ...fold.problems];
     checks += checked;
     if (problems.length) {
       failures += problems.length;
@@ -150,7 +192,7 @@ async function main() {
       for (const p of problems.slice(0, 6)) console.log(`          ${p}`);
       if (problems.length > 6) console.log(`          … ${problems.length - 6} more`);
     } else {
-      console.log(`  ok    ${slug}: ${checked} checks (${page.rows.length} rows, current ${page.current}, ${page.plays} plays)`);
+      console.log(`  ok    ${slug}: ${checked} checks (${page.rows.length} rows, ${fold.checked} shows in the history, current ${page.current}, ${page.plays} plays)`);
     }
     await sleep(1200);
   }

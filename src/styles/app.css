@@ -572,6 +572,19 @@ button.gap-figure:active {
   border-radius: var(--r-cell);
 }
 
+/* A stat that NAVIGATES rather than explains (song detail's longest-gap tile,
+ * 0.1.83, which opens the gap history). No ⓘ, which promises an explanation,
+ * and a line saying where the tap goes. */
+.stat-tappable.stat-nav .stat-label::after {
+  content: none;
+}
+.stat-link {
+  margin-top: var(--s-1);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--ink-dim);
+}
+
 /* Secondary action strip under a card heading. */
 .card-actions {
   display: flex;
@@ -896,6 +909,83 @@ button.gap-figure:active {
  * flex: none keeps it whole; the venue line beside it is what truncates. */
 .badge-sets {
   flex: none;
+}
+
+/* ----------------------------------------------------------- gap history --- */
+
+/* THE STRIP (0.1.83): one bar per show, oldest to newest, then the gap still
+ * open as a dashed bar of its own. Heights are the gap over this song's own
+ * longest, set as --h by views/gaphistory.js, with a 2px floor so every show
+ * is visible -- a debut, which has no gap, is the floor: a flat tick.
+ *
+ * THE GAP SHRINKS WITH THE COUNT. At 360px the bars' box is 288px, and with
+ * a fixed 1px gap Shadow's 141 bars are 1.05px wide; 145 bars would be
+ * 0.99px -- four more shows with Shadow in them. This keeps the gap at 1px
+ * while bars of at least 1px still fit, and shrinks it toward 0 after, so
+ * bars stay at least 1px until a song has one show per pixel of the box
+ * (288 at 360px). A percentage gap resolves against the bars' own box; --n
+ * is the bar count. The smoke test holds a synthetic 300-bar strip to the
+ * edge, and docs/design.md (0.1.83) has the measurements. */
+.gap-strip {
+  display: flex;
+  align-items: flex-end;
+  height: 56px;
+}
+.gap-strip-bars {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  column-gap: max(0px, min(1px, (100% - var(--n) * 1px) / (var(--n) - 1)));
+}
+.gap-strip-bar {
+  flex: 1 1 0;
+  min-width: 0;
+  height: max(2px, calc(var(--h, 0) * 100%));
+  background: var(--yolk-muted);
+}
+.gap-strip-bar[data-longest="true"] {
+  background: var(--yolk);
+}
+.gap-strip-bar[data-debut="true"] {
+  background: var(--ink-faint);
+}
+/* 3px wide after a 3px space: a dash pattern needs a bar wide enough to be
+ * seen on, and the space sets the gap still open apart from the shows. */
+.gap-strip-open {
+  flex: none;
+  width: 3px;
+  margin-left: 3px;
+  height: max(2px, calc(var(--h, 0) * 100%));
+  background: repeating-linear-gradient(to top, var(--yolk-muted) 0 3px, transparent 3px 5px);
+}
+.gap-strip-open[data-longest="true"] {
+  background: repeating-linear-gradient(to top, var(--yolk) 0 3px, transparent 3px 5px);
+}
+.gap-strip-caption {
+  margin: var(--s-2) 0 0;
+}
+
+/* A tap on the strip scrolls a row into view and flashes it, so the reader
+ * sees which one it was. --surface-up, the pressed-row ground, on which every
+ * text token in a row is measured in scripts/contrast.mjs -- four of those
+ * pairs added in 0.1.83, when a review found this comment claiming them
+ * before they existed. */
+.row-shell.history-row {
+  transition: background-color 0.4s ease-out;
+}
+.row-shell.history-row[data-flash="true"] {
+  background: var(--surface-up);
+}
+
+/* The set labels give way before the "×N" and "Longest" badges beside them,
+ * as .cover-note does on the Songs rows. */
+.history-sets {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 
@@ -1661,6 +1751,12 @@ button.fn-marker::after {
   border: 1px solid var(--line);
   border-radius: var(--r-cell);
   overflow: hidden;
+}
+
+/* Gap history's three tiles (0.1.83), one row at every width. Doubled, so it
+   also outranks the desktop rule's four columns at 720px and up. */
+.stat-grid.stat-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
 }
 
 .stat {

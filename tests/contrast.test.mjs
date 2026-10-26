@@ -256,6 +256,13 @@ test('EVERY TOKEN A RULE USES IS AUDITED SOMEWHERE', () => {
   // --line background. Each needs a reason.
   const NO_TEXT_ON_IT = {
     '.sheet-grip': 'a 4px drag handle; nothing renders on top of it',
+    // The gap history strip (0.1.83): bars that ARE the graphic. Their own
+    // contrast against the card is measured as a foreground in PAIRS --
+    // `yolk-muted on surface` at 3:1 for the closed bars and the open one,
+    // `ink-faint on surface` (already at 4.5) for the debut tick.
+    '.gap-strip-bar': 'a closed-gap bar in the gap history strip; nothing renders on it',
+    '.gap-strip-bar[data-debut="true"]': 'the debut tick in the gap history strip; nothing renders on it',
+    '.gap-strip-open': 'the dashed open-gap bar in the gap history strip; nothing renders on it',
   };
 
   // Tokens that are not a colour on a ground at all.
@@ -266,16 +273,19 @@ test('EVERY TOKEN A RULE USES IS AUDITED SOMEWHERE', () => {
     'shadow-up', 'shadow-sheet', 'cell-inset',
   ]);
 
+  // A token is exempt as a ground only where EVERY rule painting it is one of
+  // those selectors; one rule outside the list and it has to be audited.
   const unaudited = [];
-  for (const [token, selector] of used.color) {
+  for (const [token, selectors] of used.color) {
     if (NOT_A_COLOUR_PAIR.has(token)) continue;
-    if (!auditedFg.has(token)) unaudited.push(`color --${token} (${selector})`);
+    if (!auditedFg.has(token)) unaudited.push(`color --${token} (${selectors.join(', ')})`);
   }
-  for (const [token, selector] of used.background) {
+  for (const [token, selectors] of used.background) {
     if (NOT_A_COLOUR_PAIR.has(token)) continue;
-    if (NO_TEXT_ON_IT[selector]) continue;
+    const grounds = selectors.filter((s) => !NO_TEXT_ON_IT[s]);
+    if (!grounds.length) continue;
     const resolved = GROUND_ALIAS[token] || token;
-    if (!auditedBg.has(resolved)) unaudited.push(`background --${token} (${selector})`);
+    if (!auditedBg.has(resolved)) unaudited.push(`background --${token} (${grounds.join(', ')})`);
   }
   assert.deepEqual(unaudited, [], 'these tokens are painted by a rule but appear in no measured pair');
 });

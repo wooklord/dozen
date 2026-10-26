@@ -299,6 +299,15 @@ export const PAIRS = [
   // below --ink-label (6.85 on the shell), so section labels stay clearly
   // brighter than Carton links, which smoke.mjs asserts independently.
   { fg: 'ink-faint', bg: 'surface-up', min: 4.5, where: 'cover note, row-meta separator and gap unit on a PRESSED row' },
+  // The REST of a row's text on that ground (0.1.83). A gap-history row
+  // flashes --surface-up after a strip tap, and app.css and design.md said
+  // every row text token was already measured there -- only ink-faint was, of
+  // the text. A cold review found the claim had no pairs behind it. A pressed
+  // row has always carried these four as well.
+  { fg: 'ink', bg: 'surface-up', min: 4.5, where: 'row titles on a pressed or flashing row' },
+  { fg: 'ink-dim', bg: 'surface-up', min: 4.5, where: 'row meta, set labels and plain badges on a pressed or flashing row' },
+  { fg: 'ink-venue', bg: 'surface-up', min: 4.5, where: 'venue names on a pressed or flashing row' },
+  { fg: 'ink-place', bg: 'surface-up', min: 4.5, where: 'venue places on a pressed or flashing row' },
 
   // Section and stat labels. A dedicated token so brightening them cannot
   // drag up .carton-link, .creator-credit or .attrib, which share --ink-faint
@@ -361,8 +370,21 @@ export const PAIRS = [
   // shape that has to stay hand-listed, and exactly the shape that goes
   // unnoticed. Found by the coverage check below, not by reading the file.
   { fg: 'yolk-ink', bg: 'yolk-deep', min: 4.5, where: 'selected theme segment while pressed' },
+  // Its UNSELECTED twin: .segmented-item's --ink-dim label on the --line
+  // ground .segmented-item:active paints. Never measured until 0.1.83, and
+  // invisible to the coverage check, which recorded one selector per token --
+  // --line's was .sheet-grip, exempt, so every later --line ground was too.
+  // Measured 6.57:1 dark, 5.15:1 light.
+  { fg: 'ink-dim', bg: 'line', min: 4.5, where: 'unselected theme segment while pressed' },
 
   { fg: 'danger', bg: 'shell', min: 4.5, where: 'error text, the NO SW chip' },
+
+  // The gap history strip (0.1.83). Graphics, so WCAG 1.4.11's 3:1 against
+  // the card they sit on. The closed bars and the dashed open bar wear the
+  // muted accent; the longest bar is --yolk, already asserted on --surface at
+  // 4.5 above, and the debut tick --ink-faint, likewise. The bars carry no
+  // text, so the coverage test exempts them as grounds by selector.
+  { fg: 'yolk-muted', bg: 'surface', min: 3, where: 'gap history strip: the closed-gap bars and the open bar, on the card' },
 ];
 
 /**
@@ -557,7 +579,17 @@ export function deriveRulePairs(cssPath = path.join(ROOT, 'src/styles/app.css'),
   return { pairs, skipped };
 }
 
-/** Every palette token a rule in app.css actually uses, by property. */
+/**
+ * Every palette token a rule in app.css actually uses, by property, with EVERY
+ * selector that uses it.
+ *
+ * Every selector, not the first one. This kept only the first until 0.1.83,
+ * and the coverage test exempts grounds BY SELECTOR (NO_TEXT_ON_IT) precisely
+ * so that exempting one rule cannot exempt another -- but with one selector
+ * recorded per token, exempting the first rule to paint a token exempted the
+ * token, and a later rule putting text on it would have passed unmeasured.
+ * Found when the gap history strip's bars needed exactly such an exemption.
+ */
 export function tokensUsedByRules(cssPath = path.join(ROOT, 'src/styles/app.css')) {
   const rules = parseRules(fs.readFileSync(cssPath, 'utf8'));
   const out = { color: new Map(), background: new Map() };
@@ -566,7 +598,9 @@ export function tokensUsedByRules(cssPath = path.join(ROOT, 'src/styles/app.css'
       const v = r.decls.get(prop);
       if (!v) continue;
       const m = String(v).match(/var\(\s*--([a-z0-9-]+)\s*\)/);
-      if (m && !out[key].has(m[1])) out[key].set(m[1], r.selector);
+      if (!m) continue;
+      if (!out[key].has(m[1])) out[key].set(m[1], []);
+      if (!out[key].get(m[1]).includes(r.selector)) out[key].get(m[1]).push(r.selector);
     }
   }
   return out;

@@ -137,7 +137,12 @@ export function venueInfoButton(venue, label = 'Venue info') {
 }
 
 /**
- * How gap is counted, reachable from any gap figure in the app.
+ * How gap is counted. Reachable from the gap figures that explain themselves
+ * and from the "How gap is counted" links beside them. Some figures do not
+ * open it (0.1.83): song detail's longest-gap tile, which opens the gap
+ * history, and every figure on that history -- its three tiles and its rows
+ * -- whose screen carries the link in its sub-line instead. So the "shows
+ * since last" tile explains itself on song detail and not on the history.
  *
  * Two things a reader needs and cannot infer from the number itself:
  * what the denominator is, and why our figure can disagree with the gap

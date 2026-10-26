@@ -22,6 +22,7 @@ import { renderHome } from './views/home.js';
 import { renderSongs } from './views/songs.js';
 import { renderShows } from './views/shows.js';
 import { renderSong } from './views/song.js';
+import { renderGapHistory } from './views/gaphistory.js';
 import { renderShow } from './views/show.js';
 import { renderVenue } from './views/venue.js';
 import { renderGapChart } from './views/gapchart.js';
@@ -610,7 +611,9 @@ function route() {
   }
 
   // Order matters: '#/show/' and '#/shows' share a prefix, and '#/songs' /
-  // '#/song/' likewise, so the more specific pattern is tested first.
+  // '#/song/' likewise, so the more specific pattern is tested first. The gap
+  // history, '#/song/{id}/gaps', is tested before '#/song/' for the same
+  // reason: the song route would read '54/gaps' as an id and say "not found".
   //
   // ERROR BOUNDARY. Without this a view that throws leaves the screen exactly
   // as it was -- the hash changes, nothing else does, and the tap looks like a
@@ -618,7 +621,9 @@ function route() {
   // gap chart survived three releases. A view that throws must SAY so.
   let view;
   try {
-    if (hash.startsWith('#/song/')) view = renderSong(ctx, hash.slice('#/song/'.length));
+    const gaps = /^#\/song\/(\d+)\/gaps$/.exec(hash);
+    if (gaps) view = renderGapHistory(ctx, gaps[1]);
+    else if (hash.startsWith('#/song/')) view = renderSong(ctx, hash.slice('#/song/'.length));
     else if (hash.startsWith('#/songs')) view = renderSongs(ctx);
     else if (hash.startsWith('#/gapchart/')) view = renderGapChart(ctx, hash.slice('#/gapchart/'.length));
     else if (hash.startsWith('#/show/')) view = renderShow(ctx, hash.slice('#/show/'.length));

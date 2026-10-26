@@ -28,6 +28,7 @@ the work that an illustration would otherwise do.
 --ink-faint    #918779   tertiary, timestamps
 --yolk         #F5A623   THE accent
 --yolk-deep    #C77F14   pressed
+--yolk-muted   #C77F14   gap-history strip bars that are not the longest (dark aliases --yolk-deep)
 --yolk-wash    rgba(245,166,35,.12)   selected row fill
 ```
 
@@ -54,6 +55,15 @@ eye has exactly one thing to find.
 
 Gap magnitude uses **opacity of a single hue**, not a rainbow scale. A multi-hue heatmap would
 imply thresholds the data doesn't have, and thresholds edge toward prediction.
+
+> **Found in 0.1.83: this scale has never rendered.** Every `.gap-bar` gets its `--heat` through
+> `el()`'s `style` prop, which is `Object.assign(node.style, …)`, and a key beginning `--` assigned
+> that way is a plain JS expando: measured in headless Chrome, `cssText` comes back without it and
+> the computed value is empty, with no error. So `var(--heat, 0)` has read 0 on every bar since
+> 0.1.16, and every bar in the app has sat at `--heat-floor` — 0.1 dark, 0.32 light. The floor
+> paragraph below was tuned, in 0.1.27, against bars that were all at the floor. **Not fixed in
+> 0.1.83**: the fix is one line in `el()`, and it relights every list in the app at once, which is
+> a visible change to shipped screens and its own decision. See "Gap history", 0.1.83, below.
 
 The heat bar's minimum opacity is a **per-theme token** (`--heat-floor`), not a constant. The dark
 accent is far lighter than its ground, so a low opacity still registers; the same value on white
@@ -1319,6 +1329,126 @@ Measured against the live tables: `show_tags` is `[]` on all 804 shows, `venues`
 flag, and the only festival signal anywhere is free text — 47 venue names, 8 show titles and 8
 shows' notes contain "fest". Matching on that would be the app inferring a category Carton never
 states. Parked in `plan.md` (f), not ruled out.
+
+### Gap history: one row per show, and a strip of every gap above it (0.1.83)
+
+Locked in chat on 2026-10-26 and ruled in `plan.md` ("Gap history (2026-10-26)") before any code,
+with the seven defaults approved at the change plan recorded there. Reached from song detail's
+longest-gap tile, at `#/song/{id}/gaps`.
+
+**The list is one row per show.** `gapHistory()` groups a song's performances by show and asks
+`gapAtShow()` for each, so a row and that night's gap chart carry the same figure — the smoke test
+taps the action on a folded "×N" row and compares. No screen-level check reads the set labels
+("Set 1, Encore"); their order and de-duplication are pinned by the unit fixture only. A repeat within a show is "×N" with every set label it was played
+in; Carton's 0 on the repeat row never appears. Measured 2026-10-26: 558 performance rows fold into
+another at the same show, across 136 songs; Shadow, the song with the most shows, has 169
+performances at 141 shows. `scripts/gap-oracle.mjs` holds the fold against Carton's own page —
+the same shows in the same order, each show's first row carrying the figure, the row count at the
+show equal to "×N".
+
+**The strip is spans, not a chart library and not a canvas.** One bar per show, oldest to newest,
+its height the gap over the song's longest (`heatFor()`, linear) with a 2px floor; a debut has no
+gap, so it is the floor, in `--ink-faint`. The gap still open is a dashed 3px bar set 3px apart at
+the right end. It is one `role="img"` with a summary in words, and a tap picks the bar nearest the
+tap's x — at 1.25px a bar is not something a thumb can aim at — then scrolls that show's row to the
+centre and flashes it on `--surface-up`, the pressed-row ground. This first said every row token
+was "already measured" there, and a cold review found only `--ink-faint` was, of the text: `--ink`,
+`--ink-dim`, `--ink-venue` and `--ink-place` on `--surface-up` had never been measured, on this
+screen or on any pressed row. They are pairs now, the lowest 6.49:1 (`--ink-dim`, light). Instant,
+not smooth: a smooth programmatic scroll never advanced in headless Chrome (0.1.82).
+
+**The bar gap shrinks so the bars do not.** `column-gap: max(0px, min(1px, (100% - n × 1px) /
+(n - 1)))`, with `n` the bar count: 1px between bars until the bars would fall under 1px, then the
+gap gives way. Shadow's strip from `scripts/smoke.mjs`, at device scale 2:
+
+| Viewport | Strip | Bars | Bar width | Gap | Open bar | 300 synthetic bars |
+|---|---|---|---|---|---|---|
+| 390px | 318px | 141 | 1.250–1.266px | 1px | 3px | 324px strip, bars 1px, inside the edge |
+| 360px | 288px | 141 | 1.047–1.063px | 1px | 3px | 294px strip, bars 0.969px, inside the edge |
+
+"Strip" is the bars' own box; the open bar and its 3px space take the other 6px of the card. The
+synthetic strip has no open bar, so it spans the full 324px and 294px. A fixed 1px gap fits
+Shadow today and stops fitting at 145 bars at 360 — four more shows with Shadow in them — and 160
+at 390. The
+fluid gap keeps every bar at 1px or wider up to as many bars as the strip has pixels; past that
+the bars thin below a pixel but never run off the card. Because no real song is near either
+limit, the smoke test builds a 300-bar strip in the same card and holds it to the edge at both
+widths, and to 1px bars wherever the strip has a pixel per bar. With the gap fixed at 1px it reads
+`a 300-bar strip 324px wide has bars 0.078px wide` at 390 and `runs to 332, past its edge at 327`
+at 360.
+
+**The fit is checked at the last bar's edge, not with `scrollWidth`.** Found while designing this,
+in a scratch page with the app's CSS: a 300-bar strip at 360 with a fixed gap put its last bar's
+right edge at 332 against the strip's 327, and `scrollWidth > clientWidth` reported no overflow.
+Recorded in `CLAUDE.md`'s proxy table.
+
+**The strip's custom properties nearly shipped dead.** `--n` and every bar's `--h` were first set
+through `el()`'s `style` prop, which drops custom properties without an error (see the note under
+"Color", above). Every bar rendered at the 2px floor and the gap fell back to 0 — and the first
+version of the smoke check, "the bright bar is the tallest", **passed**, because when every bar is
+2px each of them is the tallest. Caught by the 0px gap in that run's own output. The check now
+holds every bar's height to its own row's figure and the bar spacing to the fluid gap's formula,
+and both went red with the custom properties put back on `el()`. The strip sets them with
+`style.setProperty` (`withVars()` in `views/gaphistory.js`). The rows' `.gap-bar` heat on this
+screen is left on `el()` with every other list's, so this screen matches the rest of the app until
+`el()` is fixed for all of them.
+
+**`--yolk-muted`, a token for the bars that are not the longest.** The longest is `--yolk`; the
+rest read as the same family, a step down. `--yolk-deep` could not serve both themes: on near-black
+it is the quieter accent, on white it is darker than `--lt-yolk` and would read as the louder bar.
+Dark aliases `--dk-yolk-deep`; light gets its own hex. On `--surface`, against the accent beside it:
+
+```
+--dk-yolk-muted   #c77f14   5.44:1   ΔE00 12.31 from --dk-yolk (8.70:1)
+--lt-yolk-muted   #b67f2f   3.46:1   ΔE00 14.30 from --lt-yolk (5.69:1)
+```
+
+Graphics, so the floor is 3:1 (WCAG 1.4.11), measured in `scripts/contrast.mjs`, and the two
+separations are matched so the strip reads the same in both themes. Colour is never the only
+signal: the longest bar is also the tallest.
+
+**"Longest" follows `longestGap()`, ties included.** Every closed show at the longest gap is tagged
+and its bar is bright — Smile ties three shows at 14 — and when the open gap is the longest the tag
+and the bright bar go on "Now · still open" and the dashed bar instead. Measured 2026-10-26: 9 songs
+have two or more shows tied at their longest closed gap; Silver Steed and Sussudio tie open against
+closed and read open. No song had a longest gap of 0; the rule that tags nothing then is pinned by a
+unit test, not left to the data. The smoke test derives the expected tags from the rendered figures
+by `longestGap()`'s own rule and compares them with the tile, the tags and the bright bars — on
+Shadow, on the first still-tied song of eight, on the first song under "Passed longest gap", and on
+Silver Steed.
+
+**Song detail's longest tile navigates; the other tile still explains.** The tile keeps its label
+and adds "Gap history ›" under it, outside `.stat-label`, so the label the 0.1.81 checks read is
+unchanged; its ⓘ is suppressed by `.stat-tappable.stat-nav`. The three tiles on the history repeat
+song detail's figures — the current gap, the longest, times played — so nothing read there changes
+here, and the longest reads a dash exactly where song detail's does. The sort is the 0.1.81 lead
+chip and sheet, module-level like Songs' and not persisted. The screen links home to the song's
+own page on The Carton, the page whose Show Gap column every figure on it is.
+
+**The back link steps back only onto the song it was opened from**, so the browser's stack stays
+song → history; a deep link replaces itself with the song instead. Which of the two is recorded on
+the history entry, in `history.state`, when song detail opens it (`openGapHistory()`). The first
+version kept it in module memory, set by comparing the previous route, and a cold review found it
+lost or wrong three ways — a reload or a discarded tab, the refresh button (which re-renders with
+the previous route equal to this one), and a second song's history opened in between. The smoke
+test tells the paths apart by what the stack holds afterwards, since both land on the song:
+`forward()` must return to the history after a reload, and `back()` from a deep link's song must
+reach what was beneath it.
+
+**Two holes found by this build's checks, outside the screen.**
+
+- **`scripts/contrast.mjs` kept one selector per token.** The coverage test asks whether every
+  token a rule paints with is in a measured pair, and exempts tokens no text sits on, keyed by
+  selector — but `tokensUsedByRules()` recorded only the FIRST rule that used each token. A token
+  used by an exempt rule first was exempt everywhere. Recording every selector immediately found
+  `--line` grounding `.segmented-item:active`, where the unselected theme segment's `--ink-dim`
+  sits on it, never measured: 6.57:1 dark, 5.15:1 light, now a pair.
+- **`src/config.js` had not been precached since 0.1.34.** `sw.js`'s shell list is hand-kept, and
+  the module was added without it — a module `data/source.js` and `ui/components.js` both import,
+  so the shell is not whole without it. Offline, it was there only if the worker's runtime cache
+  had happened to keep a copy since the last version change. **Not reproduced offline**: the gap
+  was found by the new test in `tests/hygiene.test.mjs`, which compares the list with every `.js`
+  and `.css` under `src/`, not by a failure anyone saw.
 
 ## Attribution
 

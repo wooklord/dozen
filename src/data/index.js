@@ -934,6 +934,121 @@ export function isClosedGapLongest(song) {
 }
 
 /**
+ * A song's gap history (0.1.83): every gap it has been through, ONE ENTRY PER
+ * SHOW, oldest first, plus the gap running now. Every figure is the Show Gap
+ * Carton prints on the song's page, read through gapAtShow() at each show --
+ * not a second walk of the performances -- and the current gap is the "which
+ * was N show(s) ago" Carton states. Ruled in docs/plan.md, "Gap history
+ * (2026-10-26)".
+ *
+ * Per show, not per performance, which is the unit the gap chart uses too
+ * (gapChartForShow folds a song's repeats within a night): a song played twice
+ * at one show is one entry with `count` 2 and every set label it was played
+ * in, in setlist order, and its gap is the gap at that show. Carton's 0 on the
+ * repeat row never appears. Two DIFFERENT shows on one date stay two entries,
+ * and the second reads 0 -- a real gap between two shows. A debut entry has
+ * `isDebut` and a null gap: Carton prints a position there, not a gap.
+ *
+ * "Longest" follows longestGap(): when the gap still open is the longest (an
+ * exact tie reads open) only `current` is flagged; otherwise EVERY show whose
+ * gap equals the longest closed gap is, because each of them is the longest.
+ * Nothing is flagged when the longest gap is 0 -- a song first played at the
+ * newest show has had no gap yet.
+ *
+ * @returns {{song, entries: object[], current: object|null, max: number}|null}
+ *   entries: `{ show, show_id, showdate, row, gap, isDebut, count, setLabels,
+ *   isLongest, order }`, where `order` is the entry's chronological position
+ *   (the sort comparators below read it); `current`: `{ gap, sinceDate,
+ *   sinceShowId, isLongest, order }`, ordered after every entry, or null when
+ *   the song has no current gap; `max`: the longest gap, the figure the strip
+ *   and the heat bars scale to (0 when there is none); `longest`: longestGap()
+ *   itself, null when it has no answer -- what the screen's tile reads, so a
+ *   song with no longest gap reads a dash there as on song detail, not 0.
+ */
+export function gapHistory(index, songId) {
+  const song = index.songsById.get(Number(songId));
+  if (!song) return null;
+
+  // Performances are already in canonical show order, so the first row seen
+  // for a show fixes that show's place; its rows are then put in setlist
+  // order, the same order show detail renders them in.
+  const byShow = new Map();
+  for (const p of song.performances) {
+    const id = Number(p.show_id);
+    if (!byShow.has(id)) byShow.set(id, []);
+    byShow.get(id).push(p);
+  }
+
+  const longest = longestGap(song);
+  const tagged = longest && longest.gap > 0 ? longest : null;
+
+  const entries = [];
+  for (const [id, rows] of byShow) {
+    rows.sort((a, b) => setRank(a.setnumber) - setRank(b.setnumber) || Number(a.position) - Number(b.position));
+    const setLabels = [];
+    for (const r of rows) {
+      const label = setLabel(r.settype, r.setnumber);
+      if (!setLabels.includes(label)) setLabels.push(label);
+    }
+    const { gap, isDebut } = gapAtShow(index, song.song_id, id);
+    entries.push({
+      show: index.showsById.get(id) || null,
+      show_id: id,
+      showdate: rows[0].showdate,
+      row: rows[0],
+      gap,
+      isDebut,
+      count: rows.length,
+      setLabels,
+      isLongest: !!(tagged && !tagged.open && !isDebut && gap === tagged.gap),
+      order: entries.length,
+    });
+  }
+
+  const hasCurrent = song.showsSinceLastPlayed !== null && song.showsSinceLastPlayed !== undefined && song.lastPlayed;
+  const current = hasCurrent
+    ? {
+        gap: song.showsSinceLastPlayed,
+        sinceDate: song.lastPlayed,
+        sinceShowId: song.lastShowId,
+        isLongest: !!(tagged && tagged.open),
+        order: entries.length,
+      }
+    : null;
+
+  return { song, entries, current, max: longest ? longest.gap : 0, longest };
+}
+
+/**
+ * The gap history list's three sorts (0.1.83). Each takes rows carrying
+ * `order` (chronological; the current gap is ordered after every show) and
+ * `gap` (null on a debut).
+ *
+ *   newest first   -- most recent show first, so the gap still open leads
+ *   oldest first   -- the debut first
+ *   largest gap    -- biggest gap first, ties newest first, so an exact tie
+ *                     between the open gap and a closed one puts the open one
+ *                     first, as longestGap() reads it. A row with no gap (the
+ *                     debut) has nothing to rank by and goes last.
+ */
+export function compareHistoryNewest(a, b) {
+  return b.order - a.order;
+}
+
+export function compareHistoryOldest(a, b) {
+  return a.order - b.order;
+}
+
+export function compareHistoryLargest(a, b) {
+  const av = a.gap ?? null;
+  const bv = b.gap ?? null;
+  if (av === null && bv === null) return b.order - a.order;
+  if (av === null) return 1;
+  if (bv === null) return -1;
+  return bv - av || b.order - a.order;
+}
+
+/**
  * Set structure of a played show, e.g. "Set 1 + Set 2 + Encore" or "One Set".
  * Only ever derived from rows that EXIST -- never asserted for a future show.
  */

@@ -429,6 +429,8 @@ then passes for the wrong reason, and reports health it never established.
 | `fetch` `/song/thorns` and count the rows (2026-10-24) | that **Carton's Thorns page** lists N performances | the **all-songs index**, reached by a 302 — a page with a table and 360 rows that looked like a song page and wasn't. The count was cited as evidence for a ruling before anyone noticed. Caught when `scripts/gap-oracle.mjs` started identifying songs by the page's `data-song-id` instead of the URL it asked for. The struck figure is in `docs/plan.md`, decision 2 under "Decisions settled 2026-10-24"; the slug behaviour is in `docs/carton_schema.md`, "A song's slug is not always its name" |
 | Read `window.innerWidth` after `Emulation.setDeviceMetricsOverride` to 360 (2026-10-24, 0.1.81) | that the **emulated viewport** was 360px before measuring the chip bar | the **page overflowing horizontally**: under mobile emulation an over-wide document widens the layout viewport, so a nowrap fault that pushed the bar to 366px made the check report "the override did not take" and skip the overflow measurement it existed for. A layout fault, reported as a harness fault, by a check that was going red for the wrong reason. It reports the viewport and the bar's figures together now |
 | Poll the live `version.js` for the string `0.1.82` after a push (2026-10-25, 0.1.82) | that **the Pages build had landed** | **nothing** — the inverse case. `src/version.js` stores `BUILD = 82`, a bare integer, and never contains the label, so the loop ran its full four minutes against a host that had already flipped and reported "still not 0.1.82". A check that cannot pass is as useless as one that cannot fail, and it reads the same from outside: a red run, a plausible cause, and a deploy wrongly presumed stalled. It is `scripts/wait-deploy.mjs` now, reading the integer with the same regex `verify-deploy.mjs` uses, proved green against the live host (exit 0 in under a second) and red against a build it does not serve (timeout, exit 1) |
+| `scrollWidth > clientWidth` on the gap-history strip (2026-10-26, 0.1.83) | that **the strip's bars fit inside it** | **the overflowing strip itself**. A flex strip's bars carry `min-width: 0`, and given more bars than pixels they shrank past the edge: in a scratch page with the app's CSS, 300 bars at 360 with a fixed 1px gap ran the last bar to 332 against the strip's 327, and `scrollWidth` reported no overflow. The check compares the **last bar's right edge** with the strip's now, and a synthetic 300-bar strip in the real card reads `runs to 332, past its edge at 327` with the gap fixed |
+| "The bright strip bar is the tallest" (2026-10-26, 0.1.83) | that **the strip's heights follow the gaps** | **every bar at the same 2px**. The bars' `--h` went through `el()`'s `style` prop, which is `Object.assign` and drops custom properties without an error, so every bar sat at the floor -- and when every bar is 2px, each one is the tallest. Green on its first run; caught by the same run printing a 0px bar gap. Each bar is now held to its own row's figure, and the spacing to the fluid gap's formula. The same `el()` path has kept every `.gap-bar`'s `--heat` off the page since 0.1.16 (`docs/design.md`, under "Color") |
 
 The shape is always a **proxy**: the check tests a side effect rather than the
 thing itself, and the side effect has more than one cause. The last row is the
@@ -533,6 +535,62 @@ checks were verified this way:
   confirmed: the comparison rewritten against the `0.1.N` label fails "compares
   the two integers"; the regex loosened to `/BUILD = (\d+)/` fails "must read
   BUILD with the same regex". Restored: 223 passing.
+- The 0.1.83 checks (gap history), six faults applied one at a time with the
+  Edit tool. Each staged file's sha256 was confirmed DIFFERENT from its byte
+  copy before any suite ran, and each was restored from the byte copy with the
+  hash confirmed:
+  - the fold disabled, one entry per performance: 5 unit failures; smoke 8,
+    `Shadow: 28 show(s) listed more than once -- the list is one entry per show
+    (169 rows)` and `no row carries ×N`; gap oracle 11 mismatches, `history:
+    169 entries against 141 shows on Carton` -- every page with a repeat red,
+    the nine without one correctly green.
+  - the debut carrying Carton's position instead of the badge: 5 unit
+    failures; smoke 36, `0 Debut row(s)`, and Shadow's longest read off the
+    rows as 219 -- the position; gap oracle all 20 pages FAIL, `the first show
+    is not a debut with no number (isDebut false, gap 219)`.
+  - the closed maximum tagged while the open gap is the longest: 2 unit
+    failures; smoke 4, `song 250: "Longest" on order(s) 2,3, expected 3`, and
+    the same on Silver Steed's open tie.
+  - `compareHistoryLargest` with its sign flipped: 1 unit failure; smoke
+    `Largest gap: rises at row 20: 2 (order 131) after 1 (order 3)`.
+  - the strip gap fixed at `1px`: 0 unit failures -- unit tests cannot see
+    layout -- and smoke at 360, `a 300-bar strip runs to 332, past its edge at
+    327`. At 390 it PASSED, with 0.078px bars, because the synthetic check
+    asked only for bars wider than 0; it now also holds them to 1px wherever
+    the strip has a pixel per bar, and re-run with the fault still staged (hash
+    re-read) it reads `a 300-bar strip 324px wide has bars 0.078px wide`.
+  - the strip's custom properties put back through `Object.assign(node.style,
+    ...)`: 0 unit failures; smoke 9, `141 strip bar(s) not at their row's
+    height, e.g. order 1: 2px ... wants 11.2px` and `bars spaced 0–0px, the
+    fluid gap gives 1px`. That is the state the first version of the height
+    check called green.
+  - Two more went red on a real defect before their fix, not staged: the
+    contrast coverage test, once `tokensUsedByRules()` kept every selector
+    instead of the first, on `--line` grounding `.segmented-item:active`; and
+    the new precache test in `tests/hygiene.test.mjs`, on `src/config.js`,
+    absent from `sw.js` since 0.1.34.
+  Then a cold review of the full diff found four checks that could pass for
+  the wrong reason, and each was narrowed and proved the same way:
+  - the back link's "opened from the song" put back in module memory, the
+    version the review faulted: smoke 1, `opened from the song and reloaded,
+    the back link did not step back: forward() reached #/song/54` -- green
+    without the reload, which is why the check reloads.
+  - the back link always stepping back: smoke 1, `from a deep link, the back
+    link went to #/home, not the song`.
+  - the back link pushing the song instead of replacing: smoke 1, `back()
+    from the song reached #/song/54/gaps, not #/home -- the link pushed the
+    song instead of replacing the history`. Before the review, all three
+    landed on `#/song/54` and passed.
+  - the screen's Carton link removed: smoke 1, `the history's Carton link is
+    null, song detail's https://thecarton.net/song/shadow`.
+  - only the first of a song's tied shows tagged: 1 unit failure; smoke 2,
+    `song 277: "Longest" on order(s) 76, expected 76,77,87`. The tie song was
+    chosen by its tags before, so this fault skipped every candidate and
+    reported that the data had moved; it is chosen by its figures now.
+  - an entry commented out of `SHELL`: the precache test fails naming
+    `src/config.js`. It matched the whole file before, comments included.
+  Restored, by hash the same files: 239 passing, smoke 203 ok with 0 skips,
+  gap oracle 2080 of 2080.
 
 Do this for every new check. It costs one minute and it is the only thing that
 separates a real check from a comforting one.
@@ -896,6 +954,14 @@ normalised away, so "the rules differ" has one cause.
 `.btn-small` was also removed from the probe list: every small button is
 `el('button.btn.btn-small')`, so listing both counted each one twice.
 
+**And it could not compare a build that adds a route (0.1.83).** Both sides
+walked this checkout's `scripts/routes.mjs`, so the reference build was asked
+for `#/song/54/gaps`, rendered "Song not found", and the run aborted on a
+missing marker -- a new screen reported as a broken one, with no verdict on the
+eight routes that did exist on both sides. The reference side now walks the
+reference's own route list, with its own markers; a route on one side only is
+reported `NEW` or `REMOVED` and never compared.
+
 **It also makes two full archive pulls per run** — roughly 38 API requests.
 Running it repeatedly trips The Carton's documented 60/minute limit, which
 surfaces as an error boundary and reads like a harness bug. Wait a minute
@@ -945,7 +1011,7 @@ landed". The second is the worse of the two because it passes.
 |---|---|---|---|
 | `node --test` | instant | none | always, before anything else |
 | `node scripts/smoke.mjs` | ~1 min | Carton (cold pull) | **before every push** |
-| `node scripts/gap-oracle.mjs` | ~1 min | Carton (cold pull + 20 song pages) | after any change to gap arithmetic or to the show universe in `buildIndex`; it compares every Show Gap cell on 20 Carton song pages against the app's own `gapAtShow()`, and **SKIPs, never passes,** when Carton is unreachable. The smoke test carries a one-song spot check of the same parity |
+| `node scripts/gap-oracle.mjs` | ~1 min | Carton (cold pull + 20 song pages) | after any change to gap arithmetic, to the show universe in `buildIndex`, or to `gapHistory()`; it compares every Show Gap cell on 20 Carton song pages against the app's own `gapAtShow()`, and the gap history's one-entry-per-show fold (0.1.83) against the same pages grouped by show, and **SKIPs, never passes,** when Carton is unreachable. The smoke test carries a one-song spot check of the same parity |
 | `node scripts/contrast.mjs` | instant | none | when eyeballing a colour; the assertions already run in `node --test` |
 | `node scripts/deadcss.mjs` | instant | none | when a CSS rule looks inert; lists every declaration the cascade can never let win. The assertions already run in `node --test` (`tests/deadcss.test.mjs`) |
 |  `node scripts/layout-diff.mjs [ref] [width] [theme]` | ~3 min | Carton (two cold boots) | after a deliberate layout change, to see what else moved |

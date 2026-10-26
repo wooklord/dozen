@@ -43,6 +43,11 @@ export const ROUTES = [
   { hash: '#/jams', expect: 'as listed by The Carton' },
   { hash: '#/picks', expect: 'Your picks' },
   { hash: '#/song/49', expect: 'Where it has landed' },
+  // The gap history (0.1.83), on Shadow: the song with the most shows, so the
+  // strip's worst case is what every consumer of this list walks. The marker
+  // is the strip's caption; "Gap history" alone would also match song
+  // detail's "Gap history ›" tile.
+  { hash: '#/song/54/gaps', expect: 'Every gap, oldest to newest' },
   { hash: '#/venue/73', expect: 'Every show' },
 
   // THE TWO ROUTES THAT HAVE ACTUALLY BROKEN IN PRODUCTION, and which this

@@ -21,6 +21,7 @@ import {
   heatFor,
 } from '../ui/components.js';
 import { SLOT_LABELS, SLOTS, setLabel, longestGap } from '../data/index.js';
+import { openGapHistory } from './gaphistory.js';
 import { formatShowDate, formatShowDateShort } from '../util/dates.js';
 import { isPicked, togglePick } from '../scratchpad.js';
 
@@ -85,7 +86,8 @@ export function renderSong(ctx, songId) {
     screen,
     el('div.section', null, [
       el('div.stat-grid', null, [
-        // Tappable: the headline gap figure explains its own denominator.
+        // Tappable: the headline gap figure explains its own denominator. The
+        // longest-gap tile below navigates instead.
         el(
           'button.stat.stat-tappable',
           {
@@ -117,14 +119,23 @@ export function renderSong(ctx, songId) {
       // Songs list uses, so what was tapped is what is read. A song with no
       // Eggy performance at all (hidden from the list, still reachable by id)
       // has neither figure and reads a dash with its reason.
+      //
+      // The tile OPENS THE GAP HISTORY (0.1.83), every gap the figure is the
+      // largest of; it no longer opens the explainer, which the tile above
+      // and the link under it still do. With no figure there is no history
+      // to open, and the tile is a plain stat. The "Gap history ›" line sits
+      // outside .stat-label so the label still reads exactly as the Songs
+      // list's date line does.
       el('div', { style: { marginTop: '12px' } }, [
         el(
-          'button.stat.stat-tappable.stat-wide',
-          {
-            type: 'button',
-            'aria-label': 'How gap is counted',
-            onclick: () => openGapExplainer(index),
-          },
+          longest ? 'button.stat.stat-tappable.stat-nav.stat-wide' : 'div.stat.stat-wide',
+          longest
+            ? {
+                type: 'button',
+                'aria-label': `Longest observed gap ${longest.gap}, ${formatShowDateShort(longest.fromDate)} to ${longest.open ? 'still open' : formatShowDateShort(longest.toDate)}. Gap history`,
+                onclick: () => openGapHistory(navigate, song.song_id),
+              }
+            : null,
           [
             statValue(longest ? longest.gap : '—'),
             el('div.stat-label', {
@@ -139,6 +150,7 @@ export function renderSong(ctx, songId) {
                   ? 'longest observed gap — none, never played'
                   : 'longest observed gap — none, no performance in the counted shows',
             }),
+            longest ? el('div.stat-link', { text: 'Gap history ›' }) : null,
           ],
         ),
       ]),
@@ -244,7 +256,6 @@ export function renderSong(ctx, songId) {
   if (song.performances.length) {
     const list = el('ul.rows');
     for (const p of song.performances.slice().reverse()) {
-      const show = index.showsById.get(Number(p.show_id));
       append(
         list,
         el('li', null, [

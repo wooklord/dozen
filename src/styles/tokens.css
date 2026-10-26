@@ -57,6 +57,21 @@
   --dk-yolk-wash: rgba(245, 166, 35, 0.12);
   --dk-yolk-line: rgba(245, 166, 35, 0.35);
   --dk-yolk-ink: #1a1206;
+  /* The MUTED accent: the gap history strip's closed-gap bars (0.1.83), beside
+     --yolk on the longest. A graphic, so it is held to WCAG 1.4.11's 3:1
+     against the card, not to the text threshold.
+
+     A DEDICATED TOKEN, not --yolk-deep, because the two themes run opposite
+     ways: on white the deep yolk (#7d4d05) is DARKER than the accent
+     (#945906), so it would read as the louder of the two -- the reverse of
+     muted. Dark aliases --dk-yolk-deep, which on near-black is the quieter
+     one; light gets its own hex, lighter than --lt-yolk.
+
+     Measured on --surface, both themes, against the accent beside it:
+       dark  #c77f14  5.44:1   ΔE00 12.31 from --dk-yolk (8.70:1)
+       light #b67f2f  3.46:1   ΔE00 14.30 from --lt-yolk (5.69:1)
+     Matched separations, so the strip reads the same in both themes. */
+  --dk-yolk-muted: var(--dk-yolk-deep);
   /* Selected sort/filter chip. THREE DEDICATED TOKENS, not --yolk-wash and
      --yolk-line, because those two are also worn by .row-shell[data-picked]
      and .badge-jam and this change is scoped to chips.
@@ -185,6 +200,7 @@
   --lt-yolk-wash: rgba(148, 89, 6, 0.1);
   --lt-yolk-line: rgba(148, 89, 6, 0.32);
   --lt-yolk-ink: #fffaf1;
+  --lt-yolk-muted: #b67f2f;
   /* See the --dk-chip-sel-* block for the full reasoning and the measured
      figures. The one place the two themes diverge in STRUCTURE, not just in
      hex: the light label is --lt-ink, not --lt-yolk.
@@ -226,6 +242,7 @@
   --yolk-wash: var(--dk-yolk-wash);
   --yolk-line: var(--dk-yolk-line);
   --yolk-ink: var(--dk-yolk-ink);
+  --yolk-muted: var(--dk-yolk-muted);
   --chip-sel-fill: var(--dk-chip-sel-fill);
   --chip-sel-line: var(--dk-chip-sel-line);
   --chip-sel-ink: var(--dk-chip-sel-ink);
@@ -302,6 +319,7 @@
     --yolk-wash: var(--lt-yolk-wash);
     --yolk-line: var(--lt-yolk-line);
     --yolk-ink: var(--lt-yolk-ink);
+    --yolk-muted: var(--lt-yolk-muted);
   --chip-sel-fill: var(--lt-chip-sel-fill);
   --chip-sel-line: var(--lt-chip-sel-line);
   --chip-sel-ink: var(--lt-chip-sel-ink);
@@ -336,6 +354,7 @@
   --yolk-wash: var(--lt-yolk-wash);
   --yolk-line: var(--lt-yolk-line);
   --yolk-ink: var(--lt-yolk-ink);
+  --yolk-muted: var(--lt-yolk-muted);
   --chip-sel-fill: var(--lt-chip-sel-fill);
   --chip-sel-line: var(--lt-chip-sel-line);
   --chip-sel-ink: var(--lt-chip-sel-ink);

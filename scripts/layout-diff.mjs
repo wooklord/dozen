@@ -35,7 +35,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execFileSync, spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ROUTES } from './routes.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -141,6 +141,17 @@ const main = async () => {
   console.log(`layout-diff: ${REF} vs working tree, ${WIDTH}px\n`);
   execFileSync('git', ['worktree', 'add', '--detach', WORKTREE, REF], { cwd: ROOT, stdio: 'pipe' });
 
+  // THE REFERENCE SIDE WALKS THE REFERENCE'S OWN ROUTE LIST (0.1.83), with its
+  // own markers. Both sides used to walk this checkout's list, which holds only
+  // while no route is added: 0.1.83's #/song/54/gaps does not exist at its
+  // ref, the ref rendered "Song not found", and the whole run failed on a
+  // marker -- reporting a new screen as a broken one. A marker reworded since
+  // the ref describes a screen the ref does not render, for the same reason.
+  // A route on one side only is reported NEW or REMOVED, never compared.
+  const refRoutesFile = path.join(WORKTREE, 'scripts', 'routes.mjs');
+  const REF_ROUTES = fs.existsSync(refRoutesFile)
+    ? (await import(pathToFileURL(refRoutesFile).href)).ROUTES
+    : ROUTES;
 
   const chrome = spawn(CHROME, [
     '--headless=new', '--disable-gpu', '--no-first-run', '--hide-scrollbars',
@@ -171,7 +182,7 @@ const main = async () => {
     width: WIDTH, height: 844, deviceScaleFactor: 2, mobile: WIDTH < 720,
   });
 
-  const snap = async (port, label) => {
+  const snap = async (port, label, routes) => {
     process.stdout.write(`  booting ${label}`);
     // ?nosw IS LOAD-BEARING HERE, not hygiene.
     //
@@ -266,7 +277,7 @@ const main = async () => {
     }
 
     const out = {};
-    for (const r of ROUTES) {
+    for (const r of routes) {
       await ev(`location.hash = ${JSON.stringify(r.hash)}; window.scrollTo(0, 0);`);
       // WAIT FOR THE ROUTE TO ACTUALLY RENDER before measuring it. Probing a
       // half-rendered screen produced a snapshot missing whole elements, and
@@ -316,8 +327,8 @@ const main = async () => {
   // identical. A false negative for any change at all.
   const sA = await serve(WORKTREE, PORT_A);
   const sB = await serve(ROOT, PORT_B);
-  const a = await snap(PORT_A, REF);
-  const b = await snap(PORT_B, 'working tree');
+  const a = await snap(PORT_A, REF, REF_ROUTES);
+  const b = await snap(PORT_B, 'working tree', ROUTES);
   console.log('');
 
   // If the working tree differs from the ref in CSS but both sides rendered
@@ -362,9 +373,23 @@ const main = async () => {
   }
 
   let changed = 0;
+  let identical = 0;
+  let newRoutes = 0;
+  const refHashes = new Set(REF_ROUTES.map((r) => r.hash));
   for (const r of ROUTES) {
     const A = a[r.hash] || [];
     const B = b[r.hash] || [];
+
+    if (!refHashes.has(r.hash)) {
+      if (!B.length) {
+        failures++;
+        console.log(`  NO BOXES   ${r.hash}  <- new since ${REF}, and captured nothing; this route proved nothing`);
+      } else {
+        newRoutes++;
+        console.log(`  NEW        ${r.hash}  (${B.length} boxes; not a route at ${REF}, nothing to compare)`);
+      }
+      continue;
+    }
 
     // A route that captured nothing on BOTH sides diffs as equal and proves
     // nothing. It is a failure, never a pass.
@@ -394,6 +419,7 @@ const main = async () => {
       diffs.push(`      ${REF}: ${gone[i] ?? '(none)'}\n      now : ${added[i] ?? '(none)'}`);
     }
     if (!diffs.length) {
+      identical++;
       console.log(`  identical  ${r.hash}  (${A.length} boxes)`);
     } else {
       changed++;
@@ -403,8 +429,14 @@ const main = async () => {
     }
   }
 
+  const nowHashes = new Set(ROUTES.map((r) => r.hash));
+  const removed = REF_ROUTES.filter((r) => !nowHashes.has(r.hash));
+  for (const r of removed) console.log(`  REMOVED    ${r.hash}  (a route at ${REF}, not in this checkout's list)`);
+
   console.log(
-    `\n${changed} route(s) changed, ${ROUTES.length - changed - failures} identical` +
+    `\n${changed} route(s) changed, ${identical} identical` +
+    (newRoutes ? `, ${newRoutes} new` : '') +
+    (removed.length ? `, ${removed.length} removed` : '') +
     (failures ? `, ${failures} PROVED NOTHING` : ''),
   );
   console.log('Changed routes are only a problem if you did not intend them.');

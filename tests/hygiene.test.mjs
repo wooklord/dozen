@@ -113,6 +113,28 @@ test('the cache declares exactly the expiry it can enforce', () => {
   assert.match(stale.slice(0, 200), /ARCHIVE_TTL/);
 });
 
+// --- the offline shell -------------------------------------------------------
+
+test('the service worker precaches every module and stylesheet under src/', () => {
+  // The offline path is a shipped feature, used in venues on bad signal. A
+  // view missing from SHELL loads fine online and fails only offline, the one
+  // place nobody is testing -- and nothing compared the list with the tree
+  // until a new view was added for the gap history (0.1.83).
+  const sw = read('sw.js');
+  // The SHELL array literal ONLY, with its comments removed. Matched against
+  // the whole file, a path named in a comment -- or an entry commented out of
+  // the list -- counted as precached (cold review, 0.1.83).
+  const literal = (sw.match(/const SHELL = \[([\s\S]*?)\];/) || [])[1] || '';
+  const live = literal.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  const shell = new Set([...live.matchAll(/'\.\/(src\/[^']+)'/g)].map((m) => m[1]));
+  assert.ok(shell.size >= 10, `only ${shell.size} src/ entries parsed out of SHELL -- a parse that matched nothing would pass`);
+  const missing = srcFiles()
+    .filter((f) => /\.(js|css)$/.test(f))
+    .map((f) => path.relative(ROOT, f).split(path.sep).join('/'))
+    .filter((f) => !shell.has(f));
+  assert.deepEqual(missing, [], 'these files ship but the service worker does not precache them');
+});
+
 // --- tabular figures ---------------------------------------------------------
 
 test('the tabular-nums rule names no element the app never emits', () => {
