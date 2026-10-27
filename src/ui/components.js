@@ -138,11 +138,12 @@ export function venueInfoButton(venue, label = 'Venue info') {
 
 /**
  * How gap is counted. Reachable from the gap figures that explain themselves
- * and from the "How gap is counted" links beside them. Some figures do not
- * open it (0.1.83): song detail's longest-gap tile, which opens the gap
- * history, and every figure on that history -- its three tiles and its rows
- * -- whose screen carries the link in its sub-line instead. So the "shows
- * since last" tile explains itself on song detail and not on the history.
+ * -- the "shows since last" tile on song detail and on the gap history alike,
+ * currentGapTile() below -- and from the "How gap is counted" links beside
+ * them. Song detail's longest-gap tile does not open it: it opens the gap
+ * history (0.1.83). Nor do the history's other figures, its longest and
+ * times-played tiles and its rows; that screen carries the link in its
+ * sub-line.
  *
  * Two things a reader needs and cannot infer from the number itself:
  * what the denominator is, and why our figure can disagree with the gap
@@ -812,6 +813,25 @@ export function statValue(value, { accent = false } = {}) {
 
 export function statTile(value, label, accent = false) {
   return el('div.stat', null, [statValue(value, { accent }), el('div.stat-label', { text: label })]);
+}
+
+/**
+ * The "shows since last" tile: the current gap, which explains its own
+ * denominator when tapped (the ⓘ, and the "How gap is counted" sheet). ONE
+ * tile for song detail and the gap history (0.1.84), with no way to ask for a
+ * plain one -- in 0.1.83 the same figure explained itself on one screen and
+ * not on the other.
+ */
+export function currentGapTile(index, value) {
+  return el(
+    'button.stat.stat-tappable',
+    {
+      type: 'button',
+      'aria-label': 'How gap is counted',
+      onclick: () => openGapExplainer(index),
+    },
+    [statValue(value ?? '—', { accent: true }), el('div.stat-label', { text: 'shows since last' })],
+  );
 }
 
 export function sectionHead(title, right = null) {

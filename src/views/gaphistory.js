@@ -16,6 +16,7 @@ import {
   songPermalink,
   emptyState,
   statTile,
+  currentGapTile,
   gapExplainerLink,
   venueLine,
   heatFor,
@@ -120,7 +121,7 @@ export function renderGapHistory(ctx, songId) {
     screen,
     el('div.section', null, [
       el('div.stat-grid.stat-grid-3', null, [
-        statTile(current ? current.gap : '—', 'shows since last', true),
+        currentGapTile(index, current ? current.gap : '—'),
         statTile(longest ? longest.gap : '—', 'longest gap'),
         statTile(song.timesPlayed, song.timesPlayed === 1 ? 'time played' : 'times played'),
       ]),
@@ -135,54 +136,21 @@ export function renderGapHistory(ctx, songId) {
 
   // --- The strip: every show, oldest to newest -------------------------------
   //
-  // Plain spans, one per show, heights scaled to this song's own longest gap
-  // with a 2px floor so every show is visible -- a debut has no gap and is the
-  // floor, a flat tick. The gap still open is a dashed bar of its own at the
-  // right end. The longest is --yolk, the rest --yolk-muted; colour is never
-  // the only signal, because the longest bar is also the tallest.
-  //
-  // The strip is ONE image to assistive tech (role="img", a summary label);
-  // its bars are not focusable, and the list below is the accessible path to
-  // every figure on it. A tap picks the bar nearest the tap's x position --
-  // at Shadow's 141 shows a bar is ~1.3px wide and no thumb can aim at one --
-  // and scrolls that show's row into view.
+  // gapStrip() below, the same component song detail's longest-gap tile
+  // carries. Here it is ONE image to assistive tech (role="img", a summary
+  // label); its bars are not focusable, and the list below is the accessible
+  // path to every figure on it. A tap picks the bar nearest the tap's x
+  // position -- at Shadow's 141 shows a bar is ~1.3px wide and no thumb can
+  // aim at one -- and scrolls that show's row into view.
   const rowsByOrder = new Map();
-  const bars = withVars(el('div.gap-strip-bars'), { '--n': entries.length });
-  for (const e of entries) {
-    append(
-      bars,
-      withVars(
-        el('span.gap-strip-bar', {
-          'data-order': String(e.order),
-          'data-debut': e.isDebut ? 'true' : null,
-          'data-longest': e.isLongest ? 'true' : null,
-        }),
-        { '--h': e.isDebut ? 0 : heatFor(e.gap, max) },
-      ),
-    );
-  }
-  const openBar = current
-    ? withVars(
-        el('span.gap-strip-open', {
-          'data-order': String(current.order),
-          'data-longest': current.isLongest ? 'true' : null,
-        }),
-        { '--h': heatFor(current.gap, max) },
-      )
-    : null;
-
-  const strip = el(
-    'div.gap-strip',
-    {
-      role: 'img',
-      'aria-label': stripSummary(entries, current, max),
-      onclick: (ev) => {
-        const order = nearestBar(strip, ev.clientX);
-        if (order !== null) jumpTo(order);
-      },
+  const strip = gapStrip(data, {
+    role: 'img',
+    'aria-label': stripSummary(entries, current, max),
+    onclick: (ev) => {
+      const order = nearestBar(strip, ev.clientX);
+      if (order !== null) jumpTo(order);
     },
-    [bars, openBar],
-  );
+  });
   append(
     screen,
     el('div.card', null, [
@@ -291,6 +259,50 @@ export function renderGapHistory(ctx, songId) {
 function withVars(node, vars) {
   for (const [k, v] of Object.entries(vars)) node.style.setProperty(k, String(v));
   return node;
+}
+
+/**
+ * THE STRIP: one bar per show, oldest to newest, then the gap still open.
+ * Heights are the gap over this song's own longest, with a 2px floor so every
+ * show is visible -- a debut has no gap and is the floor, a flat tick. The
+ * gap still open is a dashed bar of its own at the right end. The longest is
+ * --yolk, the rest --yolk-muted; colour is never the only signal, because the
+ * longest bar is also the tallest.
+ *
+ * ONE COMPONENT, rendered in two places (0.1.84): this screen, and song
+ * detail's longest-gap tile, which is the way in. A copy in the tile would be
+ * a second scale, a second floor and a second gap rule free to drift from
+ * this one. Its height comes from where it sits (app.css), never from an
+ * option here, and `attrs` is what the placement adds: a role, a label and a
+ * tap on this screen, aria-hidden in the tile.
+ *
+ * @param {{entries: object[], current: object|null, max: number}} data  gapHistory()
+ */
+export function gapStrip({ entries, current, max }, attrs = null) {
+  const bars = withVars(el('div.gap-strip-bars'), { '--n': entries.length });
+  for (const e of entries) {
+    append(
+      bars,
+      withVars(
+        el('span.gap-strip-bar', {
+          'data-order': String(e.order),
+          'data-debut': e.isDebut ? 'true' : null,
+          'data-longest': e.isLongest ? 'true' : null,
+        }),
+        { '--h': e.isDebut ? 0 : heatFor(e.gap, max) },
+      ),
+    );
+  }
+  const openBar = current
+    ? withVars(
+        el('span.gap-strip-open', {
+          'data-order': String(current.order),
+          'data-longest': current.isLongest ? 'true' : null,
+        }),
+        { '--h': heatFor(current.gap, max) },
+      )
+    : null;
+  return el('div.gap-strip', attrs, [bars, openBar]);
 }
 
 /** The bar whose centre is nearest a tap's x position, as its order. */

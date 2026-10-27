@@ -591,6 +591,28 @@ checks were verified this way:
     `src/config.js`. It matched the whole file before, comments included.
   Restored, by hash the same files: 239 passing, smoke 203 ok with 0 skips,
   gap oracle 2080 of 2080.
+- The 0.1.84 checks (the tour line, the tile as the history's entry), six
+  faults applied one at a time with the Edit tool, each staged hash confirmed
+  different from the byte copy before any suite ran, each file restored from
+  the copy with the hash confirmed:
+  - `tourName()` ignoring `tour_id`: 1 unit failure, "tour_id 1 names nothing";
+    smoke 2, the newest played and the soonest upcoming `tour_id` 1 shows
+    reading `["Part of Not Part of a Tour"]`.
+  - `tourName()` keyed on the string "Not Part of a Tour" instead of the id: 2
+    unit failures, one of them "the id decides, not the string". Smoke cannot
+    see this one -- on the live data the id and the string are one-to-one --
+    which is why the unit test exists.
+  - the history's shows-since tile left a plain `statTile`: smoke 1, `"shows
+    since last" is a DIV, ::after none, and opened null`.
+  - the tile's strip fed one entry per performance: smoke 1, `the tile's strip
+    has 169 bars, the history's 141 (141 show rows)`.
+  - the tile's strip on its own scale (`max * 2`), with the bar count right:
+    smoke 1, `122 tile bar(s) not at their row's height, e.g. order 1: 3px,
+    the history row's 4 of 20 in 30px wants 6px`. A check on the count alone
+    would have passed this copy.
+  - the tile not navigating: smoke 4, led by `tapping the tile landed on
+    #/song/54`.
+  Restored, by hash the same files: 243 passing, smoke 206 ok with 0 skips.
 
 Do this for every new check. It costs one minute and it is the only thing that
 separates a real check from a comforting one.

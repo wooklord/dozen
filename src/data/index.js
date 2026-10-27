@@ -1049,6 +1049,20 @@ export function compareHistoryLargest(a, b) {
 }
 
 /**
+ * The tour a show was part of, exactly as The Carton names it, or null
+ * (0.1.84; docs/plan.md, "Tours (2026-10-25)"). `tour_id` 1, "Not Part of a
+ * Tour", is Carton's null -- the value a show carries when it is on no tour --
+ * so it names nothing, and that is decided by the ID, not by the string (rule
+ * 2). The name is returned as stored: never merged, reordered or corrected, so
+ * a 2019 show filed under "Fall Tour 2021" reads "Fall Tour 2021" (rule 1).
+ */
+export function tourName(show) {
+  if (!show || Number(show.tour_id) === 1) return null;
+  const name = show.tourname;
+  return typeof name === 'string' && name.trim() ? name : null;
+}
+
+/**
  * Set structure of a played show, e.g. "Set 1 + Set 2 + Encore" or "One Set".
  * Only ever derived from rows that EXIST -- never asserted for a future show.
  */

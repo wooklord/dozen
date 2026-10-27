@@ -20,7 +20,7 @@ import {
   statValue,
   venuePlace,
 } from '../ui/components.js';
-import { showStructure } from '../data/index.js';
+import { showStructure, tourName } from '../data/index.js';
 import { formatShowDate, formatShowDateShort } from '../util/dates.js';
 
 export function renderVenue(ctx, venueId) {
@@ -117,7 +117,10 @@ export function renderVenue(ctx, venueId) {
                   el('div.row-title', { text: formatShowDate(show.showdate) }),
                   el('div.row-meta', null, [
                     show.showtitle ? el('span', { text: show.showtitle }) : null,
-                    el('span', { text: show.tourname && show.tourname !== 'Not Part of a Tour' ? show.tourname : '' }),
+                    // tourName(): tour_id 1 names nothing, decided by the id
+                    // (0.1.84). This compared the name with "Not Part of a
+                    // Tour", which agreed only because the two are one-to-one.
+                    el('span', { text: tourName(show) || '' }),
                   ]),
                 ]),
                 hasSetlist

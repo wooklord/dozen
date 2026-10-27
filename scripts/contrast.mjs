@@ -260,7 +260,7 @@ export const PAIRS = [
   // Body and headings on the two grounds text sits on.
   { fg: 'ink', bg: 'shell', min: 4.5, where: 'screen titles, body text on the page ground' },
   { fg: 'ink', bg: 'surface', min: 4.5, where: 'setlist text, row titles inside cards' },
-  { fg: 'ink-dim', bg: 'shell', min: 4.5, where: 'screen sub-lines' },
+  { fg: 'ink-dim', bg: 'shell', min: 4.5, where: 'screen sub-lines, and the tour line on show detail' },
   { fg: 'ink-dim', bg: 'surface', min: 4.5, where: 'footnote text, jam entry notes' },
   { fg: 'ink-place', bg: 'shell', min: 4.5, where: 'venue city/state' },
   { fg: 'ink-place', bg: 'surface', min: 4.5, where: 'venue city/state inside a card' },
@@ -350,7 +350,13 @@ export const PAIRS = [
   // the failing mirror would have been recording a WCAG failure that does not
   // exist on screen; keeping the passing one was recording a pass that means
   // nothing. The measured figures are kept here so they are not re-derived.
-  { fg: 'chip-sel-ink', bg: 'chip-sel-fill', min: 4.5, where: 'selected sort/filter chip label' },
+  { fg: 'chip-sel-ink', bg: 'chip-sel-fill', min: 4.5, where: 'selected sort/filter chip label, and "Gap history ›" on song detail\'s longest-gap tile' },
+  // SONG DETAIL'S LONGEST-GAP TILE (0.1.84) wears the lead fill: its figure
+  // is --ink, its dated label --ink-label (the pair below) and "Gap history ›"
+  // --chip-sel-ink (the pair above). The strip does NOT sit on the fill:
+  // light --yolk-muted measured 2.72:1 on it, under 3:1, so the strip has a
+  // --surface well and its bars are the "yolk-muted on surface" pair.
+  { fg: 'ink', bg: 'chip-sel-fill', min: 4.5, where: 'the figure on song detail\'s longest-gap tile' },
   // The lead chips' SORT / FILTER / VIEW labels and the selected sheet-option
   // row's description (0.1.81; Shows' leads 0.1.82) are --ink-label on the
   // selected fill. Listed, not trusted to the coverage check: --ink-label is
@@ -360,7 +366,7 @@ export const PAIRS = [
   // sheet's ground, which is the pair listed under section labels above; the
   // wheel's options are --ink-dim on --surface and its selected option is
   // --chip-sel-ink on the --chip-sel-fill band, both pairs already here.
-  { fg: 'ink-label', bg: 'chip-sel-fill', min: 4.5, where: 'lead-chip SORT/FILTER/VIEW label and the selected sheet option description' },
+  { fg: 'ink-label', bg: 'chip-sel-fill', min: 4.5, where: 'lead-chip SORT/FILTER/VIEW label, the selected sheet option description, and the dated label on song detail\'s longest-gap tile' },
   { fg: 'chip-sel-line', bg: 'chip-sel-fill', min: 3, where: 'selected chip border against its own fill' },
   { fg: 'chip-sel-line', bg: 'shell', min: 3, where: 'selected chip border against the sortbar ground' },
 

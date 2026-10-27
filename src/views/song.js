@@ -15,13 +15,13 @@ import {
   showPermalink,
   statTile,
   statValue,
-  openGapExplainer,
+  currentGapTile,
   gapExplainerLink,
   venueLine,
   heatFor,
 } from '../ui/components.js';
-import { SLOT_LABELS, SLOTS, setLabel, longestGap } from '../data/index.js';
-import { openGapHistory } from './gaphistory.js';
+import { SLOT_LABELS, SLOTS, setLabel, longestGap, gapHistory } from '../data/index.js';
+import { openGapHistory, gapStrip } from './gaphistory.js';
 import { formatShowDate, formatShowDateShort } from '../util/dates.js';
 import { isPicked, togglePick } from '../scratchpad.js';
 
@@ -86,20 +86,10 @@ export function renderSong(ctx, songId) {
     screen,
     el('div.section', null, [
       el('div.stat-grid', null, [
-        // Tappable: the headline gap figure explains its own denominator. The
-        // longest-gap tile below navigates instead.
-        el(
-          'button.stat.stat-tappable',
-          {
-            type: 'button',
-            'aria-label': 'How gap is counted',
-            onclick: () => openGapExplainer(index),
-          },
-          [
-            statValue(song.showsSinceLastPlayed ?? '—', { accent: true }),
-            el('div.stat-label', { text: 'shows since last' }),
-          ],
-        ),
+        // Tappable: the headline gap figure explains its own denominator, the
+        // same tile the gap history uses. The longest-gap tile below navigates
+        // instead.
+        currentGapTile(index, song.showsSinceLastPlayed),
         statTile(song.timesPlayed, song.timesPlayed === 1 ? 'time played' : 'times played'),
         statTile(song.lastPlayed ? formatShowDateShort(song.lastPlayed) : '—', 'last played'),
         statTile(song.firstPlayed ? formatShowDateShort(song.firstPlayed) : '—', 'first played'),
@@ -120,39 +110,52 @@ export function renderSong(ctx, songId) {
       // Eggy performance at all (hidden from the list, still reachable by id)
       // has neither figure and reads a dash with its reason.
       //
-      // The tile OPENS THE GAP HISTORY (0.1.83), every gap the figure is the
-      // largest of; it no longer opens the explainer, which the tile above
-      // and the link under it still do. With no figure there is no history
-      // to open, and the tile is a plain stat. The "Gap history ›" line sits
-      // outside .stat-label so the label still reads exactly as the Songs
-      // list's date line does.
+      // THE TILE IS THE GAP HISTORY'S ENTRY (0.1.83; this form 0.1.84, the
+      // user's option B, docs/plan.md): the lead chip's fill and accent
+      // border, the figure and its dated label, "Gap history ›" top right,
+      // and under them the song's own strip -- gapStrip(), the history
+      // screen's component, not a copy, aria-hidden here because the tile's
+      // label already says what it shows. It opens the history; it no longer
+      // opens the explainer, which the tile above and the link under it still
+      // do. With no figure there is no history to open, and the tile is a
+      // plain stat. "Gap history ›" sits outside .stat-label so the label
+      // still reads exactly as the Songs list's date line does.
       el('div', { style: { marginTop: '12px' } }, [
-        el(
-          longest ? 'button.stat.stat-tappable.stat-nav.stat-wide' : 'div.stat.stat-wide',
-          longest
-            ? {
+        longest
+          ? el(
+              'button.stat.stat-tappable.stat-nav.stat-wide.stat-gap-entry',
+              {
                 type: 'button',
-                'aria-label': `Longest observed gap ${longest.gap}, ${formatShowDateShort(longest.fromDate)} to ${longest.open ? 'still open' : formatShowDateShort(longest.toDate)}. Gap history`,
+                'aria-label': `Gap history. Longest observed gap ${longest.gap}, ${formatShowDateShort(longest.fromDate)}${longest.open ? ', still open' : ` to ${formatShowDateShort(longest.toDate)}`}.`,
                 onclick: () => openGapHistory(navigate, song.song_id),
-              }
-            : null,
-          [
-            statValue(longest ? longest.gap : '—'),
-            el('div.stat-label', {
-              // Two "none" cases, kept apart: no Eggy performance at all, or
-              // performances none of which is in the counted universe (a
-              // setlist dated after today, or a show missing from the count)
-              // -- the second is listed with its plays and must not read
-              // "never played" beside "1 time played".
-              text: longest
-                ? `longest observed gap — ${formatShowDateShort(longest.fromDate)} → ${longest.open ? 'still open' : formatShowDateShort(longest.toDate)}`
-                : song.timesPlayed === 0
-                  ? 'longest observed gap — none, never played'
-                  : 'longest observed gap — none, no performance in the counted shows',
-            }),
-            longest ? el('div.stat-link', { text: 'Gap history ›' }) : null,
-          ],
-        ),
+              },
+              [
+                el('div.stat-gap-head', null, [
+                  el('div', null, [
+                    statValue(longest.gap),
+                    el('div.stat-label', {
+                      text: `longest observed gap — ${formatShowDateShort(longest.fromDate)} → ${longest.open ? 'still open' : formatShowDateShort(longest.toDate)}`,
+                    }),
+                  ]),
+                  el('div.stat-link', { text: 'Gap history ›' }),
+                ]),
+                gapStrip(gapHistory(index, song.song_id), { 'aria-hidden': 'true' }),
+              ],
+            )
+          : el('div.stat.stat-wide', null, [
+              statValue('—'),
+              el('div.stat-label', {
+                // Two "none" cases, kept apart: no Eggy performance at all, or
+                // performances none of which is in the counted universe (a
+                // setlist dated after today, or a show missing from the count)
+                // -- the second is listed with its plays and must not read
+                // "never played" beside "1 time played".
+                text:
+                  song.timesPlayed === 0
+                    ? 'longest observed gap — none, never played'
+                    : 'longest observed gap — none, no performance in the counted shows',
+              }),
+            ]),
       ]),
     ]),
   );

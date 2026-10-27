@@ -1425,6 +1425,10 @@ here, and the longest reads a dash exactly where song detail's does. The sort is
 chip and sheet, module-level like Songs' and not persisted. The screen links home to the song's
 own page on The Carton, the page whose Show Gap column every figure on it is.
 
+> **Superseded in 0.1.84** (below): the label and the suppressed ⓘ stand, but "Gap history ›" is
+> no longer a line under the label. The whole tile became the entry, with the link at its top right
+> and the song's strip under it. And the history's own shows-since tile now explains too.
+
 **The back link steps back only onto the song it was opened from**, so the browser's stack stays
 song → history; a deep link replaces itself with the song instead. Which of the two is recorded on
 the history entry, in `history.state`, when song detail opens it (`openGapHistory()`). The first
@@ -1449,6 +1453,60 @@ reach what was beneath it.
   had happened to keep a copy since the last version change. **Not reproduced offline**: the gap
   was found by the new test in `tests/hygiene.test.mjs`, which compares the list with every `.js`
   and `.css` under `src/`, not by a failure anyone saw.
+
+### The tour line, and the longest-gap tile as the history's entry (0.1.84)
+
+Two rulings built: the Tours line (`plan.md`, "Tours (2026-10-25)") and the amendment to the Gap
+history ruling that made song detail's tile the entry (`plan.md`, under "Gap history", the user's
+option B).
+
+**The tour line is one plain line under the venue line**: "Part of {tourname}", `.show-tour`,
+`--ink-dim` at `--t-sm` on `--shell`, the screen sub-lines' pair (8.99 dark, 7.09 light). It is not a
+link: there is no tour screen, and the filter that would be one is parked. Both rules — the name
+exactly as Carton stores it, and nothing for `tour_id` 1 — are `tourName()` in `data/index.js`, and
+the Venue screen's rows read the same helper instead of comparing the name with "Not Part of a
+Tour". The smoke test fetches the raw shows table and holds five show screens to it, chosen by what
+they are rather than by date: a 2019 show filed under Fall Tour 2021, the only show of a one-show
+tour, the newest named-tour show, the newest played `tour_id` 1 show and the soonest upcoming one.
+On the live data `tour_id` 1 and the string are one-to-one, so the screen cannot tell a helper
+keyed on the id from one keyed on the name; `tests/tours.test.mjs` can.
+
+**One "shows since last" tile, `currentGapTile()`, on both screens.** Song detail's opened the
+explainer and the history's was a plain stat; they are one component now, a control drawing the ⓘ.
+
+**The longest-gap tile wears the lead chip's pair**, `--chip-sel-fill` and `--chip-sel-line`, so it
+reads as the way on rather than as one more figure. The figure and its dated label sit at the left
+and "Gap history ›" at the top right in `--chip-sel-ink`, in a flex row (`.stat-gap-head`), so the
+label `.stat-label` holds is the one the 0.1.81 checks read. Every text pair on the fill is measured
+in `scripts/contrast.mjs`:
+
+| On `--chip-sel-fill` | Dark | Light |
+|---|---|---|
+| the figure, `--ink` | 11.72 | 13.71 |
+| the dated label, `--ink-label` | 4.88 | 5.09 |
+| "Gap history ›", `--chip-sel-ink` | 6.61 | 13.71 |
+| the border, `--chip-sel-line` (3:1) | 4.13 | 5.62 |
+
+**Under them is the song's strip, and it is `gapStrip()`**, exported from `views/gaphistory.js`
+and called from both screens. What a placement adds comes in as attributes — `role="img"`, the
+summary label and the tap on the history; `aria-hidden` in the tile, whose own label says what the
+strip shows — and the height comes from `app.css` by placement, never from an option a caller could
+pass. A copy in the tile would have been a second scale, floor and gap rule free to drift; the smoke
+test is built so that a copy matching the bar count still fails, because it holds every tile bar's
+height to its own row on the history screen at the tile's height. On Shadow: 141 bars and the open
+bar, 30px tall, the narrowest bar 1.016px at 360.
+
+**The strip sits in a `--surface` well, not on the fill.** The first measurement put the bars on the
+fill, and light `--yolk-muted` read **2.72:1** against `#f9e1ba` — under the 3:1 a graphic needs;
+dark passed at 4.13. A light-only bar token would have fixed the number and made the tile's strip a
+different image from the history's. In the well the bars sit on the ground they were measured on
+for the history screen, 3.46 light and 5.44 dark, so it is the same picture in both places. The
+well is 38px with 4px padding above and below, which leaves the bars their 30px.
+
+**Spoken, the tile is "Gap history. Longest observed gap N, {from} to {to}."** When the longest is
+the gap still open it reads "…, {from}, still open." — the visible label's words, since there is no
+"to" date to say. The smoke test derives the expected text from the visible label rather than
+restating it.
 
 ## Attribution
 

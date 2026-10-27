@@ -227,6 +227,14 @@ a {
   margin: 0 0 var(--s-4);
 }
 
+/* Show detail's tour line (0.1.84), under the venue: a fact about the show,
+   one step quieter than the venue it follows. */
+.show-tour {
+  color: var(--ink-dim);
+  font-size: var(--t-sm);
+  margin: 2px 0 0;
+}
+
 .section {
   margin-top: var(--s-5);
 }
@@ -574,15 +582,47 @@ button.gap-figure:active {
 
 /* A stat that NAVIGATES rather than explains (song detail's longest-gap tile,
  * 0.1.83, which opens the gap history). No ⓘ, which promises an explanation,
- * and a line saying where the tap goes. */
+ * and "Gap history ›" saying where the tap goes. */
 .stat-tappable.stat-nav .stat-label::after {
   content: none;
 }
+
+/* SONG DETAIL'S LONGEST-GAP TILE IS THE GAP HISTORY'S ENTRY (0.1.84, the
+ * user's option B). The lead chip's fill and accent border, the pair a
+ * selected sort wears, so it reads as the way on; the figure and its dated
+ * label at the left, "Gap history ›" at the top right in the lead's own ink,
+ * and the song's strip under them at the tile's full width. The strip is
+ * gapStrip(), the history screen's component; its height is set HERE, by
+ * placement, never by an option the caller passes. Every pair on this fill
+ * is measured in scripts/contrast.mjs. */
+.stat.stat-gap-entry {
+  background: var(--chip-sel-fill);
+  border-color: var(--chip-sel-line);
+}
+.stat-gap-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
 .stat-link {
-  margin-top: var(--s-1);
+  flex: none;
   font-size: var(--t-sm);
   font-weight: 600;
-  color: var(--ink-dim);
+  color: var(--chip-sel-ink);
+}
+/* THE STRIP SITS IN A --surface WELL, NOT ON THE LEAD FILL. Measured on the
+ * fill, light --yolk-muted reads 2.72:1 against #f9e1ba -- under the 3:1 a
+ * graphic needs -- while dark passes at 4.13. On --surface the bars are on
+ * the ground they were measured on for the history screen (3.46 light, 5.44
+ * dark), so the strip is the same image in both places, not merely the same
+ * code. The well is 38px with 4px above and below: bars 30px tall. */
+.stat-gap-entry .gap-strip {
+  height: 38px;
+  margin-top: var(--s-2);
+  padding: 4px 6px;
+  background: var(--surface);
+  border-radius: var(--r-cell);
 }
 
 /* Secondary action strip under a card heading. */

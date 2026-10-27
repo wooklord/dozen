@@ -733,8 +733,8 @@ them saying so.
 
 ### Tours (2026-10-25)
 
-**Status: ruled, not built.** The show-detail tour line is next after BUILD 0.1.83 (Gap history),
-as 0.1.84.
+**Status: built in 0.1.84.** Show detail carries the line under its venue line, and the Venue
+screen's rows read the same helper. The Tour filter stays parked.
 
 **Ruling.** Show detail gains one line naming the show's tour, read from `tourname` on the show's
 own `shows` row. **A Tour filter is parked, not ruled out.** Both sit inside the scope rule —
@@ -770,10 +770,20 @@ nothing since April 2025, and several of Carton's assignments would come back as
 2. **`tour_id` 1 renders nothing.** It is Carton's null — the value a show carries when it is on
    no tour — not a tour called "Not Part of a Tour".
 
-**Already in the app.** The Venue screen's show rows have carried `tourname` in their meta line
-since 0.1.23, suppressed by comparing the name with the string "Not Part of a Tour" rather than by
-`tour_id`. On the 2026-10-25 data the two tests agree, because `tour_id` 1 and that name are
-one-to-one, so that screen renders what rule 2 says without being keyed the way rule 2 states.
+**Built (0.1.84), with the change plan's defaults approved 2026-10-26.** The line reads **"Part of
+{tourname}"**, plain text, under the venue line. "Part of" rather than the bare name because three
+of the eleven names do not contain the word "tour" — Winter 2020, Quarantine Streams and Winter
+2022, and a bare "Winter 2020" under a venue reads as a date — and rather than "Tour:", which would
+print "Tour: Fall Tour 2021". Both
+rules live in one helper, `tourName()` in `src/data/index.js`, keyed on `tour_id`;
+`tests/tours.test.mjs` holds it to the id even where the string says otherwise, and the smoke test
+holds five screens to the raw shows table.
+
+**The Venue screen's rows, keyed the way rule 2 states since 0.1.84.** They carried `tourname` in
+their meta line from 0.1.23, suppressed by comparing the name with the string "Not Part of a Tour"
+rather than by `tour_id`. On the 2026-10-25 data the two tests agree — `tour_id` 1 and that name are
+one-to-one — so the screen rendered what rule 2 says without being keyed the way it states. They
+read `tourName()` now, so the two screens cannot disagree about which shows are on a tour.
 
 ### Gap history (2026-10-26)
 
@@ -832,6 +842,9 @@ plan answered by default; all seven approved as proposed, the sixth with one cha
 3. **Song detail keeps its tile label** ("longest observed gap — {from} → {to | still open}") and
    adds a "Gap history ›" line under it; the tile's ⓘ goes, because it no longer opens the
    explainer.
+
+   > **Superseded in 0.1.84** by the amendment below: the label and the missing ⓘ stand, but
+   > "Gap history ›" moved to the tile's top right and the tile itself became the entry.
 4. **A new token, `--yolk-muted`,** for every bar that is not the longest. The longest is
    `--yolk`; the bars read as one family with the longest lifted out. A token, not a reuse,
    because `--yolk-deep` is the quieter accent only in dark: in light it is darker than `--yolk`
@@ -849,6 +862,36 @@ plan answered by default; all seven approved as proposed, the sixth with one cha
 The sort sheet's three options and their second lines are locked with these: **Newest first** —
 "Most recent show first."; **Oldest first** — "The debut first."; **Largest gap** — "Biggest gap
 first; ties newest first."
+
+#### Amendment (2026-10-26, built in 0.1.84): the longest-gap tile is the entry
+
+The user's pick, option B of the ones shown in chat. Song detail's "longest observed gap" tile
+**is** the way into the history, rather than a tile with a link line under it:
+
+- **The lead chip's fill and accent border** (`--chip-sel-fill`, `--chip-sel-line`), the pair a
+  selected sort wears, so the tile reads as the way on.
+- **The figure and its label at the left**, the label unchanged — "longest observed gap — {from} →
+  {to | still open}" — and **"Gap history ›" at the top right**, in `--chip-sel-ink`. The separate
+  "Gap history ›" line is gone.
+- **Below them, the song's own strip at the tile's full width, 30px tall, `aria-hidden`.** It is
+  `gapStrip()`, the history screen's component, not a copy: the same scale (each gap over the
+  song's own longest), the 2px floor, the 1px minimum bar, the shrinking gap, the debut tick and
+  the dashed open bar. Its height is set by where it sits, in `app.css`, not by an option.
+- **Spoken as "Gap history. Longest observed gap N, {from} to {to}."** When the longest is the gap
+  still open there is no "to" date, and it reads "…, {from}, still open." — the visible label's
+  own words.
+- **The strip sits in a `--surface` well, not on the lead fill.** Measured on the fill, light
+  `--yolk-muted` reads **2.72:1** against `#f9e1ba`, under the 3:1 a graphic needs (dark passes at
+  4.13). In the well the bars are on the ground they were measured on for the history screen —
+  3.46 light, 5.44 dark — so it is the same image in both places, not only the same code. The
+  alternative, a light-only bar token for the fill, was not taken; it is a second strip palette.
+  The text on the fill is measured in `scripts/contrast.mjs`: the figure (`--ink`) 11.72 dark /
+  13.71 light, the label (`--ink-label`) 4.88 / 5.09, "Gap history ›" (`--chip-sel-ink`) 6.61 /
+  13.71.
+
+**And the history's own "shows since last" tile explains itself** (0.1.84), as song detail's does:
+the ⓘ, and "How gap is counted" on a tap. Both are one component, `currentGapTile()`. Its other two
+figures stay plain stats.
 
 ## Out of scope — parked
 

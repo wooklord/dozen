@@ -3630,6 +3630,155 @@ server.listen(PORT, async () => {
     else pass('three sorts as locked: Oldest first opens on the debut, Largest gap never rises and breaks ties newest first, Newest first opens on the gap still open; the count line follows each');
   }
 
+  // (h) The history's "shows since last" tile explains itself, as song
+  // detail's does (0.1.84): a control, the ⓘ drawn, the explainer opened.
+  {
+    await openHistory(54);
+    const r = await evaluate(`(() => {
+      const s = [...document.querySelectorAll('.screen .stat-grid-3 .stat')].find((x) => ((x.querySelector('.stat-label') || {}).textContent || '').trim() === 'shows since last');
+      if (!s) return null;
+      const info = getComputedStyle(s.querySelector('.stat-label'), '::after').content;
+      const tag = s.tagName;
+      s.click();
+      const h = document.querySelector('.sheet h2'); const text = h ? h.textContent.trim() : null;
+      const bd = document.querySelector('.sheet-backdrop'); if (bd) bd.click();
+      return { info, tag, text };
+    })()`);
+    if (!r) fail('gap history: no "shows since last" tile');
+    else if (r.tag !== 'BUTTON' || !r.info.includes('ⓘ') || r.text !== 'How gap is counted') fail(`gap history: "shows since last" is a ${r.tag}, ::after ${r.info}, and opened ${JSON.stringify(r.text)} -- not the explainer song detail's opens`);
+    else pass('the history\'s "shows since last" tile is a control with the ⓘ and opens "How gap is counted", as on song detail');
+  }
+
+  // (i) Song detail's longest-gap tile IS the history's entry (0.1.84, the
+  // user's option B). The same strip COMPONENT, so the same bars: the count,
+  // the open bar, the bright ones, and every bar's height against its own row
+  // on the history screen at the tile's height -- a copy with its own scale
+  // would match the count and fail the heights. aria-hidden, no role; the
+  // tile's spoken label derived from its visible one; the bars inside the
+  // tile at 390 and 360. "Tapping the tile lands on the route" is (f).
+  {
+    const hist = await openHistory(54);
+    const histRowsByOrder = new Map(hist.rows.map((r) => [r.order, r]));
+    const longestFig = Number(hist.tiles.longest);
+    await evaluate(`location.hash = '#/song/54';`);
+    await sleep(1100);
+    const TILE_JS = `(() => {
+      const tile = document.querySelector('.screen button.stat-gap-entry');
+      if (!tile) return null;
+      const strip = tile.querySelector('.gap-strip');
+      const box = strip && strip.querySelector('.gap-strip-bars');
+      const bars = box ? [...box.querySelectorAll('.gap-strip-bar')] : [];
+      const open = strip && strip.querySelector('.gap-strip-open');
+      const or = open ? open.getBoundingClientRect() : null;
+      const br = box ? box.getBoundingClientRect() : null;
+      const sr = strip ? strip.getBoundingClientRect() : null;
+      const cs = strip ? getComputedStyle(strip) : null;
+      return {
+        aria: tile.getAttribute('aria-label'),
+        hidden: strip ? strip.getAttribute('aria-hidden') : null,
+        role: strip ? strip.getAttribute('role') : null,
+        label: ((tile.querySelector('.stat-label') || {}).textContent || '').trim(),
+        value: ((tile.querySelector('.stat-value') || {}).textContent || '').trim(),
+        boxH: br ? br.height : 0,
+        bars: bars.map((b) => { const r = b.getBoundingClientRect(); return { order: Number(b.dataset.order), h: r.height, w: r.width, right: r.right, longest: b.dataset.longest === 'true' }; }),
+        open: or ? { order: Number(open.dataset.order), h: or.height, right: or.right, longest: open.dataset.longest === 'true' } : null,
+        boxRight: br ? br.right : 0,
+        contentRight: sr ? sr.right - parseFloat(cs.paddingRight) : 0,
+        viewport: window.innerWidth,
+      };
+    })()`;
+    const tileAt = {};
+    for (const w of [390, 360]) {
+      await send('Emulation.setDeviceMetricsOverride', { width: w, height: 844, deviceScaleFactor: 2, mobile: true });
+      await sleep(400);
+      tileAt[w] = await evaluate(TILE_JS);
+    }
+    await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+    await sleep(400);
+    const t = tileAt[390];
+    const p = [];
+    if (!t) p.push('song detail has no .stat-gap-entry tile');
+    else {
+      const span = /— (.+) → (.+)$/.exec(t.label);
+      const wantAria = span ? `Gap history. Longest observed gap ${t.value}, ${span[1]}${span[2] === 'still open' ? ', still open' : ` to ${span[2]}`}.` : null;
+      if (t.aria !== wantAria) p.push(`the tile's aria-label is ${JSON.stringify(t.aria)}, the visible label gives ${JSON.stringify(wantAria)}`);
+      if (t.hidden !== 'true' || t.role) p.push(`the tile's strip is aria-hidden=${t.hidden}, role=${t.role}`);
+      const histShows = hist.rows.filter((r) => !r.now).length;
+      if (t.bars.length !== hist.bars.length || t.bars.length !== histShows) p.push(`the tile's strip has ${t.bars.length} bars, the history's ${hist.bars.length} (${histShows} show rows)`);
+      if (!!t.open !== !!hist.open) p.push(`open bar ${t.open ? 'in' : 'not in'} the tile, ${hist.open ? 'in' : 'not in'} the history`);
+      const brightOf = (s) => [...s.bars.filter((b) => b.longest), ...(s.open && s.open.longest ? [s.open] : [])].map((b) => b.order).sort((a, b) => a - b).join(',');
+      if (brightOf(t) !== brightOf(hist)) p.push(`bright bars at ${brightOf(t) || 'none'} in the tile, ${brightOf(hist) || 'none'} in the history`);
+      if (Math.abs(t.boxH - 30) > 1) p.push(`the tile's bars are ${t.boxH}px tall, not about 30`);
+      const wantH = (r) => (r.debut || r.num === null || longestFig <= 0 ? 2 : Math.max(2, (Math.min(r.num, longestFig) / longestFig) * t.boxH));
+      const off = [...t.bars, ...(t.open ? [t.open] : [])].filter((b) => { const r = histRowsByOrder.get(b.order); return !r || Math.abs(b.h - wantH(r)) > 0.6; });
+      if (off.length) { const b = off[0]; const r = histRowsByOrder.get(b.order); p.push(`${off.length} tile bar(s) not at their row's height, e.g. order ${b.order}: ${Math.round(b.h * 100) / 100}px, the history row's ${r ? r.num : 'nothing'} of ${longestFig} in ${t.boxH}px wants ${r ? Math.round(wantH(r) * 100) / 100 : '?'}px`); }
+      for (const w of [390, 360]) {
+        const m = tileAt[w];
+        if (!m) { p.push(`no tile at ${w}px`); continue; }
+        if (m.viewport !== w) p.push(`at ${w}px the layout viewport reads ${m.viewport}px`);
+        const minW = Math.min(...m.bars.map((b) => b.w));
+        if (minW < 0.999) p.push(`at ${w}px the tile's narrowest bar is ${Math.round(minW * 1000) / 1000}px`);
+        const last = m.bars[m.bars.length - 1];
+        if (last && last.right > m.boxRight + 0.5) p.push(`at ${w}px the tile's last bar ends at ${last.right}, past ${m.boxRight}`);
+        if (m.open && m.open.right > m.contentRight + 0.5) p.push(`at ${w}px the tile's open bar ends at ${m.open.right}, past ${m.contentRight}`);
+      }
+    }
+    if (p.length) for (const x of p) fail(`song detail's gap-history tile: ${x}`);
+    else pass(`song detail's tile carries the history's own strip: ${t.bars.length} bars${t.open ? ' and the open bar' : ''}, ${t.boxH}px tall, every bar at its row's height, ${Math.round(Math.min(...tileAt[360].bars.map((b) => b.w)) * 1000) / 1000}px narrowest at 360; aria-hidden; spoken "${t.aria}"`);
+  }
+
+  // --- Tour line on show detail (0.1.84) --------------------------------------
+  //
+  // docs/plan.md, "Tours (2026-10-25)". Held against the raw shows table, not
+  // the app's index: the name renders exactly as Carton stores it (rule 1),
+  // and tour_id 1 renders nothing (rule 2). The shows are chosen by what they
+  // are, so none goes stale: a 2019 show filed under Fall Tour 2021 (a filing
+  // slip, which must not be corrected), the only show of a one-show tour, the
+  // newest named-tour show, the newest played tour_id 1 show, and the soonest
+  // upcoming one. On the live data id 1 and "Not Part of a Tour" are
+  // one-to-one, so this cannot tell a helper keyed on the id from one keyed on
+  // the string; tests/tours.test.mjs can. SKIPs if Carton is unreachable.
+  console.log('\ntour line:');
+  {
+    let shows = null;
+    try {
+      const res = await fetch('https://thecarton.net/api/v2/shows.json?limit=20000');
+      const body = (res.headers.get('content-type') || '').includes('json') ? await res.json() : null;
+      shows = body && Array.isArray(body.data) ? body.data : null;
+    } catch {}
+    if (!shows || shows.length < 100) skip(`tour line: the shows table could not be read (${shows ? shows.length : 'no'} rows), nothing checked`);
+    else {
+      const today = new Date().toISOString().slice(0, 10);
+      const byDate = [...shows].sort((a, b) => (a.showdate < b.showdate ? -1 : a.showdate > b.showdate ? 1 : 0));
+      const named = byDate.filter((s) => Number(s.tour_id) !== 1);
+      const perTour = named.reduce((m, s) => m.set(s.tour_id, (m.get(s.tour_id) || 0) + 1), new Map());
+      const picks = [
+        ['a 2019 show filed under Fall Tour 2021', named.find((s) => s.tourname === 'Fall Tour 2021' && s.showdate.startsWith('2019'))],
+        ['the only show of a one-show tour', named.find((s) => perTour.get(s.tour_id) === 1)],
+        ['the newest named-tour show', named[named.length - 1]],
+        ['the newest played tour_id 1 show', byDate.filter((s) => Number(s.tour_id) === 1 && s.showdate <= today).pop()],
+        ['the soonest upcoming tour_id 1 show', byDate.find((s) => Number(s.tour_id) === 1 && s.showdate > today)],
+      ];
+      const tourProblems = [];
+      const seen = [];
+      for (const [what, s] of picks) {
+        if (!s) { (what.includes('upcoming') ? skip : fail)(`tour line: no ${what} in the shows table${what.includes('upcoming') ? ' today' : ' -- the data moved; this case went unchecked'}`); continue; }
+        await evaluate(`location.hash = '#/show/${s.show_id}';`);
+        await sleep(1100);
+        const got = await evaluate(`(() => {
+          const lines = [...document.querySelectorAll('.screen .show-tour')].map((x) => x.textContent);
+          return { title: ((document.querySelector('.screen h1') || {}).textContent || ''), lines, stray: (document.getElementById('main').innerText || '').includes('Not Part of a Tour') };
+        })()`);
+        const want = Number(s.tour_id) === 1 ? [] : [`Part of ${s.tourname}`];
+        if (JSON.stringify(got.lines) !== JSON.stringify(want)) tourProblems.push(`${what} (${s.showdate}, tour_id ${s.tour_id} "${s.tourname}"): the screen shows ${JSON.stringify(got.lines)}, expected ${JSON.stringify(want)}`);
+        else if (got.stray) tourProblems.push(`${what} (${s.showdate}): "Not Part of a Tour" is on the screen`);
+        else seen.push(want.length ? `${s.showdate} "${want[0]}"` : `${s.showdate} no line`);
+      }
+      if (tourProblems.length) for (const x of tourProblems) fail(`tour line: ${x}`);
+      else if (seen.length) pass(`tour line as Carton stores it, and nothing for tour_id 1: ${seen.join('; ')}`);
+    }
+  }
+
   // --- The set-structure badge is compact, and the row is one control -------
   //
   // "Set 1 + Set 2 + Encore" was pushing venue names into ellipsis on the

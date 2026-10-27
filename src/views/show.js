@@ -11,7 +11,7 @@ import {
   venueLine,
   venueInfoButton,
 } from '../ui/components.js';
-import { showStructure, setLabel } from '../data/index.js';
+import { showStructure, setLabel, tourName } from '../data/index.js';
 import { formatShowDate } from '../util/dates.js';
 
 export function renderShow(ctx, showId) {
@@ -34,6 +34,13 @@ export function renderShow(ctx, showId) {
 
   append(screen, el('h1.screen-title', { text: formatShowDate(show.showdate) }));
   append(screen, venueLine(show));
+  // The tour, named as Carton names it, and nothing for tour_id 1 -- see
+  // tourName(). "Part of" because three of the eleven names do not say
+  // "tour" (Winter 2020, Quarantine Streams, Winter 2022), and a bare
+  // "Winter 2020" under a venue reads as a date. Plain text: the filter that
+  // would make it a control is parked (docs/plan.md, Tours).
+  const tour = tourName(show);
+  if (tour) append(screen, el('p.show-tour', { text: `Part of ${tour}` }));
   const rows = index.setlistByShow.get(Number(show.show_id)) || [];
 
   // ONE condition for both jam-related things on this screen: the key inside
