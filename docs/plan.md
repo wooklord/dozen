@@ -733,6 +733,9 @@ them saying so.
 
 ### Tours (2026-10-25)
 
+**Status: ruled, not built.** The show-detail tour line is next after BUILD 0.1.83 (Gap history),
+as 0.1.84.
+
 **Ruling.** Show detail gains one line naming the show's tour, read from `tourname` on the show's
 own `shows` row. **A Tour filter is parked, not ruled out.** Both sit inside the scope rule —
 `tour_id` / `tourname` are Carton fields, and showing or filtering on them is repackaging — so this
