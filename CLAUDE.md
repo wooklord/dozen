@@ -430,7 +430,7 @@ then passes for the wrong reason, and reports health it never established.
 | Read `window.innerWidth` after `Emulation.setDeviceMetricsOverride` to 360 (2026-10-24, 0.1.81) | that the **emulated viewport** was 360px before measuring the chip bar | the **page overflowing horizontally**: under mobile emulation an over-wide document widens the layout viewport, so a nowrap fault that pushed the bar to 366px made the check report "the override did not take" and skip the overflow measurement it existed for. A layout fault, reported as a harness fault, by a check that was going red for the wrong reason. It reports the viewport and the bar's figures together now |
 | Poll the live `version.js` for the string `0.1.82` after a push (2026-10-25, 0.1.82) | that **the Pages build had landed** | **nothing** — the inverse case. `src/version.js` stores `BUILD = 82`, a bare integer, and never contains the label, so the loop ran its full four minutes against a host that had already flipped and reported "still not 0.1.82". A check that cannot pass is as useless as one that cannot fail, and it reads the same from outside: a red run, a plausible cause, and a deploy wrongly presumed stalled. It is `scripts/wait-deploy.mjs` now, reading the integer with the same regex `verify-deploy.mjs` uses, proved green against the live host (exit 0 in under a second) and red against a build it does not serve (timeout, exit 1) |
 | `scrollWidth > clientWidth` on the gap-history strip (2026-10-26, 0.1.83) | that **the strip's bars fit inside it** | **the overflowing strip itself**. A flex strip's bars carry `min-width: 0`, and given more bars than pixels they shrank past the edge: in a scratch page with the app's CSS, 300 bars at 360 with a fixed 1px gap ran the last bar to 332 against the strip's 327, and `scrollWidth` reported no overflow. The check compares the **last bar's right edge** with the strip's now, and a synthetic 300-bar strip in the real card reads `runs to 332, past its edge at 327` with the gap fixed |
-| "The bright strip bar is the tallest" (2026-10-26, 0.1.83) | that **the strip's heights follow the gaps** | **every bar at the same 2px**. The bars' `--h` went through `el()`'s `style` prop, which is `Object.assign` and drops custom properties without an error, so every bar sat at the floor -- and when every bar is 2px, each one is the tallest. Green on its first run; caught by the same run printing a 0px bar gap. Each bar is now held to its own row's figure, and the spacing to the fluid gap's formula. The same `el()` path has kept every `.gap-bar`'s `--heat` off the page since 0.1.16 (`docs/design.md`, under "Color") |
+| "The bright strip bar is the tallest" (2026-10-26, 0.1.83) | that **the strip's heights follow the gaps** | **every bar at the same 2px**. The bars' `--h` went through `el()`'s `style` prop, which is `Object.assign` and drops custom properties without an error, so every bar sat at the floor -- and when every bar is 2px, each one is the tallest. Green on its first run; caught by the same run printing a 0px bar gap. Each bar is now held to its own row's figure, and the spacing to the fluid gap's formula. The same `el()` path kept every `.gap-bar`'s `--heat` off the page from 0.1.16 until `el()` was fixed in 0.1.84 (`docs/design.md`, under "Color") |
 
 The shape is always a **proxy**: the check tests a side effect rather than the
 thing itself, and the side effect has more than one cause. The last row is the
@@ -613,6 +613,22 @@ checks were verified this way:
   - the tile not navigating: smoke 4, led by `tapping the tile landed on
     #/song/54`.
   Restored, by hash the same files: 243 passing, smoke 206 ok with 0 skips.
+- The 0.1.84 heat checks (the second commit, `el()` passing custom properties
+  through `setProperty`), three faults staged the same way:
+  - `el()` reverted to `Object.assign(node.style, v)`: 0 unit failures -- unit
+    tests have no DOM -- and smoke 28. All three heat lists in both themes,
+    `354 of 354 bar(s) not at their row's heat, e.g. Miles to Go: --heat "",
+    its 792 of 792 gives 1` and `1 distinct --heat value(s)`, and every strip
+    height and spacing check from 0.1.83 and the tile's, the strip having lost
+    its own setProperty helper in the same commit.
+  - the `.gap-bar` opacity rule composing the heat wrong (`* 0.5` for
+    `* (1 - floor)`): smoke 6, `287 bar(s) not at floor + heat x (1 - floor),
+    e.g. Miles to Go: opacity 0.6, floor 0.1, --heat "1"`. The value check
+    alone would have passed this.
+  - the `data-heat="none"` rule unmatched: smoke 4, `6 row(s) with no heat
+    still draw a bar, e.g. Find The Cost of Freedom at opacity 0.1`, and
+    Shadow's debut row the same.
+  Restored, by hash the same files: 243 passing, smoke 209 ok with 0 skips.
 
 Do this for every new check. It costs one minute and it is the only thing that
 separates a real check from a comforting one.

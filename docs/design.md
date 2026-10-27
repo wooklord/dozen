@@ -64,6 +64,16 @@ imply thresholds the data doesn't have, and thresholds edge toward prediction.
 > paragraph below was tuned, in 0.1.27, against bars that were all at the floor. **Not fixed in
 > 0.1.83**: the fix is one line in `el()`, and it relights every list in the app at once, which is
 > a visible change to shipped screens and its own decision. See "Gap history", 0.1.83, below.
+>
+> **Fixed in 0.1.84**, as its own commit, held until the user had looked at before-and-after
+> screenshots of the relit lists. `el()` sends any style key beginning `--` through
+> `style.setProperty`, so the scale renders as this section has always described it: each bar at
+> `--heat-floor + heat × (1 − floor)`, the heat its row's figure over the list's largest. The smoke
+> test reads it back from computed style on three lists in both themes. **`--heat-floor` was not
+> retuned with it**: a default approved with the change plan, and kept by the user on 2026-10-26
+> after the screenshots showed it under a real scale for the first time — Songs, Jams, a gap chart
+> and the gap history, dark and light. See "The tour line, and the longest-gap tile", 0.1.84,
+> below.
 
 The heat bar's minimum opacity is a **per-theme token** (`--heat-floor`), not a constant. The dark
 accent is far lighter than its ground, so a low opacity still registers; the same value on white
@@ -1388,10 +1398,10 @@ through `el()`'s `style` prop, which drops custom properties without an error (s
 version of the smoke check, "the bright bar is the tallest", **passed**, because when every bar is
 2px each of them is the tallest. Caught by the 0px gap in that run's own output. The check now
 holds every bar's height to its own row's figure and the bar spacing to the fluid gap's formula,
-and both went red with the custom properties put back on `el()`. The strip sets them with
-`style.setProperty` (`withVars()` in `views/gaphistory.js`). The rows' `.gap-bar` heat on this
-screen is left on `el()` with every other list's, so this screen matches the rest of the app until
-`el()` is fixed for all of them.
+and both went red with the custom properties put back on `el()`. In 0.1.83 the strip set them
+with `style.setProperty` through a helper of its own, and the rows' `.gap-bar` heat was left on
+`el()` with every other list's. Since 0.1.84 `el()` itself handles custom properties, the helper is
+gone, and the strip and the rows go through `el()` like everything else.
 
 **`--yolk-muted`, a token for the bars that are not the longest.** The longest is `--yolk`; the
 rest read as the same family, a step down. `--yolk-deep` could not serve both themes: on near-black
@@ -1507,6 +1517,23 @@ well is 38px with 4px padding above and below, which leaves the bars their 30px.
 the gap still open it reads "…, {from}, still open." — the visible label's words, since there is no
 "to" date to say. The smoke test derives the expected text from the visible label rather than
 restating it.
+
+**The heat scale renders (0.1.84, the second commit).** `el()` applied a style object with
+`Object.assign(node.style, …)`, which drops any `--` key without an error, so every `.gap-bar` sat
+at `--heat-floor` from 0.1.16 on (the note under "Color", above). It sends custom properties
+through `style.setProperty` now, and the strip's own helper for `--n` and `--h` is gone. Read back
+by the smoke test from computed style, as of 2026-10-26:
+
+| List | Bars | Distinct heats | Opacity, dark | Opacity, light | No bar |
+|---|---|---|---|---|---|
+| Songs, Coldest first | 354 | 184 | 0.101–1 | 0.321–1 | 6 (a figure of 0, or none) |
+| Gap chart, 1728657865 | 11 | 9 | 0.104–1 | 0.323–1 | 0 |
+| Shadow's gap history | 141 | 15 | 0.145–1 | 0.354–1 | 1 (the debut) |
+
+Every bar is held to its own row: `--heat` equal to the row's figure over the list's largest, the
+opacity equal to `floor + heat × (1 − floor)` with the floor read from the bar itself, at least
+three distinct values, and a bar at 1 on the largest row. A row with no heat reads opacity 0.
+Before the fix, every other bar on all three lists read exactly the floor, 0.1 dark and 0.32 light.
 
 ## Attribution
 

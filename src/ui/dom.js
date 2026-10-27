@@ -16,7 +16,7 @@ export function el(spec, props = null, children = null) {
     for (const [k, v] of Object.entries(props)) {
       if (v === null || v === undefined || v === false) continue;
       if (k === 'class') node.className = [node.className, v].filter(Boolean).join(' ');
-      else if (k === 'style' && typeof v === 'object') Object.assign(node.style, v);
+      else if (k === 'style' && typeof v === 'object') setStyle(node, v);
       // NO `html:` PROP. It existed, it set node.innerHTML, and it had zero
       // call sites in the entire app -- so it was never "only ever used with
       // our own markup", it was never used at all. The comment at the top of
@@ -35,6 +35,23 @@ export function el(spec, props = null, children = null) {
 
   append(node, children);
   return node;
+}
+
+/**
+ * A style object, applied. A key beginning "--" is a custom property and goes
+ * through setProperty: assigned as node.style['--heat'] it is a plain JS
+ * expando -- cssText comes back without it, the computed value is empty, and
+ * nothing errors. This was Object.assign(node.style, v), and every gap bar's
+ * --heat was dropped that way from 0.1.16 to 0.1.83, every bar sitting at
+ * --heat-floor (docs/design.md, 0.1.84). A null or undefined value sets
+ * nothing, as for any other prop.
+ */
+function setStyle(node, styles) {
+  for (const [k, v] of Object.entries(styles)) {
+    if (v === null || v === undefined) continue;
+    if (k.startsWith('--')) node.style.setProperty(k, String(v));
+    else node.style[k] = v;
+  }
 }
 
 export function append(node, children) {

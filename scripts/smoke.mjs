@@ -1655,6 +1655,96 @@ server.listen(PORT, async () => {
     }
   }
 
+  // --- Gap bars carry their heat (0.1.84) ------------------------------------
+  //
+  // A .gap-bar is one hue at an opacity scaled to its row: --heat is the
+  // row's figure over the list's largest (heatFor()), and app.css composes
+  // the opacity as --heat-floor + heat x (1 - floor). From 0.1.16 to 0.1.83
+  // el() dropped --heat and every bar sat at the floor, with nothing on screen
+  // looking wrong (docs/design.md, 0.1.84). Read from computed style, each row
+  // against ITS OWN figure, on three lists in both themes: Songs under Coldest
+  // first, a gap chart, and Shadow's gap history, whose debut row has no
+  // figure and must draw no bar. "The values vary" alone would pass bars
+  // scaled to the wrong figure, and "above the floor" a heat the stylesheet
+  // never composed; this asserts the value, the opacity and the variety.
+  console.log('\ngap bar heat:');
+  const readHeat = () => evaluate(`(() => {
+    const read = () => [...document.querySelectorAll('.screen .rows li .row-shell')].map((r) => {
+      const bar = r.querySelector('.gap-bar');
+      const n = r.querySelector('.gap-num');
+      const cs = bar ? getComputedStyle(bar) : null;
+      const txt = n ? n.textContent.trim() : '';
+      return {
+        title: ((r.querySelector('.row-title') || {}).textContent || '').trim(),
+        fig: /^\\d+$/.test(txt) ? Number(txt) : null,
+        bar: !!bar,
+        heat: cs ? cs.getPropertyValue('--heat').trim() : null,
+        floor: cs ? parseFloat(cs.getPropertyValue('--heat-floor')) : null,
+        opacity: cs ? Number(cs.opacity) : null,
+        none: !!bar && bar.dataset.heat === 'none',
+      };
+    });
+    const was = document.documentElement.getAttribute('data-theme');
+    document.documentElement.setAttribute('data-theme', 'dark');
+    const dark = read();
+    document.documentElement.setAttribute('data-theme', 'light');
+    const light = read();
+    if (was === null) document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', was);
+    return { dark, light };
+  })()`);
+  // noneWhen: which rows the screen marks data-heat="none" -- no figure, or
+  // (Songs) a figure of 0, where heatFor() is 0 -- and those read opacity 0.
+  const heatProblems = (tag, rows, noneWhen) => {
+    const p = [];
+    if (rows.length < 10) return [`${tag}: only ${rows.length} rows`];
+    const bare = rows.filter((r) => !r.bar);
+    if (bare.length) p.push(`${tag}: ${bare.length} row(s) without a gap bar, e.g. ${bare[0].title}`);
+    const max = Math.max(1, ...rows.map((r) => r.fig ?? 0));
+    const misNone = rows.filter((r) => r.bar && r.none !== noneWhen(r));
+    if (misNone.length) p.push(`${tag}: ${misNone.length} row(s) ${misNone[0].none ? 'marked' : 'not marked'} data-heat="none", e.g. ${misNone[0].title} (${misNone[0].fig})`);
+    const lit = rows.filter((r) => r.bar && !r.none);
+    const offHeat = lit.filter((r) => r.fig === null || r.heat === '' || Math.abs(Number(r.heat) - r.fig / max) > 1e-9);
+    if (offHeat.length) { const r = offHeat[0]; p.push(`${tag}: ${offHeat.length} of ${lit.length} bar(s) not at their row's heat, e.g. ${r.title}: --heat ${JSON.stringify(r.heat)}, its ${r.fig} of ${max} gives ${r.fig === null ? '?' : Math.round((r.fig / max) * 1e4) / 1e4}`); }
+    const offOpacity = lit.filter((r) => Math.abs(r.opacity - (r.floor + Number(r.heat || 0) * (1 - r.floor))) > 0.005);
+    if (offOpacity.length) { const r = offOpacity[0]; p.push(`${tag}: ${offOpacity.length} bar(s) not at floor + heat x (1 - floor), e.g. ${r.title}: opacity ${r.opacity}, floor ${r.floor}, --heat ${JSON.stringify(r.heat)}`); }
+    const litNone = rows.filter((r) => r.none && r.opacity !== 0);
+    if (litNone.length) p.push(`${tag}: ${litNone.length} row(s) with no heat still draw a bar, e.g. ${litNone[0].title} at opacity ${litNone[0].opacity}`);
+    const distinct = new Set(lit.map((r) => r.heat)).size;
+    if (distinct < 3) p.push(`${tag}: ${distinct} distinct --heat value(s) across ${lit.length} bars -- the bars do not vary`);
+    if (!lit.some((r) => Number(r.heat) === 1)) p.push(`${tag}: no bar reads --heat 1, though the row with the largest figure (${max}) should`);
+    return p;
+  };
+  const heatSummary = (rows) => {
+    const lit = rows.filter((r) => r.bar && !r.none);
+    const op = lit.map((r) => r.opacity);
+    return `${lit.length} bars, ${new Set(lit.map((r) => r.heat)).size} heats, opacity ${Math.round(Math.min(...op) * 1000) / 1000}–${Math.round(Math.max(...op) * 1000) / 1000}, ${rows.filter((r) => r.none).length} with none`;
+  };
+  {
+    const lists = [];
+    if (await clickSort('Coldest first')) {
+      await sleep(900);
+      lists.push(['Songs, Coldest first', await readHeat(), (r) => r.fig === null || r.fig === 0]);
+    } else fail('heat: no "Coldest first" in the sort sheet');
+    await evaluate(`location.hash = '#/gapchart/1728657865';`);
+    await sleep(1200);
+    lists.push(['the gap chart for 1728657865', await readHeat(), (r) => r.fig === null]);
+    await evaluate(`location.hash = '#/song/54/gaps';`);
+    await sleep(1200);
+    const hist = await readHeat();
+    lists.push(["Shadow's gap history", hist, (r) => r.fig === null]);
+    const p = [];
+    for (const [tag, { dark, light }, noneWhen] of lists) {
+      p.push(...heatProblems(`${tag} (dark)`, dark, noneWhen), ...heatProblems(`${tag} (light)`, light, noneWhen));
+      if (dark.length && light.length && dark[0].floor === light[0].floor) p.push(`${tag}: the floor reads ${dark[0].floor} in both themes -- the theme did not switch`);
+    }
+    if (!hist.dark.some((r) => r.none)) p.push("Shadow's gap history: no row without a figure, so \"no heat draws no bar\" went unchecked");
+    if (p.length) for (const x of p) fail(`heat: ${x}`);
+    else for (const [tag, { dark, light }] of lists) pass(`heat on ${tag}: each bar at its figure over the list's largest, opacity floor + heat x (1 - floor); dark ${heatSummary(dark)}; light ${heatSummary(light)}`);
+    await evaluate(`location.hash = '#/songs';`);
+    await sleep(1200);
+  }
+
   // --- "Longest gap": one flat list, non-increasing, every row a dated span
   //
   // (0.1.81) The figure is the longest gap each song has been through, closed
@@ -3286,8 +3376,9 @@ server.listen(PORT, async () => {
     // longest, of the strip's height, with the 2px floor; a debut is the
     // floor. NOT "the bright bar is the tallest" -- that was the first version
     // of this check, and it passed with every bar at 2px, because the bars'
-    // --h never reached the page (el()'s style prop drops custom properties;
-    // docs/design.md, 0.1.83). Equal heights satisfy "tallest" trivially.
+    // --h never reached the page (el()'s style prop dropped custom properties
+    // until 0.1.84; docs/design.md, 0.1.83). Equal heights satisfy "tallest"
+    // trivially.
     const byOrder = new Map(h.rows.map((r) => [r.order, r]));
     const wantH = (r) => (r.debut || r.num === null || longest <= 0 ? 2 : Math.max(2, (Math.min(r.num, longest) / longest) * h.stripH));
     const offH = [...h.bars, ...(h.open ? [h.open] : [])].filter((b) => {

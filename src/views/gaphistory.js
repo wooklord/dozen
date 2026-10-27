@@ -245,23 +245,6 @@ export function renderGapHistory(ctx, songId) {
 }
 
 /**
- * Set custom properties on a node. NOT el()'s `style` prop: that goes through
- * Object.assign(node.style, ...), and a key beginning "--" assigned that way
- * is a plain JS expando -- cssText comes back without it and the computed
- * value is empty, with no error (measured in headless Chrome, 2026-10-26).
- * The strip's --n and --h were dropped exactly so until the smoke test tied
- * bar heights to the row figures. Every .gap-bar's --heat in the app goes
- * through el() and is dropped the same way, and has been since 0.1.16: the
- * rows on this screen are left on that path with the others, because fixing
- * el() relights every list in the app and is its own decision (docs/design.md,
- * 0.1.83).
- */
-function withVars(node, vars) {
-  for (const [k, v] of Object.entries(vars)) node.style.setProperty(k, String(v));
-  return node;
-}
-
-/**
  * THE STRIP: one bar per show, oldest to newest, then the gap still open.
  * Heights are the gap over this song's own longest, with a 2px floor so every
  * show is visible -- a debut has no gap and is the floor, a flat tick. The
@@ -276,31 +259,32 @@ function withVars(node, vars) {
  * option here, and `attrs` is what the placement adds: a role, a label and a
  * tap on this screen, aria-hidden in the tile.
  *
+ * --n and --h go through el()'s style prop. They went through a setProperty
+ * helper of their own in 0.1.83, because el() dropped custom properties then;
+ * the smoke test holds every bar's height to its row, so a regression in
+ * el() fails here as well as on the gap bars' heat.
+ *
  * @param {{entries: object[], current: object|null, max: number}} data  gapHistory()
  */
 export function gapStrip({ entries, current, max }, attrs = null) {
-  const bars = withVars(el('div.gap-strip-bars'), { '--n': entries.length });
+  const bars = el('div.gap-strip-bars', { style: { '--n': String(entries.length) } });
   for (const e of entries) {
     append(
       bars,
-      withVars(
-        el('span.gap-strip-bar', {
-          'data-order': String(e.order),
-          'data-debut': e.isDebut ? 'true' : null,
-          'data-longest': e.isLongest ? 'true' : null,
-        }),
-        { '--h': e.isDebut ? 0 : heatFor(e.gap, max) },
-      ),
+      el('span.gap-strip-bar', {
+        style: { '--h': String(e.isDebut ? 0 : heatFor(e.gap, max)) },
+        'data-order': String(e.order),
+        'data-debut': e.isDebut ? 'true' : null,
+        'data-longest': e.isLongest ? 'true' : null,
+      }),
     );
   }
   const openBar = current
-    ? withVars(
-        el('span.gap-strip-open', {
-          'data-order': String(current.order),
-          'data-longest': current.isLongest ? 'true' : null,
-        }),
-        { '--h': heatFor(current.gap, max) },
-      )
+    ? el('span.gap-strip-open', {
+        style: { '--h': String(heatFor(current.gap, max)) },
+        'data-order': String(current.order),
+        'data-longest': current.isLongest ? 'true' : null,
+      })
     : null;
   return el('div.gap-strip', attrs, [bars, openBar]);
 }

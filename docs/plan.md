@@ -879,12 +879,14 @@ The user's pick, option B of the ones shown in chat. Song detail's "longest obse
   the dashed open bar. Its height is set by where it sits, in `app.css`, not by an option.
 - **Spoken as "Gap history. Longest observed gap N, {from} to {to}."** When the longest is the gap
   still open there is no "to" date, and it reads "…, {from}, still open." — the visible label's
-  own words.
+  own words. Kept by the user at the look check, 2026-10-26.
 - **The strip sits in a `--surface` well, not on the lead fill.** Measured on the fill, light
   `--yolk-muted` reads **2.72:1** against `#f9e1ba`, under the 3:1 a graphic needs (dark passes at
   4.13). In the well the bars are on the ground they were measured on for the history screen —
   3.46 light, 5.44 dark — so it is the same image in both places, not only the same code. The
   alternative, a light-only bar token for the fill, was not taken; it is a second strip palette.
+  The user kept the inset well at the look check, 2026-10-26, with both themes' screenshots in
+  front of them.
   The text on the fill is measured in `scripts/contrast.mjs`: the figure (`--ink`) 11.72 dark /
   13.71 light, the label (`--ink-label`) 4.88 / 5.09, "Gap history ›" (`--chip-sel-ink`) 6.61 /
   13.71.
