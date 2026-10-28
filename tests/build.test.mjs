@@ -17,8 +17,12 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
+// Anchored to the declaration line: unanchored, the first `BUILD = n` in the
+// file won, so a comment quoting one above the declaration read as the build.
+const BUILD_DECL = /^export const BUILD\s*=\s*(\d+);?\s*$/m;
+
 function buildFromVersionJs() {
-  const m = read('src/version.js').match(/export const BUILD\s*=\s*(\d+)/);
+  const m = read('src/version.js').match(BUILD_DECL);
   assert.ok(m, 'src/version.js must export a numeric BUILD');
   return `0.1.${m[1]}`;
 }
@@ -60,9 +64,8 @@ test('the service worker cache version tracks the build', () => {
 // and fail for the wrong reason -- or, at BUILD 100 itself, pass for one.
 async function labelFor(n) {
   const src = read('src/version.js');
-  const re = /export const BUILD\s*=\s*\d+/;
-  assert.match(src, re, 'src/version.js must declare `export const BUILD = <int>` for the swap');
-  const mod = await import(`data:text/javascript,${encodeURIComponent(src.replace(re, `export const BUILD = ${n}`))}`);
+  assert.match(src, BUILD_DECL, 'src/version.js must declare `export const BUILD = <int>` for the swap');
+  const mod = await import(`data:text/javascript,${encodeURIComponent(src.replace(BUILD_DECL, `export const BUILD = ${n};`))}`);
   assert.equal(mod.BUILD, n, `the swapped module reads BUILD ${mod.BUILD}, not ${n}`);
   return mod.BUILD_LABEL;
 }

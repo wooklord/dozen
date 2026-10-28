@@ -20,11 +20,15 @@ import { ROUTES } from './routes.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HOST = process.env.DOZEN_HOST || 'https://dozen.wooklord.net';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Anchored to the declaration line, for the working tree and the served copy
+// alike. Unanchored, the first `BUILD = n` anywhere in the file won -- a
+// comment above the declaration included.
+const BUILD_RE = /^export const BUILD\s*=\s*(\d+);?\s*$/m;
 
 // Expected build: argv, else whatever the working tree says.
 const expected =
   process.argv[2] ||
-  `0.1.${fs.readFileSync(path.join(ROOT, 'src/version.js'), 'utf8').match(/BUILD\s*=\s*(\d+)/)[1]}`;
+  `0.1.${fs.readFileSync(path.join(ROOT, 'src/version.js'), 'utf8').match(BUILD_RE)[1]}`;
 
 console.log(`expecting BUILD ${expected} at ${HOST}\n`);
 
@@ -50,7 +54,7 @@ async function checkHtml() {
 async function checkVersionJs() {
   const res = await fetch(`${HOST}/src/version.js${bust()}`, { cache: 'no-store' });
   if (!res.ok) return bad(`src/version.js returned ${res.status}`);
-  const m = (await res.text()).match(/BUILD\s*=\s*(\d+)/);
+  const m = (await res.text()).match(BUILD_RE);
   if (!m) return bad('could not read BUILD from the served src/version.js');
   const got = `0.1.${m[1]}`;
   if (got !== expected) return bad(`served version.js says ${got}, expected ${expected}`);

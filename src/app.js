@@ -98,6 +98,7 @@ async function boot() {
 
 async function coldStart() {
   const loader = loadingScreen();
+  leaveScreen();
   clear(main);
   append(main, loader.node);
 
@@ -464,6 +465,7 @@ function renderError(err, { keepData = false } = {}) {
     return;
   }
 
+  leaveScreen();
   clear(main);
   append(
     main,
@@ -585,9 +587,34 @@ function navigate(hash, replace = false) {
 // and it is the destination that a view should see, never the alias.
 let previousHash = null;
 
+// What the screen on display asked to run when it leaves (0.1.85): the title
+// chip's IntersectionObserver, which would otherwise keep watching a heading
+// that is no longer on the page. A view registers through ctx.onLeave() while
+// it is built; the hooks run just before main is cleared, here and wherever
+// else main is replaced. The new view's hooks are collected apart from the
+// outgoing one's, because the new view is built while the old one is still up.
+//
+// A hook that throws must not stop the next screen. Uncaught, it would leave
+// route() before clear(main), and the tap would look dead -- the failure the
+// error boundary below exists to prevent. Logged instead, which the smoke test
+// counts as a failure.
+let leaveHooks = [];
+function leaveScreen() {
+  const hooks = leaveHooks;
+  leaveHooks = [];
+  for (const fn of hooks) {
+    try {
+      fn();
+    } catch (err) {
+      console.error('[dozen] a screen failed to clean up as it left', err);
+    }
+  }
+}
+
 function route() {
   if (!app.index) return;
-  const ctx = { index: app.index, navigate, previousHash };
+  const hooks = [];
+  const ctx = { index: app.index, navigate, previousHash, onLeave: (fn) => hooks.push(fn) };
   const hash = location.hash || '#/';
 
   // #/gap was the old Rotation route. It is kept as a redirect so bookmarks
@@ -638,6 +665,8 @@ function route() {
   }
 
   previousHash = hash;
+  leaveScreen();
+  leaveHooks = hooks;
   clear(main);
   append(main, view);
   renderTabs();

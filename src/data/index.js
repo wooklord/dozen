@@ -957,7 +957,8 @@ export function isClosedGapLongest(song) {
  *
  * @returns {{song, entries: object[], current: object|null, max: number}|null}
  *   entries: `{ show, show_id, showdate, row, gap, isDebut, count, setLabels,
- *   isLongest, order }`, where `order` is the entry's chronological position
+ *   isJam, isLongest, order }`, where `isJam` is true when any of the song's
+ *   performances at that show is a jam chart entry (0.1.85) and `order` is the entry's chronological position
  *   (the sort comparators below read it); `current`: `{ gap, sinceDate,
  *   sinceShowId, isLongest, order }`, ordered after every entry, or null when
  *   the song has no current gap; `max`: the longest gap, the figure the strip
@@ -1000,6 +1001,9 @@ export function gapHistory(index, songId) {
       isDebut,
       count: rows.length,
       setLabels,
+      // Any of the song's rows at this show a jam chart entry: the setlist
+      // row's own flag, which agrees exactly with the jamcharts table.
+      isJam: rows.some((r) => Number(r.isjamchart) === 1),
       isLongest: !!(tagged && !tagged.open && !isDebut && gap === tagged.gap),
       order: entries.length,
     });

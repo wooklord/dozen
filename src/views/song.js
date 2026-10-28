@@ -19,6 +19,7 @@ import {
   gapExplainerLink,
   venueLine,
   heatFor,
+  titleChip,
 } from '../ui/components.js';
 import { SLOT_LABELS, SLOTS, setLabel, longestGap, gapHistory } from '../data/index.js';
 import { openGapHistory, gapStrip } from './gaphistory.js';
@@ -37,6 +38,14 @@ export function renderSong(ctx, songId) {
   }
 
   // --- Header ---------------------------------------------------------------
+  // The title chip's bar comes first and is 0px tall: it is sticky under the
+  // header from the top of the screen, and the bar it holds is laid over the
+  // content, so showing it moves nothing (app.css, .title-bar).
+  const title = el('h1.screen-title', { text: song.name });
+  const titleBar = el('div.title-bar-inner');
+  append(titleBar, titleChip(ctx, song.name, title, { bar: titleBar }));
+  append(screen, el('div.title-bar', null, titleBar));
+
   append(
     screen,
     el('button.chip', { type: 'button', onclick: () => history.back(), style: { marginBottom: '12px' } }, [
@@ -45,7 +54,7 @@ export function renderSong(ctx, songId) {
     ]),
   );
 
-  append(screen, el('h1.screen-title', { text: song.name }));
+  append(screen, title);
 
   const subBits = [];
   if (song.isOriginal) subBits.push('Eggy original');
@@ -259,10 +268,25 @@ export function renderSong(ctx, songId) {
   if (song.performances.length) {
     const list = el('ul.rows');
     for (const p of song.performances.slice().reverse()) {
+      // A jam chart entry (0.1.85): a green edge down the row and a "Jam chart"
+      // badge on a line of its own under the venue. The flag is the setlist
+      // row's own `isjamchart`, which agrees exactly with the jamcharts table
+      // (docs/carton_schema.md), and it is per performance, so a song charted
+      // twice in one night marks both rows. Green means jam chart and nothing
+      // else in this app; the badge says it in words, so colour is never the
+      // only signal. The row carries its show, set and position -- jamKey()'s
+      // fields -- so a check can hold each row to its own entry in the table,
+      // not just count them per show.
+      const isJam = Number(p.isjamchart) === 1;
       append(
         list,
         el('li', null, [
-          el('div.row-shell', null, [
+          el('div.row-shell', {
+            'data-show-id': String(p.show_id),
+            'data-set': String(p.setnumber).toLowerCase(),
+            'data-position': String(p.position),
+            'data-jam': isJam ? 'true' : null,
+          }, [
             el(
               'button.row',
               { type: 'button', onclick: () => navigate(`#/show/${p.show_id}`) },
@@ -270,6 +294,7 @@ export function renderSong(ctx, songId) {
                 el('div.row-main', null, [
                   el('div.row-title', { text: formatShowDate(p.showdate) }),
                   venueLine(p),
+                  isJam ? el('div.row-meta', null, el('span.badge.badge-jam', { text: 'Jam chart' })) : null,
                 ]),
                 el('span.badge.badge-set', { text: setLabel(p.settype, p.setnumber) }),
               ],

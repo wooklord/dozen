@@ -240,13 +240,28 @@ test('the deploy wait compares the BUILD integer version.js stores, never the la
   const wait = read('scripts/wait-deploy.mjs');
   const verify = read('scripts/verify-deploy.mjs');
   // Matches the regex LITERAL as it appears in the source, i.e. the text
-  // /BUILD\s*=\s*(\d+)/ with its backslashes, so a drift in either file fails.
-  const re = (src) => src.match(/\/BUILD\\s\*=\\s\*\(\\d\+\)\//g) || [];
-  assert.ok(re(verify).length >= 1, 'verify-deploy.mjs reads BUILD with /BUILD\\s*=\\s*(\\d+)/');
+  // /^export const BUILD\s*=\s*(\d+);?\s*$/m with its backslashes, so a drift
+  // in either file fails. Anchored since 0.1.85: unanchored, the first
+  // `BUILD = n` in the file won, a comment above the declaration included.
+  const re = (src) => src.match(/\/\^export const BUILD\\s\*=\\s\*\(\\d\+\);\?\\s\*\$\/m/g) || [];
+  assert.ok(re(verify).length >= 1, 'verify-deploy.mjs reads BUILD with /^export const BUILD\\s*=\\s*(\\d+);?\\s*$/m');
   assert.ok(re(wait).length >= 1, 'wait-deploy.mjs must read BUILD with the same regex');
+  // And nothing in either reads it any other way, beside the anchored one.
+  // Every line that pairs BUILD with a digit class is a reader of the
+  // integer, whatever shape it takes -- an inline .match(), a second named
+  // constant, a RegExp built from a string -- and each must be the anchored
+  // literal. The cold review of 0.1.85 found the first version of this guard
+  // looked only for an inline `.match(/BUILD\s`, which a named constant passed.
+  // The anchored constant must also be what .match() is given.
+  for (const [name, src] of [['verify-deploy.mjs', verify], ['wait-deploy.mjs', wait]]) {
+    const readers = src.split('\n').filter((l) => /BUILD/.test(l) && /\\d|\[0-9\]/.test(l));
+    for (const l of readers) assert.ok(re(l).length === 1, `${name} reads BUILD with a regex other than the anchored one: ${l.trim()}`);
+    assert.match(src, /const BUILD_RE = \/\^export const BUILD/, `${name} binds the anchored regex to BUILD_RE`);
+    assert.match(src, /\.match\(BUILD_RE\)/, `${name} reads BUILD through BUILD_RE`);
+  }
   assert.doesNotMatch(wait, /got\s*===?\s*['"`]0\.1\./, 'wait-deploy.mjs compares against a "0.1.N" string, which version.js never contains');
   assert.match(wait, /got === expected/, 'wait-deploy.mjs compares the two integers');
   const local = read('src/version.js');
-  assert.match(local, /BUILD\s*=\s*\d+;/, 'version.js stores a bare integer');
+  assert.match(local, /^export const BUILD\s*=\s*\d+;?\s*$/m, 'version.js stores a bare integer');
   assert.doesNotMatch(local, /BUILD\s*=\s*['"`]/, 'version.js stores the integer, not the label');
 });

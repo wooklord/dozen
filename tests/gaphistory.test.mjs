@@ -236,6 +236,29 @@ test('`longest` is longestGap() for every song, null included', () => {
   assert.equal(H(50).longest.gap, 0, 'a gap of 0 is an answer, not a missing one');
 });
 
+// The "Jam" tag (0.1.85) is per show, like the entry: any of the song's rows
+// at that show flagged. Flags only one of TIE's two rows at show 4, and SAME
+// at the first of the two shows on one date.
+test('isJam is per show: any of the song\'s performances there is a jam chart entry', () => {
+  const f = fixture();
+  const flag = (showId, songId, settype = null) => {
+    const r = f.setlists.find((x) => x.show_id === showId && x.song_id === songId && (!settype || x.settype === settype));
+    r.isjamchart = 1;
+  };
+  flag(4, 10, 'Encore');
+  flag(7, 10);
+  flag(8, 20);
+  const idx = buildIndex(f);
+  const jams = (id) => gapHistory(idx, id).entries.filter((e) => e.isJam).map((e) => e.show_id);
+  assert.deepEqual(jams(10), [4, 7], 'one charted row of two still tags the show');
+  assert.deepEqual(jams(20), [8], 'two shows on one date are two entries, tagged apart');
+  assert.deepEqual(jams(30), []);
+  // The unflagged fixture tags nothing, and says so with a boolean.
+  for (const id of [10, 20, 30, 40, 50, 60]) {
+    assert.ok(H(id).entries.every((e) => e.isJam === false), `song ${id}`);
+  }
+});
+
 // --- The three sorts, over the rows the screen lists: every show, then now ---
 const rowsOf = (h) => [...h.entries, ...(h.current ? [{ now: true, ...h.current }] : [])];
 const label = (r) => (r.now ? 'now' : r.show_id);

@@ -901,13 +901,18 @@ button.gap-figure:active {
 /* The floor is per-theme: on near-black the accent is far lighter than its
    ground so a low opacity still registers, while the same value on white
    disappears. Without it the bar is present in one theme and absent in the
-   other -- an inconsistency you feel without being able to name it. */
+   other -- an inconsistency you feel without being able to name it.
+
+   4px since 0.1.85 (3px before), mainly for light, where a thin warm bar at
+   low opacity on white was the hardest to read. The row's 12px padding still
+   leaves 8px between the bar and the row text on every list at 360px, which
+   the smoke test measures. */
 .gap-bar {
   position: absolute;
   left: 0;
   top: 0;
   bottom: 0;
-  width: 3px;
+  width: 4px;
   background: var(--yolk);
   opacity: calc(var(--heat-floor) + var(--heat, 0) * (1 - var(--heat-floor)));
 }
@@ -933,7 +938,26 @@ button.gap-figure:active {
   white-space: nowrap;
 }
 
+/* GREEN MEANS JAM CHART, AND ONLY THAT (0.1.85). The jam badge -- "Jam chart"
+ * on song detail's performances, "Jam" on Gap history, the entry count on
+ * show detail -- wears --jam for its text and its whole border, the colour the
+ * setlist's jam titles and the jam key already wear. Until 0.1.85 this class
+ * was YOLK and carried Debut and Longest as well as a jam badge nothing
+ * rendered; Debut is the plain badge now, and Longest is .badge-accent below.
+ *
+ * Text and border are one token, so both are the measured pairs "jam on
+ * surface" (rows), "jam on surface-up" (a pressed or flashing row) and "jam on
+ * shell" (show detail's section head) in scripts/contrast.mjs, every one of
+ * them clearing 4.5:1, past the 3:1 a border needs. */
 .badge-jam {
+  color: var(--jam);
+  border-color: var(--jam);
+}
+
+/* The yolk badge: "Longest" on Gap history. It was .badge-jam until 0.1.85,
+ * and its --yolk-line border is still the accepted KNOWN_GAPS entry in
+ * scripts/contrast.mjs -- the --yolk text carries it. */
+.badge-accent {
   color: var(--yolk);
   border-color: var(--yolk-line);
 }
@@ -1019,8 +1043,8 @@ button.gap-figure:active {
   background: var(--surface-up);
 }
 
-/* The set labels give way before the "×N" and "Longest" badges beside them,
- * as .cover-note does on the Songs rows. */
+/* The set labels give way before the "×N", "Jam" and "Longest" badges beside
+ * them, as .cover-note does on the Songs rows. */
 .history-sets {
   flex: 0 1 auto;
   min-width: 0;
@@ -1048,6 +1072,21 @@ button.gap-figure:active {
 }
 .row-shell[data-picked="true"] {
   background: var(--yolk-wash);
+}
+
+/* A jam chart performance on song detail (0.1.85): a green edge down the
+ * row, the heat bar's width and place, beside the "Jam chart" badge that says
+ * it in words. Only that list carries one -- Gap history's left edge is the
+ * heat bar, so its rows carry the badge alone. --jam on --surface, measured
+ * 9.54:1 dark and 6.52:1 light, past the 3:1 a graphic needs. */
+.row-shell[data-jam="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--jam);
 }
 
 /* ------------------------------------------------------------------ tabs --- */
@@ -1132,6 +1171,93 @@ button.gap-figure:active {
 }
 .sortbar::-webkit-scrollbar {
   display: none;
+}
+
+/* THE TITLE CHIP (0.1.85): titleChip() in ui/components.js, ruled in
+ * docs/plan.md, "0.1.85 design". The song's name, shown once the screen's
+ * heading has gone under the header; a tap goes back to the top.
+ *
+ * ON SONG DETAIL IT HAS A BAR OF ITS OWN, AND THE BAR TAKES NO SPACE.
+ * .title-bar is a 0px sticky first child of the screen, stuck under the header
+ * from the top of the page, and the bar it holds is laid over the content
+ * beneath, so the chip appearing moves nothing. Same ground and blur as
+ * .sortbar, and full-bleed the same way.
+ *
+ * ON GAP HISTORY IT TAKES THE SORT ROW'S RIGHT END (.sortbar-titled), so that
+ * screen has one sticky bar, never two stacked. align-items: center there,
+ * because a title that wraps makes a taller chip, and the lead chip beside it
+ * must not stretch to match. AND THERE A HIDDEN CHIP KEEPS ITS BOX
+ * (visibility, not display): the sort row is in the flow, so a wrapped chip
+ * appearing would push the whole list down -- 14px for a two-line title, 33px
+ * for Rocket Man's three, found by the cold review. Held, the row is as tall
+ * at the top as with the chip shown, and nothing moves when it appears. The
+ * fade is a transition there, because an animation would not replay on a
+ * visibility change.
+ *
+ * IT WRAPS, NEVER ELLIPSIZES. Measured in the built chip, one of the 360
+ * played titles wraps on song detail at 360px or 390px, and beside Gap
+ * history's lead chip 37 do at 360px, 17 at 390px (docs/design.md, 0.1.85): a name
+ * cut short is the one thing this chip must not do. --s-1 of block padding
+ * keeps a wrapped name off the border; one line stays the 34px chip.
+ *
+ * `[hidden]` is restated because display: flex and .chip's inline-flex beat
+ * the UA's display: none, as for .filter-pills. */
+.title-bar {
+  position: sticky;
+  top: calc(var(--header-h) + env(safe-area-inset-top));
+  z-index: 30;
+  height: 0;
+}
+.title-bar-inner {
+  position: absolute;
+  top: 0;
+  left: calc(var(--s-4) * -1);
+  right: calc(var(--s-4) * -1);
+  display: flex;
+  padding: var(--s-2) var(--s-4);
+  background: var(--shell-alpha);
+  backdrop-filter: blur(12px);
+  animation: title-in 150ms ease-out;
+}
+.title-bar-inner[hidden] {
+  display: none;
+}
+.sortbar.sortbar-lead.sortbar-titled {
+  align-items: center;
+}
+.chip.title-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding-block: var(--s-1);
+  text-align: left;
+  color: var(--ink);
+}
+.chip.title-chip[hidden] {
+  display: none;
+}
+.sortbar-titled .title-chip {
+  margin-left: auto;
+  transition: opacity 150ms ease-out;
+}
+.sortbar-titled .chip.title-chip[hidden] {
+  display: inline-flex;
+  visibility: hidden;
+  opacity: 0;
+}
+.title-chip-name {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+.title-chip-up {
+  flex: none;
+  color: var(--ink-faint);
+}
+/* A fade in, song detail's bar. The global prefers-reduced-motion rule at the
+ * end of this file takes it, and Gap history's transition, to 0.01ms. */
+@keyframes title-in {
+  from {
+    opacity: 0;
+  }
 }
 
 /* Border is --btn-line, not --line. 0.1.46 fixed the gap chart and show detail

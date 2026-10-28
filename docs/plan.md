@@ -897,8 +897,9 @@ figures stay plain stats.
 
 ### 0.1.85 design (2026-10-27)
 
-**Status: recorded, not built.** Three changes the user asked for on 2026-10-27; the change plan
-follows, and the look is approved from screenshots before the commit.
+**Status: shipped in 0.1.85; the look was approved from screenshots on 2026-10-28.** Three changes
+the user asked for on 2026-10-27. The plan was approved the same day with six answers, recorded
+under the list.
 
 1. **Jam chart shows stand out, in the existing jam green, on song detail AND on Gap history.** The
    user's pick. Jam chart membership is a Carton fact — Carton marks these entries green on its own
@@ -915,6 +916,55 @@ follows, and the look is approved from screenshots before the commit.
 3. **The row heat strip goes from 3px to 4px**, every `.gap-bar`, for legibility — mainly in the
    light theme, where the strip relit in 0.1.84 reads thin. It must still clear the row's text at
    360px.
+
+**The plan's open questions, answered by the user (2026-10-27):**
+
+1. **When the chip shows:** once the H1 is gone, even on Gap history, where the sort row it joins
+   is still mid-screen at that point (the row sticks 342px later at 390px, 361px at 360px).
+2. **Where it sits:** at the left of its own bar on song detail; at the right end of the sort row
+   on Gap history.
+3. **The "Jam chart" badge on song detail's Every performance list:** on its own line under the
+   venue. Of the four placements measured (docs/design.md, 0.1.85) it is the only one that leaves
+   the venue line as wide as it is today, at the cost of 21px of row height on a jam row.
+4. **The green badge:** a full `--jam` border, not the plain badge's `--line`.
+5. **Show detail's jam-entry count badge** goes green with the rest. **The Songs list's unused
+   "Jam" badge path is deleted**, not repainted: `songRow()`'s `jamBadge` option, off by default
+   and never switched on.
+6. **Screenshots:** after-only for the new screens, plus a before and after of Songs, Coldest first,
+   for the 4px bars.
+
+**As built:**
+
+- **`.badge-jam` is green** — `--jam` text and border — and is worn by "Jam chart" (song detail),
+  "Jam" (Gap history) and show detail's entry count, and nothing else. The yolk badge it used to be
+  is **`.badge-accent`**, which carries only "Longest" on Gap history; its `--yolk-line` border is
+  the same accepted `KNOWN_GAPS` entry, renamed. **Debut**, on the gap chart and on Gap history, is
+  the plain `.badge`.
+- **Song detail's jam rows** carry `data-jam` and a 4px `--jam` edge (`.row-shell[data-jam]::before`)
+  beside the badge. **Gap history's rows carry the badge alone**: their left edge is the heat bar,
+  and a green edge would cover it. Gap history's tag is per show — `gapHistory()`'s new `isJam`,
+  true when any of the song's performances at that show is charted.
+- **The title chip** is `titleChip()` in `ui/components.js`. On song detail it sits in a 0px sticky
+  bar laid over the content, so showing it moves nothing; on Gap history it is the sort row's last
+  chip, `margin-left: auto`, and a hidden chip keeps its box there, so a title that wraps does not
+  push the list down when it appears — it makes the sort row taller at the top instead (37 titles
+  at 360px, 17 at 390px). Hidden is `hidden` plus `inert`. The tap scrolls to the top
+  (`behavior: 'auto'` under reduced motion, because Chrome does not apply the preference to
+  `'smooth'`) and moves focus to the heading, as does the chip hiding with focus on it. The
+  observer is rebuilt on resize, since the header's height includes the safe-area inset, and it
+  and the listener go through a new `ctx.onLeave()` hook in `route()`.
+- **Every `.gap-bar` is 4px**, and the jam edge matches it.
+- **The cold review** changed four things in the build: the held box on Gap history (the list
+  moved 14px for a two-line title, 33px for Rocket Man), the resize, the focus hand-back, and leave
+  hooks that cannot stop the next screen. The rest of it is recorded in `docs/design.md`, 0.1.85,
+  and in the proofs in `CLAUDE.md`.
+
+**The held box is the user's call (2026-10-28).** Approved with the look, from a before and after
+of Rocket Man's Gap history at 360px: a hidden chip keeps its space in the sort row, so for a title
+that wraps the row is taller at the top of the screen (83px against 50 for Rocket Man) and the list
+does not move when the chip appears. The alternatives put to the user were letting the list jump
+(14px for a two-line title, 33px for Rocket Man) and cutting long titles short, which the original
+constraint ruled out. One-line titles, Shadow's among them, are unaffected.
 
 ## Out of scope — parked
 

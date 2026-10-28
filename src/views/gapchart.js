@@ -124,8 +124,10 @@ export function renderGapChart(ctx, showId) {
             // gap 0 "a second performance on the same date". Carton prints the
             // debut date's position on a debut row; here it is a badge
             // (ruling 2026-10-24, decision 1). Different facts, shown differently.
+            // The plain badge since 0.1.85: it wore the yolk .badge-jam, and
+            // green -- the class's colour now -- means jam chart only.
             e.isDebut
-              ? el('div.gap-figure', null, [el('span.badge.badge-jam', { text: 'Debut' })])
+              ? el('div.gap-figure', null, [el('span.badge', { text: 'Debut' })])
               : el(
                   'button.gap-figure',
                   {

@@ -21,7 +21,9 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HOST = process.env.DOZEN_HOST || 'https://dozen.wooklord.net';
-const BUILD_RE = /BUILD\s*=\s*(\d+)/;
+// Anchored to the declaration line. Unanchored, the first `BUILD = n` anywhere
+// in the file won -- a comment above the declaration included.
+const BUILD_RE = /^export const BUILD\s*=\s*(\d+);?\s*$/m;
 const INTERVAL_MS = 10_000;
 
 const readBuild = (text) => {

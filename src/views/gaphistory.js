@@ -20,6 +20,7 @@ import {
   gapExplainerLink,
   venueLine,
   heatFor,
+  titleChip,
 } from '../ui/components.js';
 import {
   gapHistory,
@@ -97,7 +98,8 @@ export function renderGapHistory(ctx, songId) {
       [icon(ICONS.back, 16), song.name],
     ),
   );
-  append(screen, el('h1.screen-title', { text: 'Gap history' }));
+  const title = el('h1.screen-title', { text: 'Gap history' });
+  append(screen, title);
   append(
     screen,
     el('p.screen-sub', null, [
@@ -166,14 +168,17 @@ export function renderGapHistory(ctx, songId) {
 
   // --- Sort, count line, list ------------------------------------------------
   // The 0.1.81 lead-chip pattern: one chip reads the active sort and opens a
-  // sheet of described options.
+  // sheet of described options. The song's title chip (0.1.85) takes the
+  // row's right end, so this screen has one sticky bar, never two stacked; it
+  // shows once the heading above has gone under the header, even while this
+  // row is still mid-screen.
   const leadValue = el('span.chip-value');
   const lead = el('button.chip.chip-lead', { type: 'button', onclick: () => openSortSheet() }, [
     el('span.chip-label', { text: 'Sort' }),
     leadValue,
     el('span.chip-caret', { text: '▾', 'aria-hidden': 'true' }),
   ]);
-  append(screen, el('div.sortbar.sortbar-lead', null, [lead]));
+  append(screen, el('div.sortbar.sortbar-lead.sortbar-titled', null, [lead, titleChip(ctx, song.name, title)]));
 
   function openSortSheet() {
     openSheet('Sort by', (close) =>
@@ -328,13 +333,20 @@ function listJoin(items) {
  * instead of a number (Carton prints a position there, not a gap). Tap opens
  * the show; the trailing action opens that night's gap chart, where this song
  * carries the same figure.
+ *
+ * "Jam" (0.1.85) is green and PER SHOW, like the row: it is there when any of
+ * the song's performances at that show is a jam chart entry -- `isJam`, from
+ * gapHistory(). The row's left edge is the heat bar, so the tag carries the
+ * fact alone here, and the row has no data-jam: on song detail's list that
+ * attribute draws the green edge (app.css), which here would cover the bar.
  */
 function showRow(e, max, navigate) {
   const heat = e.isDebut ? 0 : heatFor(e.gap, max);
   const meta = el('div.row-meta', null, [
     el('span.history-sets', { text: e.setLabels.join(', ') }),
     e.count > 1 ? el('span.badge', { text: `×${e.count}` }) : null,
-    e.isLongest ? el('span.badge.badge-jam', { text: 'Longest' }) : null,
+    e.isJam ? el('span.badge.badge-jam', { text: 'Jam' }) : null,
+    e.isLongest ? el('span.badge.badge-accent', { text: 'Longest' }) : null,
   ]);
   return el(
     'div.row-shell.history-row',
@@ -357,8 +369,10 @@ function showRow(e, max, navigate) {
           ]),
         ],
       ),
+      // Debut in the plain badge (0.1.85): it wore the yolk .badge-jam, and
+      // green -- the class's colour now -- means jam chart only.
       e.isDebut
-        ? el('div.gap-figure', null, [el('span.badge.badge-jam', { text: 'Debut' })])
+        ? el('div.gap-figure', null, [el('span.badge', { text: 'Debut' })])
         : el('div.gap-figure', null, [
             el('div.gap-num.num', { text: e.gap === null ? '—' : String(e.gap) }),
             el('div.gap-unit', { text: 'show gap' }),
@@ -393,7 +407,7 @@ function nowRow(c, max) {
           el('div.row-title', { text: 'Now · still open' }),
           el('div.row-meta', null, [
             el('span', { text: `Last played ${formatShowDateShort(c.sinceDate)}` }),
-            c.isLongest ? el('span.badge.badge-jam', { text: 'Longest' }) : null,
+            c.isLongest ? el('span.badge.badge-accent', { text: 'Longest' }) : null,
           ]),
         ]),
       ]),

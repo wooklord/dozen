@@ -3818,6 +3818,404 @@ server.listen(PORT, async () => {
     else pass(`song detail's tile carries the history's own strip: ${t.bars.length} bars${t.open ? ' and the open bar' : ''}, ${t.boxH}px tall, every bar at its row's height, ${Math.round(Math.min(...tileAt[360].bars.map((b) => b.w)) * 1000) / 1000}px narrowest at 360; aria-hidden; spoken "${t.aria}"`);
   }
 
+  // --- 0.1.85: jam chart marking, the title chip, 4px bars --------------------
+  //
+  // docs/plan.md, "0.1.85 design". Each read off the screen.
+  //
+  // (1) JAM MARKING, held against THE CARTON's raw jamcharts table, not the
+  //     app's index -- comparing the screen with index.jamcharts would compare
+  //     the app with itself. Per (song, show): song detail marks as many
+  //     performance rows as the table has entries, and Gap history tags the
+  //     show when the table has any. Per performance on song detail too: each
+  //     marked row is the table's entry by show, set and position, which a
+  //     night with only some of the song's performances charted needs (the
+  //     run fails if the songs checked have no such night). On Shadow, and on
+  //     the first song the table charts twice in one night, so a
+  //     per-performance count of 2 is exercised and a fold per show would
+  //     show. GREEN MEANS JAM CHART ONLY:
+  //     on every screen visited, in both themes, a badge painted --jam is a
+  //     .badge-jam reading a jam label -- a count on show detail and nowhere
+  //     else -- every .badge-jam is painted --jam, and
+  //     Debut is the plain badge -- on Shadow's history and on the gap chart
+  //     of Shadow's debut show. SKIPs if Carton is unreachable.
+  // (2) THE TITLE CHIP: hidden, inert and unfocusable at load; hidden with the
+  //     heading 4px short of the header's edge and shown 4px past it, and the
+  //     same against a header made 28px taller and a resize; reads the song's
+  //     name; a tap returns to the top, at once under reduced motion and
+  //     smoothly without, and hands focus to the heading, as does the chip
+  //     hiding with focus on it. On Gap history it is the sort row's last chip
+  //     at its right end, mid-screen included, and each screen has one sticky
+  //     bar. The list below does not move when the chip appears. The widest
+  //     title in the catalogue, found by measuring every row on Songs, wraps
+  //     inside both bars at 360 rather than running past them, and moves
+  //     nothing either.
+  // (3) EVERY .gap-bar is 4px by computed style on five lists, at least 8px
+  //     from the row text at 360; the jam edge is held to the same.
+  console.log('\njam chart marking against the jamcharts table:');
+  const GREEN_JS = `
+    const t = (n) => ((n || {}).textContent || '').trim();
+    const tokenRgb = (name) => { const s = document.createElement('span'); s.style.color = 'var(' + name + ')'; document.body.appendChild(s); const c = getComputedStyle(s).color; s.remove(); return c; };
+    const edgeOf = (r) => { const b = getComputedStyle(r, '::before'); return b.content === 'none' || b.content === 'normal' ? null : { w: parseFloat(b.width), bg: b.backgroundColor }; };
+    const perfRows = () => { const sec = [...document.querySelectorAll('.screen .section')].find((s) => t(s.querySelector('.section-title')).startsWith('Every performance')); return sec ? [...sec.querySelectorAll('.rows > li > .row-shell')] : []; };
+    const badgeScan = () => {
+      const jam = tokenRgb('--jam');
+      return [...document.querySelectorAll('#main .badge')].map((b) => { const cs = getComputedStyle(b); return { text: t(b), cls: b.className, color: cs.color, border: cs.borderTopColor, jamClass: b.classList.contains('badge-jam'), green: cs.color === jam || cs.borderTopColor === jam }; });
+    };`;
+  const greenScan = () => evaluate(`(() => {${GREEN_JS}
+    const was = document.documentElement.getAttribute('data-theme');
+    const out = {};
+    for (const th of ['dark', 'light']) { document.documentElement.setAttribute('data-theme', th); out[th] = { jam: tokenRgb('--jam'), inkDim: tokenRgb('--ink-dim'), badges: badgeScan() }; }
+    if (was === null) document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', was);
+    return out; })()`);
+  // "Jam chart" on song detail, "Jam" on Gap history; the entry count on show
+  // detail, and a bare number nowhere else, so a count turning up in a
+  // .badge-jam on another screen fails. Nothing else may wear the class.
+  const JAM_LABEL = /^(Jam chart|Jam)$/;
+  const greenProblems = (where, scan, { debutsWanted = false, label = JAM_LABEL } = {}) => {
+    const p = [];
+    for (const th of ['dark', 'light']) {
+      const s = scan[th];
+      for (const b of s.badges) {
+        if (b.green && !b.jamClass) p.push(`${where} (${th}): "${b.text}" is painted --jam without .badge-jam (class "${b.cls}")`);
+        if (b.jamClass && (b.color !== s.jam || b.border !== s.jam)) p.push(`${where} (${th}): .badge-jam "${b.text}" paints ${b.color}, border ${b.border}; --jam is ${s.jam}`);
+        if (b.jamClass && !label.test(b.text)) p.push(`${where} (${th}): .badge-jam reads "${b.text}", not a jam label here`);
+        if (b.text === 'Debut' && (b.cls !== 'badge' || b.color !== s.inkDim)) p.push(`${where} (${th}): Debut is class "${b.cls}" in ${b.color}, not the plain badge in --ink-dim ${s.inkDim}`);
+      }
+    }
+    if (debutsWanted && !scan.dark.badges.some((b) => b.text === 'Debut')) p.push(`${where}: no Debut badge rendered, so the neutral Debut went unchecked`);
+    if (scan.dark.jam === scan.light.jam) p.push(`${where}: --jam reads ${scan.dark.jam} in both themes -- the theme did not switch`);
+    return p;
+  };
+  {
+    let jam = null;
+    let why = null;
+    try {
+      const res = await fetch('https://thecarton.net/api/v2/jamcharts.json?limit=20000');
+      const body = (res.headers.get('content-type') || '').includes('json') ? await res.json() : null;
+      jam = body && Array.isArray(body.data) && body.data.length ? body.data : null;
+      if (!jam) why = 'no rows came back';
+    } catch (err) {
+      why = err.message;
+    }
+    if (!jam) skip(`jam marking not cross-checked: The Carton's jamcharts table could not be read (${why})`);
+    else {
+      // (song, show) -> entries, and the date each pair is on; and each song's
+      // entries keyed by performance, show|set|position, as jamKey() keys them.
+      const perPair = new Map();
+      const dateOf = new Map();
+      const perfKeys = new Map();
+      for (const j of jam) {
+        const k = `${Number(j.song_id)}:${Number(j.showid)}`;
+        perPair.set(k, (perPair.get(k) || 0) + 1);
+        dateOf.set(k, j.showdate);
+        const s = Number(j.song_id);
+        if (!perfKeys.has(s)) perfKeys.set(s, new Set());
+        perfKeys.get(s).add(`${Number(j.showid)}|${String(j.setnumber).toLowerCase()}|${Number(j.position)}`);
+      }
+      const wantFor = (songId) => new Map([...perPair].filter(([k]) => k.split(':')[0] === String(songId)).map(([k, n]) => [Number(k.split(':')[1]), n]));
+      const twice = [...perPair].filter(([, n]) => n > 1).map(([k]) => k)
+        .sort((a, b) => dateOf.get(a).localeCompare(dateOf.get(b)) || Number(a.split(':')[0]) - Number(b.split(':')[0]))[0];
+      const p = [];
+      if (!twice) p.push('the jamcharts table charts no song twice in one night, so a count of 2 went unchecked');
+      const songs = [...new Set([54, ...(twice ? [Number(twice.split(':')[0])] : [])])];
+      const notes = [];
+      let shadowDebutShow = null;
+      let partialNights = 0;
+      for (const id of songs) {
+        const want = wantFor(id);
+        await evaluate(`location.hash = '#/song/${id}';`);
+        await sleep(1200);
+        const d = await evaluate(`(() => {${GREEN_JS}
+          return { name: t(document.querySelector('.screen h1')), jam: tokenRgb('--jam'), rows: perfRows().map((r) => {
+            const b = r.querySelector('.badge-jam');
+            const meta = b ? b.parentElement : null;
+            return { showId: Number(r.dataset.showId), key: r.dataset.showId + '|' + r.dataset.set + '|' + r.dataset.position, attr: r.dataset.jam === 'true', badge: b ? t(b) : null,
+              ownLine: !!(meta && meta.matches('.row-meta') && meta.children.length === 1 && meta.previousElementSibling && meta.previousElementSibling.matches('.venue-line')),
+              edge: edgeOf(r) };
+          }) }; })()`);
+        const tag = `song ${id} (${d.name})`;
+        if (!d.rows.length) { p.push(`${tag}: no Every performance rows rendered`); continue; }
+        const marked = new Map();
+        for (const r of d.rows) if (r.badge !== null) marked.set(r.showId, (marked.get(r.showId) || 0) + 1);
+        const off = [...new Set([...want.keys(), ...marked.keys()])].filter((s) => (want.get(s) || 0) !== (marked.get(s) || 0));
+        if (off.length) p.push(`${tag}: ${off.length} show(s) marked unlike the jamcharts table, e.g. show ${off[0]}: ${marked.get(off[0]) || 0} row(s) marked, ${want.get(off[0]) || 0} entr(ies) in the table`);
+        // Per performance as well. A night the song was played more than once
+        // with only some of it charted is the case a per-show count cannot
+        // see: marking the wrong performance leaves every count right. So each
+        // marked row is held to its own entry, by show, set and position.
+        const wantKeys = perfKeys.get(id) || new Set();
+        const gotKeys = new Set(d.rows.filter((r) => r.badge !== null).map((r) => r.key));
+        const unmarked = [...wantKeys].filter((k) => !gotKeys.has(k));
+        const unlisted = [...gotKeys].filter((k) => !wantKeys.has(k));
+        if (unmarked.length || unlisted.length) p.push(`${tag}: by performance (show|set|position), ${unmarked.length} charted and not marked, e.g. ${unmarked[0] || '-'}; ${unlisted.length} marked and not charted, e.g. ${unlisted[0] || '-'}`);
+        const malformed = d.rows.filter((r) => !/^\d+\|[^|]+\|\d+$/.test(r.key));
+        if (malformed.length) p.push(`${tag}: ${malformed.length} row(s) without a show, set and position to key them by, e.g. "${malformed[0].key}"`);
+        const nights = new Map();
+        for (const r of d.rows) nights.set(r.showId, [...(nights.get(r.showId) || []), wantKeys.has(r.key)]);
+        partialNights += [...nights.values()].filter((xs) => xs.length > 1 && xs.some(Boolean) && !xs.every(Boolean)).length;
+        const bad = d.rows.filter((r) => (r.badge !== null) !== r.attr || (r.badge !== null && (r.badge !== 'Jam chart' || !r.ownLine)) || (r.attr ? !r.edge || r.edge.w !== 4 || r.edge.bg !== d.jam : !!r.edge));
+        if (bad.length) { const r = bad[0]; p.push(`${tag}: ${bad.length} row(s) whose badge, line and edge disagree, e.g. show ${r.showId}: badge ${JSON.stringify(r.badge)}, data-jam ${r.attr}, own line ${r.ownLine}, edge ${r.edge ? `${r.edge.w}px ${r.edge.bg}` : 'none'} (--jam ${d.jam})`); }
+        const scanD = await greenScan();
+        p.push(...greenProblems(`${tag} detail`, scanD));
+
+        await evaluate(`location.hash = '#/song/${id}/gaps';`);
+        await sleep(1200);
+        const g = await evaluate(`(() => {${GREEN_JS}
+          return [...document.querySelectorAll('.screen .rows li .history-row')].filter((r) => r.dataset.showId).map((r) => ({
+            showId: Number(r.dataset.showId), tags: [...r.querySelectorAll('.badge-jam')].map(t), edge: !!edgeOf(r),
+            debut: [...r.querySelectorAll('.badge')].some((b) => t(b) === 'Debut') })); })()`);
+        const tagged = g.filter((r) => r.tags.includes('Jam')).map((r) => r.showId).sort((a, b) => a - b);
+        const wantShows = [...want.keys()].sort((a, b) => a - b);
+        if (JSON.stringify(tagged) !== JSON.stringify(wantShows)) p.push(`${tag} history: "Jam" on ${tagged.length} show(s), the table charts ${wantShows.length}; first difference show ${[...tagged, ...wantShows].find((s) => tagged.includes(s) !== wantShows.includes(s))}`);
+        if (g.some((r) => r.tags.length > 1 || r.tags.some((x) => x !== 'Jam'))) p.push(`${tag} history: a row carries ${JSON.stringify(g.find((r) => r.tags.length > 1 || r.tags.some((x) => x !== 'Jam')).tags)} -- one "Jam" per show`);
+        if (g.some((r) => r.edge)) p.push(`${tag} history: ${g.filter((r) => r.edge).length} row(s) draw the jam edge over the heat bar`);
+        p.push(...greenProblems(`${tag} history`, await greenScan(), { debutsWanted: true }));
+        if (id === 54) shadowDebutShow = (g.find((r) => r.debut) || {}).showId || null;
+        notes.push(`${d.name}: ${[...marked.values()].reduce((a, b) => a + b, 0)} row(s) at ${marked.size} show(s), ${tagged.length} tagged`);
+      }
+      if (!partialNights) p.push('no night among the songs checked has the song played more than once with only some of it charted, so the per-performance case went unchecked');
+      // Green elsewhere: the debut night's gap chart, a show with jam entries
+      // (Shadow's newest), and the Songs list.
+      if (!shadowDebutShow) p.push("Shadow's history has no Debut row to find its debut show by");
+      else {
+        await evaluate(`location.hash = '#/gapchart/${shadowDebutShow}';`);
+        await sleep(1200);
+        p.push(...greenProblems(`gap chart ${shadowDebutShow} (Shadow's debut)`, await greenScan(), { debutsWanted: true }));
+      }
+      const shadowJamShow = [...wantFor(54).keys()].sort((a, b) => dateOf.get(`54:${b}`).localeCompare(dateOf.get(`54:${a}`)))[0];
+      await evaluate(`location.hash = '#/show/${shadowJamShow}';`);
+      await sleep(1200);
+      const showScan = await greenScan();
+      if (!showScan.dark.badges.some((b) => b.jamClass && /^\d+$/.test(b.text))) p.push(`show ${shadowJamShow}: no green entry-count badge on its jam chart entries`);
+      p.push(...greenProblems(`show ${shadowJamShow}`, showScan, { label: /^\d+$/ }));
+      await evaluate(`location.hash = '#/songs';`);
+      await sleep(1200);
+      p.push(...greenProblems('Songs', await greenScan()));
+      if (p.length) for (const x of p) fail(`jam marking: ${x}`);
+      else pass(`jam marking agrees with the jamcharts table per show and per performance, ${partialNights} partly charted night(s) among them (${notes.join('; ')}); every badge painted --jam is a .badge-jam with a jam label, on ${songs.length * 2 + 3} screens, both themes; Debut plain on Shadow's history and gap chart ${shadowDebutShow}`);
+    }
+  }
+
+  console.log('\ntitle chip:');
+  const CHIP_JS = `
+    const t = (n) => ((n || {}).textContent || '').trim();
+    const chipState = () => {
+      const c = document.querySelector('.screen .title-chip');
+      if (!c) return null;
+      const h1 = document.querySelector('.screen h1.screen-title');
+      const hdr = document.querySelector('.app-header').getBoundingClientRect();
+      const r = c.getBoundingClientRect();
+      const bar = c.closest('.sortbar') || c.closest('.title-bar-inner');
+      const br = bar ? bar.getBoundingClientRect() : null;
+      const lead = bar ? bar.querySelector('.chip-lead') : null;
+      const was = document.activeElement;
+      c.focus({ preventScroll: true });
+      const focusable = document.activeElement === c;
+      if (focusable) { if (was && was !== document.body && was.focus) was.focus({ preventScroll: true }); else c.blur(); }
+      const sticky = [...document.querySelectorAll('#main *')].filter((n) => getComputedStyle(n).position === 'sticky' && n.getClientRects().length);
+      const nm = c.querySelector('.title-chip-name');
+      // Shown means a box AND visible: on Gap history a hidden chip keeps its
+      // box (visibility: hidden) so the list does not move when it appears.
+      const row = document.querySelector('.screen .rows li');
+      const a = document.activeElement;
+      return {
+        shown: c.getClientRects().length > 0 && getComputedStyle(c).visibility === 'visible', hidden: !!c.closest('[hidden]'), inert: !!c.closest('[inert]'), focusable,
+        rowTop: row ? row.getBoundingClientRect().top + window.scrollY : null,
+        active: a ? a.tagName.toLowerCase() + (a.className ? '.' + String(a.className).split(' ').join('.') : '') : null,
+        name: t(nm), aria: c.getAttribute('aria-label'), h1: t(h1),
+        h1Bottom: h1 ? h1.getBoundingClientRect().bottom : null, headerBottom: hdr.bottom,
+        top: r.top, left: r.left, right: r.right, height: r.height,
+        nameRight: nm ? nm.getBoundingClientRect().right : null,
+        lines: nm ? Math.round(nm.getBoundingClientRect().height / parseFloat(getComputedStyle(nm).lineHeight)) : 0,
+        inSortbar: !!c.closest('.sortbar'), last: !!(c.parentElement && c.parentElement.lastElementChild === c),
+        barTop: br ? br.top : null, barLeft: br ? br.left + parseFloat(getComputedStyle(bar).paddingLeft) : null,
+        barRight: br ? br.right - parseFloat(getComputedStyle(bar).paddingRight) : null,
+        leadRight: lead ? lead.getBoundingClientRect().right : null,
+        sticky: sticky.map((n) => n.className), scrollY: window.scrollY, viewport: window.innerWidth,
+        focusH1: document.activeElement === h1,
+      };
+    };`;
+  const chipAt = async (y) => {
+    await evaluate(`window.scrollTo(0, ${y})`);
+    await sleep(350);
+    return evaluate(`(() => {${CHIP_JS} return chipState(); })()`);
+  };
+  // The tap: scrollY read in the same evaluate as the click, so "at once"
+  // means before any frame could run.
+  const tapChip = () => evaluate(`(() => {${CHIP_JS}
+    document.querySelector('.screen .title-chip').click();
+    return { y: window.scrollY, focusH1: document.activeElement === document.querySelector('.screen h1.screen-title') }; })()`);
+  const chipProblems = async (tag, { history, name, resize = false }) => {
+    const p = [];
+    const s0 = await chipAt(0);
+    if (!s0) return [`${tag}: no .title-chip on the screen`];
+    if (s0.shown || !s0.hidden || !s0.inert || s0.focusable) p.push(`${tag}: at the top the chip is ${s0.shown ? 'rendered' : 'not rendered'}, hidden ${s0.hidden}, inert ${s0.inert}, focusable ${s0.focusable} -- it must be gone, inert and unfocusable`);
+    if (s0.name !== name) p.push(`${tag}: the chip reads ${JSON.stringify(s0.name)}, the song is ${JSON.stringify(name)}`);
+    if (s0.aria !== `${name}, back to top`) p.push(`${tag}: the chip's label is ${JSON.stringify(s0.aria)}`);
+    const want = history ? ['sortbar sortbar-lead sortbar-titled'] : ['title-bar'];
+    if (JSON.stringify(s0.sticky) !== JSON.stringify(want)) p.push(`${tag}: sticky bars ${JSON.stringify(s0.sticky)}, expected ${JSON.stringify(want)} -- one bar`);
+    if (history && (!s0.inSortbar || !s0.last)) p.push(`${tag}: the chip is ${s0.inSortbar ? '' : 'not '}in the sort row and ${s0.last ? '' : 'not '}its last chip`);
+    const edge = s0.h1Bottom - s0.headerBottom;
+    const before = await chipAt(Math.max(0, Math.floor(edge - 4)));
+    if (before.shown) p.push(`${tag}: shown at scrollY ${before.scrollY}, with the heading's bottom ${Math.round(before.h1Bottom - before.headerBottom)}px below the header's edge`);
+    const after = await chipAt(Math.ceil(edge + 4));
+    if (!after.shown || after.hidden || after.inert || !after.focusable) p.push(`${tag}: at scrollY ${after.scrollY}, the heading gone, the chip is shown ${after.shown}, hidden ${after.hidden}, inert ${after.inert}, focusable ${after.focusable}`);
+    if (history && after.shown && !(after.barTop > after.headerBottom + 1)) p.push(`${tag}: at scrollY ${after.scrollY} the sort row is already stuck (top ${after.barTop}), so "mid-screen" went unchecked`);
+    if (history && after.shown && Math.abs(after.right - after.barRight) > 0.6) p.push(`${tag}: the chip ends at ${after.right}, the sort row's content at ${after.barRight} -- not its right end`);
+    if (!history && after.shown && Math.abs(after.left - after.barLeft) > 0.6) p.push(`${tag}: the chip starts at ${after.left}, the bar's content at ${after.barLeft} -- not its left`);
+    const deep = await chipAt(1500);
+    if (!deep.shown) p.push(`${tag}: not shown at scrollY ${deep.scrollY}`);
+    else if (Math.abs(deep.barTop - deep.headerBottom) > 0.6) p.push(`${tag}: at scrollY ${deep.scrollY} the bar's top is ${deep.barTop}, the header ends at ${deep.headerBottom}`);
+    // Nothing below the bar moves when the chip appears: the list's first row
+    // sits at the same page position with the chip hidden and shown.
+    for (const s of [after, deep]) if (s.rowTop !== null && Math.abs(s.rowTop - s0.rowTop) > 0.5) p.push(`${tag}: the list's first row sits at ${s.rowTop} with the chip shown (scrollY ${s.scrollY}), ${s0.rowTop} with it hidden -- the chip moved the list ${Math.round(s.rowTop - s0.rowTop)}px`);
+    // Focus on the chip when it hides goes to the heading, not to <body>.
+    await evaluate(`document.querySelector('.screen .title-chip').focus({ preventScroll: true })`);
+    const dropped = await chipAt(0);
+    if (dropped.shown) p.push(`${tag}: back at the top with focus on it, the chip is still shown`);
+    else if (!dropped.focusH1) p.push(`${tag}: the chip hid with focus on it and the focus went to ${dropped.active}, not the heading`);
+    if (resize) {
+      // A taller header, as a rotation can make one, then a resize: the chip
+      // must follow the new edge, not the one it was built with.
+      await evaluate(`document.documentElement.style.setProperty('--header-h', '80px'); window.dispatchEvent(new Event('resize'));`);
+      await sleep(300);
+      const r0 = await chipAt(0);
+      const edge2 = r0.h1Bottom - r0.headerBottom;
+      const under = await chipAt(Math.ceil(edge2 + 4));
+      const over = await chipAt(Math.max(0, Math.floor(edge2 - 4)));
+      await evaluate(`document.documentElement.style.removeProperty('--header-h'); window.dispatchEvent(new Event('resize'));`);
+      await sleep(300);
+      if (Math.round(r0.headerBottom) !== Math.round(s0.headerBottom) + 28) p.push(`${tag}: the header ends at ${r0.headerBottom} with --header-h at 80px, ${s0.headerBottom} before -- the resize check did not take`);
+      else {
+        if (!under.shown) p.push(`${tag}: with the header 28px taller, the heading ${Math.round(under.headerBottom - under.h1Bottom)}px under it at scrollY ${under.scrollY}, the chip is not shown -- it kept the old edge`);
+        if (over.shown) p.push(`${tag}: with the header 28px taller, the heading ${Math.round(over.h1Bottom - over.headerBottom)}px below it at scrollY ${over.scrollY}, the chip is shown`);
+      }
+    }
+    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+    await chipAt(1500);
+    const reduced = await tapChip();
+    if (reduced.y !== 0) p.push(`${tag}: under reduced motion the tap left scrollY at ${reduced.y} -- it must jump`);
+    if (!reduced.focusH1) p.push(`${tag}: focus did not move to the heading after the tap`);
+    await sleep(350);
+    const settled = await evaluate(`(() => {${CHIP_JS} return chipState(); })()`);
+    if (settled.shown) p.push(`${tag}: back at the top, the chip is still shown`);
+    await send('Emulation.setEmulatedMedia', { features: [] });
+    await chipAt(1500);
+    const smooth = await tapChip();
+    if (smooth.y === 0) p.push(`${tag}: without reduced motion the tap jumped -- the scroll should be smooth`);
+    let y = smooth.y;
+    for (let i = 0; i < 30 && y !== 0; i++) { await sleep(100); y = await evaluate('window.scrollY'); }
+    if (y !== 0) p.push(`${tag}: the smooth scroll stopped at ${y}, not the top`);
+    return p;
+  };
+  {
+    const p = [];
+    await evaluate(`location.hash = '#/song/54';`);
+    await sleep(1200);
+    // The resize check runs once: the observer is titleChip()'s, shared.
+    p.push(...(await chipProblems('song detail', { history: false, name: 'Shadow', resize: true })));
+    await evaluate(`location.hash = '#/song/54/gaps';`);
+    await sleep(1200);
+    p.push(...(await chipProblems('Gap history', { history: true, name: 'Shadow' })));
+    // The widest title, by measurement: every Songs row's title in a one-line
+    // chip, at 360.
+    await send('Emulation.setDeviceMetricsOverride', { width: 360, height: 844, deviceScaleFactor: 2, mobile: true });
+    await evaluate(`location.hash = '#/songs';`);
+    await sleep(1500);
+    // Over the whole catalogue: a filter left on by an earlier check would
+    // narrow the search to whatever it kept.
+    if ((await evaluate(`(() => {${LEAD_JS} return leadValue('Filter'); })()`)) !== 'All') {
+      if (!(await clickFilter('All'))) p.push('could not set the Songs filter to All for the widest title');
+      await sleep(900);
+    }
+    const widest = await evaluate(`(() => {
+      const probe = document.createElement('button'); probe.className = 'chip title-chip'; probe.style.whiteSpace = 'nowrap'; probe.style.position = 'absolute'; probe.style.visibility = 'hidden';
+      document.body.appendChild(probe);
+      let best = null;
+      for (const r of document.querySelectorAll('.screen .rows li .row-shell[data-song-id]')) {
+        probe.textContent = ((r.querySelector('.row-title') || {}).textContent || '').trim();
+        const w = probe.getBoundingClientRect().width;
+        if (!best || w > best.w) best = { id: Number(r.dataset.songId), name: probe.textContent, w };
+      }
+      probe.remove();
+      return best; })()`);
+    if (!widest) p.push('no Songs rows to find the widest title in');
+    else {
+      for (const [tag, hash] of [['song detail', `#/song/${widest.id}`], ['Gap history', `#/song/${widest.id}/gaps`]]) {
+        await evaluate(`location.hash = '${hash}';`);
+        await sleep(1200);
+        const top = await chipAt(0);
+        const s = await chipAt(1500);
+        const where = `${tag} at 360, ${JSON.stringify(widest.name)} (${Math.round(widest.w)}px on one line)`;
+        if (!s || !s.shown) { p.push(`${where}: the chip is not shown`); continue; }
+        // The case the cold review found: a wrapped chip appearing in Gap
+        // history's sort row pushed the list down by the extra lines.
+        if (top && top.rowTop !== null && Math.abs(s.rowTop - top.rowTop) > 0.5) p.push(`${where}: the list's first row sits at ${s.rowTop} with the chip shown, ${top.rowTop} with it hidden -- the chip moved the list ${Math.round(s.rowTop - top.rowTop)}px`);
+        if (s.viewport !== 360) p.push(`${where}: the layout viewport reads ${s.viewport}px`);
+        if (s.name !== widest.name) p.push(`${where}: the chip reads ${JSON.stringify(s.name)}`);
+        if (s.right > s.barRight + 0.5 || s.nameRight > s.right + 0.5) p.push(`${where}: the chip ends at ${s.right} and its name at ${s.nameRight}, past the bar's content edge ${s.barRight}`);
+        if (s.leadRight !== null && s.left < s.leadRight + 7.5) p.push(`${where}: the chip starts at ${s.left}, ${Math.round(s.left - s.leadRight)}px after the lead chip`);
+        if (s.lines < 2) p.push(`${where}: the name sits on ${s.lines} line(s) in ${Math.round(s.barRight - (s.leadRight === null ? s.barLeft : s.leadRight + 8))}px -- it fits, or it was cut`);
+        p.push(`__note ${tag}: ${s.lines} lines, ${Math.round(s.height)}px`);
+      }
+    }
+    await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+    await sleep(400);
+    const notes = p.filter((x) => x.startsWith('__note ')).map((x) => x.slice(7));
+    const real = p.filter((x) => !x.startsWith('__note '));
+    if (real.length) for (const x of real) fail(`title chip: ${x}`);
+    else pass(`title chip: hidden, inert and unfocusable at the top on both screens, shown once the heading is under the header and not before, following a taller header after a resize, back to the top at once under reduced motion and smoothly without, focus to the heading when it hides; Gap history's in the sort row at its right end, mid-screen; one sticky bar each; nothing below the bar moves when it appears; the widest title, ${JSON.stringify(widest.name)}, wraps at 360 (${notes.join('; ')})`);
+  }
+
+  console.log('\ngap bars are 4px, clear of the row text at 360:');
+  {
+    const BARS_JS = `(() => {
+      const rows = [...document.querySelectorAll('.screen .rows li')].map((li) => {
+        const bar = li.querySelector('.gap-bar');
+        const title = li.querySelector('.row-title');
+        if (!bar || !title) return null;
+        return { w: getComputedStyle(bar).width, clear: title.getBoundingClientRect().left - bar.getBoundingClientRect().right, title: title.textContent.trim() };
+      }).filter(Boolean);
+      const jam = [...document.querySelectorAll('.screen .rows li .row-shell[data-jam="true"]')].map((r) => {
+        const b = getComputedStyle(r, '::before');
+        const title = r.querySelector('.row-title');
+        return { w: b.width, clear: title.getBoundingClientRect().left - (r.getBoundingClientRect().left + parseFloat(b.width)) };
+      });
+      return { rows, jam, viewport: window.innerWidth };
+    })()`;
+    await send('Emulation.setDeviceMetricsOverride', { width: 360, height: 844, deviceScaleFactor: 2, mobile: true });
+    await evaluate(`location.hash = '#/songs';`);
+    await sleep(1200);
+    const prevSort = await evaluate(`(() => {${LEAD_JS} return leadValue('Sort'); })()`);
+    const lists = [];
+    if (await clickSort('Coldest first')) { await sleep(900); lists.push(['Songs, Coldest first', await evaluate(BARS_JS)]); }
+    else fail('gap bars: no "Coldest first" in the sort sheet');
+    for (const [tag, hash] of [['the gap chart for 1728657865', '#/gapchart/1728657865'], ["Shadow's gap history", '#/song/54/gaps'], ['song 49, where it has landed', '#/song/49'], ['Jams', '#/jams'], ['Shadow, every performance', '#/song/54']]) {
+      await evaluate(`location.hash = '${hash}';`);
+      await sleep(1200);
+      lists.push([tag, await evaluate(BARS_JS)]);
+    }
+    const p = [];
+    for (const [tag, m] of lists) {
+      if (m.viewport !== 360) p.push(`${tag}: the layout viewport reads ${m.viewport}px`);
+      const set = tag.startsWith('Shadow, every') ? m.jam : m.rows;
+      const what = tag.startsWith('Shadow, every') ? 'jam edge' : 'gap bar';
+      if (set.length < 2) { p.push(`${tag}: only ${set.length} ${what}(s) to measure`); continue; }
+      const wide = set.filter((r) => r.w !== '4px');
+      if (wide.length) p.push(`${tag}: ${wide.length} ${what}(s) not 4px wide, e.g. ${wide[0].w}`);
+      const tight = set.filter((r) => r.clear < 7.5);
+      if (tight.length) p.push(`${tag}: ${tight.length} row(s) with under 8px between the ${what} and the text, e.g. ${Math.round(tight[0].clear * 10) / 10}px`);
+    }
+    await evaluate(`location.hash = '#/songs';`);
+    await sleep(1200);
+    if (prevSort && !(await clickSort(prevSort))) fail(`gap bars: could not put the Songs sort back to ${prevSort}`);
+    await sleep(600);
+    await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+    await sleep(400);
+    if (p.length) for (const x of p) fail(`gap bars: ${x}`);
+    else pass(`every gap bar 4px with at least 8px to the row text at 360: ${lists.map(([tag, m]) => { const s = tag.startsWith('Shadow, every') ? m.jam : m.rows; return `${tag} ${s.length} (min ${Math.round(Math.min(...s.map((r) => r.clear)) * 10) / 10}px)`; }).join(', ')}`);
+  }
+
   // --- Tour line on show detail (0.1.84) --------------------------------------
   //
   // docs/plan.md, "Tours (2026-10-25)". Held against the raw shows table, not

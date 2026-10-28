@@ -257,7 +257,8 @@ region, same root cause, one change. Fixing either alone would have moved the pr
 
 **Shipped:** opaque fill (`#3d2c12` dark, `#f9e1ba` light), opaque `--yolk-deep` border, label
 `--yolk` in dark and `--ink` in light. Three dedicated `--*-chip-sel-*` tokens rather than reusing
-`--yolk-wash` / `--yolk-line`, which are also worn by `.row-shell[data-picked]` and `.badge-jam`.
+`--yolk-wash` / `--yolk-line`, which are also worn by `.row-shell[data-picked]` and `.badge-jam`
+(the yolk badge, `.badge-accent` since 0.1.85, when `.badge-jam` turned green).
 
 **The fill is opaque on purpose.** `.sortbar` is sticky with `backdrop-filter: blur(12px)`, so a
 translucent fill composites whatever is scrolling underneath and any audited figure would be true
@@ -295,7 +296,8 @@ stays auditable instead of silently reporting MISSING and dropping out of the au
 
 **Found in passing, not fixed:** `.badge-jam` uses the same `--yolk-line` against `--surface` and
 measures **2.17:1 dark / 1.60:1 light**. It has been failing unrecorded and is now a `KNOWN_GAPS`
-entry. `.row-shell[data-picked="true"]` has the same disappearing-wash weakness (1.15:1 light), but
+entry. (That yolk badge is `.badge-accent` since 0.1.85, and the entry moved with it; `.badge-jam`
+is green now and its border is measured with the jam pairs.) `.row-shell[data-picked="true"]` has the same disappearing-wash weakness (1.15:1 light), but
 its state is also carried by the `--yolk` pick button, so it is not a threshold failure. Both were
 left alone deliberately: `--yolk-line` and `--yolk-wash` are shared, and moving them would have
 changed the picked row along with the badge.
@@ -1534,6 +1536,109 @@ Every bar is held to its own row: `--heat` equal to the row's figure over the li
 opacity equal to `floor + heat × (1 − floor)` with the floor read from the bar itself, at least
 three distinct values, and a bar at 1 on the largest row. A row with no heat reads opacity 0.
 Before the fix, every other bar on all three lists read exactly the floor, 0.1 dark and 0.32 light.
+
+### Jam chart shows in green, a song-title chip, and a 4px heat strip (0.1.85)
+
+Three changes the user asked for on 2026-10-27 (`plan.md`, "0.1.85 design"), built to the six
+answers recorded there. Every figure below was measured on the rendered page.
+
+**Green means jam chart, and nothing else now.** `.badge-jam` was yolk despite its name, and was
+worn by the gap chart's and Gap history's "Debut", Gap history's "Longest", show detail's jam entry
+count, and a "Jam" badge on Songs rows that nothing switched on. The class is green now — `--jam`
+text and a `--jam` border — and carries exactly three things: "Jam chart" on song detail's Every
+performance rows, "Jam" on Gap history rows, and show detail's entry count. The yolk badge is
+`.badge-accent` and carries only "Longest"; its `--yolk-line` border is the same accepted
+`KNOWN_GAPS` entry, renamed with it. Both "Debut"s are the plain `.badge`. `songRow()`'s `jamBadge`
+option is deleted rather than repainted: it was off by default and had no caller.
+
+| `--jam` on | Dark | Light | What |
+|---|---|---|---|
+| `--surface` | 9.54 | 6.52 | the badge's text and border, the row edge |
+| `--surface-up` | 8.72 | 5.55 | the badge on a pressed or flashing row |
+| `--shell` | 10.18 | 6.06 | show detail's entry count |
+
+The smoke test holds every visited screen to it in both themes, over the screen's badges: any badge
+painted `--jam` is a `.badge-jam` reading "Jam chart" or "Jam" — or a count, on show detail and
+nowhere else — and "Debut" is the plain badge in `--ink-dim`. It reads badges only; the other green
+on those screens (jam titles and the key on show detail, the Jams tab's counts, the row edge) is
+held by the checks written for each.
+
+**Song detail's jam rows get a 4px green edge and the badge on its own line under the venue.** The
+placement was chosen by measuring four layouts on Shadow's 169 rows at 360px (a scratch probe,
+light theme), counting venue lines cut short with "…":
+
+| Placement | Venue lines cut short |
+|---|---|
+| none (0.1.84) | 61 |
+| beside the set badge | 154 |
+| stacked under the set badge | 93 |
+| its own line under the venue | 61 |
+
+Only its own line leaves the venue as wide as it was. As built, the line costs **20.9px** on a jam
+row — measured by hiding it on each row and reading the height again — so jam rows are 75px and
+plain rows 54px, at 390 and at 360, and the venue line is the same width on both (227.5–238.5px at
+390, 197.5–208.5px at 360). The edge is `.row-shell[data-jam="true"]::before`, the heat strip's
+shape in `--jam`.
+
+**Gap history carries the badge and no edge**, because a row's left edge there is its heat bar. The
+tag is per show, like the rows: `gapHistory()`'s `isJam` is true when any of the song's
+performances at that show is charted. A row with any badge on its detail line is 75.0px against a
+plain row's 73.9px, at 390 and 360 — that was already true of "×2" and "Longest" — so the 8 of
+Shadow's 14 tagged rows that carried no badge before grow 1.1px each, and the rows below them sit
+lower by as much, which is the drift `layout-diff` shows down that screen against 0.1.84 (390 dark,
+360 light). It reports two routes changed, Gap history and song detail (the badge line), and the
+other eight identical: Songs, show detail and the gap chart moved nothing, so the 4px bar, the green
+and the plain Debut are paint alone there. The smoke test fetches the raw `jamcharts` table and holds
+both screens to it, show by show, on Shadow (14 shows) and on Buying Time, the first song charted
+twice in one night (17 marked rows at 14 shows on song detail, 14 tagged shows on Gap history).
+**Song detail is also held per performance**, each marked row to its own entry by show, set and
+position, as `jamKey()` keys them; the rows carry `data-set` and `data-position` for it. A per-show
+count cannot see a night the song was played more than once with only some of it charted — marking
+the wrong performance leaves every count right — and the archive holds 174 (song, show) pairs like
+that, across 72 songs (2026-10-28), Shadow and Buying Time among them. The cold review found the gap; the run fails if the
+songs it checks have no such night.
+
+**The title chip.** On Shadow, the H1 goes under the header at scroll 90 on both screens at both
+widths — a longer name wraps the heading and moves that point — and Gap history's sort row sticks
+at 432 (390px) and 451 (360px), so the chip shows 342–361px before that row reaches the top, riding
+in it mid-screen (the user's answer 1).
+
+- **Song detail:** a sticky bar 0px tall whose inner row is laid over the content, so the chip
+  appearing moves nothing. The chip sits at the left.
+- **Gap history:** the sort row's last chip, `margin-left: auto`. One sticky bar per screen, never
+  two stacked. **There a hidden chip keeps its box** (`visibility: hidden`, not `display: none`),
+  because the sort row is in the flow: as first built, a wrapped chip appearing pushed the whole
+  list down, 14px for a two-line title and 33px for Rocket Man's three, and back up on the way to
+  the top. The cold review found it; no check measured the list. Held, a title that wraps makes the
+  sort row taller at the top too — the 37 titles that wrap at 360px, 17 at 390px; a one-line title
+  like Shadow's changes nothing. That trade is the user's call, approved with the look on
+  2026-10-28 (`docs/plan.md`, 0.1.85 design). The smoke test holds the list's first row to one page position
+  with the chip hidden and shown, on Shadow and on the widest title. The fade there is a
+  transition, since an animation does not replay on a visibility change.
+- **It wraps, never ellipsizes.** Every one of the 360 titles on Songs swapped into the built chip,
+  one at a time: on song detail one wraps at 360 and at 390 ("Rocket Man (I Think It's Going To Be
+  A Long, Long Time)", 48px against the one-line 34px); beside Gap history's lead chip 37 wrap at
+  360 and 17 at 390, Rocket Man to three lines at 67px. The planning probe, a stand-in chip,
+  estimated 31 of 370 at 360; the built chip's figure is the one that stands.
+- **Hidden is `hidden` plus `inert`**, on the chip and on song detail's bar, so a hidden chip takes
+  no space and cannot be focused.
+- **The tap scrolls to the top and focuses the H1** (`tabindex="-1"`, `preventScroll`). Smooth by
+  default, instant under reduced motion — and the code reads the preference itself, because Chrome
+  does not apply it to `behavior: 'smooth'`: in headless Chrome the scroll from 1500px took 640ms,
+  and 670ms with reduced motion emulated. `'auto'` is the instant value: no rule sets
+  `scroll-behavior`, and `'instant'` throws in browsers that predate it. **Whenever the chip hides
+  with focus on it, focus goes to the H1**, not to `<body>`.
+- It fades in over 150ms, which the app's existing reduced-motion rule already switches off. The
+  observer's top margin is minus the header's height, **re-read on every resize**: the header
+  includes `env(safe-area-inset-top)`, which a rotation can change, and an edge read once would
+  show the chip early or late (the cold review). The smoke test makes the header 28px taller,
+  fires a resize and holds the chip to the new edge. The observer and the listener go through
+  `ctx.onLeave()`, a hook `route()` runs before the next screen replaces this one; a hook that
+  throws is logged and the next screen still renders.
+
+**Every `.gap-bar` is 4px**, up from 3, for the light theme where the strip read thin. At 360 every
+bar clears its row's text by 8px (9px at 3px) on Songs Coldest first, gap chart 1728657865,
+Shadow's gap history, song 49 and Jams, and the jam edge does the same.
 
 ## Attribution
 

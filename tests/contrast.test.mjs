@@ -263,6 +263,9 @@ test('EVERY TOKEN A RULE USES IS AUDITED SOMEWHERE', () => {
     '.gap-strip-bar': 'a closed-gap bar in the gap history strip; nothing renders on it',
     '.gap-strip-bar[data-debut="true"]': 'the debut tick in the gap history strip; nothing renders on it',
     '.gap-strip-open': 'the dashed open-gap bar in the gap history strip; nothing renders on it',
+    // The jam edge (0.1.85), a graphic in the same sense: measured as a
+    // foreground in PAIRS, `jam on surface`, held there to 4.5.
+    '.row-shell[data-jam="true"]::before': 'the 4px jam edge on a song detail performance row; nothing renders on it',
   };
 
   // Tokens that are not a colour on a ground at all.

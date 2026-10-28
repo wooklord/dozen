@@ -637,10 +637,92 @@ checks were verified this way:
   - a decoy comment, `export const BUILD = 12`, above the declaration: the
     swap lands on the comment and the test fails `the swapped module reads
     BUILD 84, not 100` instead of passing on today's label. The same decoy
-    also fails the two older build tests, whose regex takes the first match in
-    the file -- as do `verify-deploy.mjs` and `wait-deploy.mjs` on the served
+    also failed the two older build tests, whose regex took the first match in
+    the file -- as did `verify-deploy.mjs` and `wait-deploy.mjs` on the served
     copy.
   Restored: 244 passing.
+- Every reader of `src/version.js` anchored to the declaration line (0.1.85):
+  both build tests, `verify-deploy.mjs` (working tree and served copy) and
+  `wait-deploy.mjs` read `/^export const BUILD\s*=\s*(\d+);?\s*$/m`, and the
+  regex-parity test in `tests/hygiene.test.mjs` pins that literal in both
+  scripts and fails on any unanchored `.match(/BUILD\s` left beside it. The
+  decoy above is now the proof that the anchor holds, so it goes GREEN: with it
+  staged (hash re-read, different), 244 passing, `wait-deploy` derived 84 from
+  the tree and found it live, and `verify-deploy` reported `DEPLOY VERIFIED --
+  live BUILD is 0.1.84`. And the anchored readers still go red on a real
+  mismatch: `version.js` bumped to 85 alone, 2 unit failures and `wait-deploy`
+  `TIMEOUT after 15s: served BUILD is 84, expected 85`, exit 1; `wait-deploy`'s
+  regex put back unanchored, the parity test fails `must read BUILD with the
+  same regex`. Restored by hash: 244 passing. **The anchor is a line shape,
+  not a parser:** a line that begins `export const BUILD = n` inside a block
+  comment would still match. Nothing writes one today.
+- The 0.1.85 checks (jam chart marking, the title chip, 4px bars), faults
+  applied one at a time with the Edit tool, each staged hash confirmed
+  different from the byte copy before any suite ran, each file restored from
+  the copy with the hash confirmed. Against the build as first written:
+  - song detail's `isJam` forced false: 0 unit failures -- unit tests have no
+    DOM -- and smoke 3, `song 54 (Shadow): 14 show(s) marked unlike the
+    jamcharts table, e.g. show 1708050183: 0 row(s) marked, 1 entr(ies)`, the
+    same on Buying Time, and `only 0 jam edge(s) to measure`.
+  - Gap history's tag taken from the song instead of the show: 1 unit
+    failure, "isJam is per show"; smoke 2, `"Jam" on 141 show(s), the table
+    charts 14`.
+  - Debut back in `.badge-jam` on the gap chart: 0 unit failures; smoke 16,
+    both themes, `Debut is class "badge badge-jam" in rgb(138, 206, 152), not
+    the plain badge in --ink-dim`. Its first run hung for three hours; see
+    the hang below.
+  - the jam edge's `content: ""` removed: smoke 2, `14 row(s) whose badge,
+    line and edge disagree ... edge none`.
+  - the chip never hidden: smoke 6, `at the top the chip is rendered, hidden
+    false, inert false, focusable true`.
+  - hidden without `inert`: smoke 2, `hidden true, inert false, focusable
+    false`. A hidden chip is unfocusable either way, so the attribute is the
+    check's evidence for inert, by design.
+  - the tap smooth under reduced motion: smoke 4, `the tap left scrollY at
+    1500 -- it must jump`.
+  Then a cold review of the diff found a defect no check measured -- a title
+  that wraps, appearing in Gap history's sort row, pushed the list down, 33px
+  for Rocket Man -- and checks that could pass for the wrong reason. Fixed
+  and narrowed (`docs/design.md`, 0.1.85), green first (smoke 212 ok, 0
+  skips), then each proved against the fixed build:
+  - the hidden chip's held box removed: smoke 1, `Rocket Man ... the chip
+    moved the list 33px`. Shadow's one-line chip stayed green, which is why
+    the check also runs on the widest title.
+  - the observer not rebuilt on resize: smoke 1, `with the header 28px taller,
+    the heading 4px under it ... the chip is not shown -- it kept the old edge`.
+  - no focus hand-back as the chip hides: smoke 2, `the focus went to body,
+    not the heading`.
+  - the jam flags reversed among a night's performances, every per-show count
+    still right: smoke 2, on the new lines alone, `6 charted and not marked
+    ... 6 marked and not charted` on Shadow, 4 and 4 on Buying Time. The
+    per-show check passed it.
+  - a count in a `.badge-jam` on the gap chart: smoke 2, `.badge-jam reads
+    "2", not a jam label here`. The label set allowed a bare number on every
+    screen; nothing else in the run caught it.
+  - a second, unanchored BUILD constant in `wait-deploy.mjs`, read before the
+    anchored one: 1 unit failure naming the line. The guard it replaces looked
+    only for an inline `.match(/BUILD\s`, which that file does not contain.
+  - the chip in a bar of its own on Gap history: smoke 3, `sticky bars
+    ["title-bar","sortbar sortbar-lead sortbar-titled"] ... one bar`.
+  - the observer's edge doubled: smoke 3, `shown at scrollY 85, with the
+    heading's bottom 5px below the header's edge`.
+  - `.gap-bar` back to 3px: smoke 5, one per list, `not 4px wide, e.g. 3px`.
+  - the chip never hidden, again, against the check's new reading of "shown"
+    (a box AND visible, since Gap history's hidden chip keeps its box): smoke
+    9.
+  Restored, by hash the same files: 245 passing.
+
+  **The hang, and a leak it uncovered (2026-10-28).** The Debut proof's first
+  smoke run stopped mid-check and sat for three hours: the smoke test's CDP
+  calls have no timeout, so one lost response waits forever. Cleaning up after
+  it found **90 headless Chromes** left from earlier runs, back to
+  2026-10-26. On this machine the `chrome.exe` that `spawn()` starts hands off
+  to a separate browser process and exits at once, so `proc.kill()` kills a
+  process that is already gone -- measured with a scratch probe, not inferred.
+  Every run of `smoke.mjs`, `verify-deploy.mjs` and `layout-diff.mjs` leaves
+  one or two behind. `Browser.close` over CDP reaches the real browser. The
+  fix in the committed scripts is proposed and not built; until it is,
+  count headless Chromes before and after a run.
 
 Do this for every new check. It costs one minute and it is the only thing that
 separates a real check from a comforting one.

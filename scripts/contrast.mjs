@@ -277,9 +277,13 @@ export const PAIRS = [
   { fg: 'yolk', bg: 'surface', min: 4.5, where: 'set labels inside the setlist card' },
 
   // The jam highlight. Recolours body text that gets read, not a glyph.
-  { fg: 'jam', bg: 'shell', min: 4.5, where: 'jam key on the page ground' },
-  { fg: 'jam', bg: 'surface', min: 4.5, where: 'jam-charted song titles, jam key' },
-  { fg: 'jam', bg: 'surface-up', min: 4.5, where: 'jam titles on a pressed card' },
+  // Since 0.1.85 the same three pairs also hold the green .badge-jam -- its
+  // text and its whole border are --jam -- and the jam row edge on song
+  // detail. The border and the edge are graphics, held here to text's 4.5
+  // rather than 1.4.11's 3, because they share the token with the text.
+  { fg: 'jam', bg: 'shell', min: 4.5, where: 'jam key on the page ground; show detail\'s jam entry count badge' },
+  { fg: 'jam', bg: 'surface', min: 4.5, where: 'jam-charted song titles, jam key; the jam badge\'s text and border and the jam row edge on song detail' },
+  { fg: 'jam', bg: 'surface-up', min: 4.5, where: 'jam titles on a pressed card; the jam badge on a pressed or flashing row' },
 
   // Tertiary. .carton-link renders at 10px, which is normal text under WCAG,
   // so it gets 4.5 and not 3 -- this pair is why the colour cannot go dimmer.
@@ -463,17 +467,20 @@ export const KNOWN_GAPS = [
     bg: 'surface',
     min: 3,
     status: 'accepted',
-    what: '.badge-jam border (--yolk-line over --surface)',
+    what: '.badge-accent border (--yolk-line over --surface)',
     measured: 'dark 2.17:1, light 1.60:1 — needs 3:1',
     why:
       'Found while measuring the chip accent, because it is the same ' +
       '--yolk-line token with the same root cause: a translucent warm tint on ' +
       'a warm ground has very little to work with. The badge sits on --surface ' +
-      'rather than the sortbar, so it was never covered by the chip pairs.',
+      'rather than the sortbar, so it was never covered by the chip pairs. ' +
+      'Recorded as .badge-jam, which the yolk badge was called until 0.1.85; ' +
+      'the green jam badge took that name, its border --jam and measured, and ' +
+      'this one is .badge-accent and carries only "Longest" on Gap history.',
     assessed:
       'ACCEPTED 2026-08-27 by the repo owner. THE BORDER IS NOT THE ONLY ' +
       'SIGNAL: the badge also carries --yolk label text, which is asserted ' +
-      'against both its grounds and passes, so the jam badge remains ' +
+      'against both its grounds and passes, so the badge remains ' +
       'identifiable with the border contributing nothing. WCAG 1.4.11 is about ' +
       'boundaries REQUIRED to identify a control or its state, and this one is ' +
       'not required -- it is decoration on a component that reads without it.',
@@ -504,9 +511,11 @@ export const KNOWN_GAPS = [
  *
  * WHAT CAN HONESTLY BE DERIVED, AND WHAT CANNOT. A rule that sets BOTH a
  * foreground and a background is a complete pair on its own -- no DOM, no
- * nesting, no ancestry. `.btn-accent`, `.segmented-item[aria-pressed="true"]`
- * and `.badge-accent` are all of this shape, and so is the selected chip. That
- * subset is derived here and measured exactly as written.
+ * nesting, no ancestry. `.btn-accent` and `.segmented-item[aria-pressed="true"]`
+ * are of this shape, and so is the selected chip. That subset is derived here
+ * and measured exactly as written. (This list also named `.badge-accent` from
+ * 0.1.63, a rule that did not exist until 0.1.85 and then set no background:
+ * it is the yolk badge, text and border on its ancestor's ground.)
  *
  * Text on an ANCESTOR's background is not derivable from CSS alone: knowing
  * that `.cover-note` sits inside `.row` requires the DOM. Those stay in PAIRS,

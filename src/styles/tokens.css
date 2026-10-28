@@ -74,7 +74,8 @@
   --dk-yolk-muted: var(--dk-yolk-deep);
   /* Selected sort/filter chip. THREE DEDICATED TOKENS, not --yolk-wash and
      --yolk-line, because those two are also worn by .row-shell[data-picked]
-     and .badge-jam and this change is scoped to chips.
+     and .badge-accent (.badge-jam until 0.1.85) and this change is scoped to
+     chips.
 
      WHY THE FILL IS OPAQUE. --yolk-wash was translucent, and a translucent
      fill inside .sortbar cannot be measured: the bar is sticky with

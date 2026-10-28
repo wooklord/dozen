@@ -305,20 +305,14 @@ export function heatFor(value, max) {
  * figure: the span truncated it on every cover row at 390px (0.1.81, (d)).
  * Every other figure keeps the credit.
  *
- * @param {object} opts
- * @param {boolean} [opts.jamBadge=false]  Show a "Jam" badge on the meta line.
- *   OFF by default. On the Songs list it crowded the second line -- which is
- *   where the date and cover credit are scanned -- and it duplicated the "Jam
- *   charts" filter (a chip row above the list until 0.1.79, in the filter
- *   sheet since). The fact stays
- *   reachable through that filter, through the Jams tab, and through the jam
- *   chart entries on song detail, where it does real work rather than acting
- *   as a label. Parameterized rather than deleted so a future caller can ask
- *   for it explicitly instead of the option vanishing from the shared row.
+ * NO JAM BADGE. The row had an opt-in "Jam" badge, off by default and never
+ * once switched on; it was deleted in 0.1.85 rather than repainted when the
+ * green .badge-jam took the name. On the Songs list it crowded the date line
+ * and duplicated the "Jam charts" filter, which is where that fact lives.
  */
 export function songRow(
   song,
-  { figure = 'gap', maxGap = 1, onOpen, index, jamBadge = false } = {},
+  { figure = 'gap', maxGap = 1, onOpen, index } = {},
 ) {
   const picked = isPicked(song.song_id);
 
@@ -374,7 +368,6 @@ export function songRow(
       }),
     );
   }
-  if (jamBadge && song.isJamChart) append(meta, el('span.badge.badge-jam', { text: 'Jam' }));
 
   const pickBtn = el(
     'button.pick-btn',
@@ -840,6 +833,86 @@ export function sectionHead(title, right = null) {
 
 export function emptyState(text) {
   return el('div.empty', { text });
+}
+
+/**
+ * THE TITLE CHIP (0.1.85): the song's name in a chip that appears once the
+ * screen's heading has scrolled under the header, and goes back to the top
+ * when tapped. On song detail it sits at the left of a bar of its own; on Gap
+ * history it takes the right end of the list's sort row, so two sticky bars
+ * never stack. Ruled in docs/plan.md, "0.1.85 design".
+ *
+ * VISIBILITY COMES FROM AN IntersectionObserver ON THE HEADING, never a scroll
+ * handler. The root's top is pulled down to the header's bottom edge, and the
+ * chip shows while the heading is wholly above that edge: not intersecting,
+ * AND its bottom at or above the root's top. A heading below the viewport is
+ * not intersecting either, which is why the position is read as well.
+ *
+ * HIDDEN MEANS GONE: `hidden` takes it out of the layout and `inert` out of
+ * the focus order and the accessibility tree -- on the chip, and on `bar` when
+ * the chip has one. A hidden control that can still be tabbed to is a trap.
+ *
+ * The tap scrolls to the top, smoothly unless the reader asked for reduced
+ * motion. Chrome does not apply that preference to `behavior: 'smooth'` on
+ * its own (measured, docs/design.md, 0.1.85), so it is read here. Focus then
+ * moves to the heading, because the chip it was on is about to hide -- and
+ * the same hand-back happens whenever the chip hides with focus on it, or the
+ * focus would fall to <body>.
+ *
+ * THE EDGE IS RE-READ ON RESIZE. The header's height includes
+ * env(safe-area-inset-top), which a rotation can change, and an observer
+ * built on the old edge would show the chip early or late. The observer is
+ * rebuilt on every resize; it and the listener go when the screen leaves
+ * (ctx.onLeave, app.js).
+ */
+export function titleChip(ctx, name, heading, { bar = null } = {}) {
+  const chip = el(
+    'button.chip.title-chip',
+    {
+      type: 'button',
+      'aria-label': `${name}, back to top`,
+      onclick: () => {
+        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+        heading.focus({ preventScroll: true });
+      },
+    },
+    [el('span.title-chip-name', { text: name }), el('span.title-chip-up', { text: '↑', 'aria-hidden': 'true' })],
+  );
+  const parts = bar ? [chip, bar] : [chip];
+  const show = (on) => {
+    if (!on && chip.contains(document.activeElement)) heading.focus({ preventScroll: true });
+    for (const n of parts) {
+      n.hidden = !on;
+      n.inert = !on;
+    }
+  };
+  show(false);
+  heading.setAttribute('tabindex', '-1');
+
+  const header = document.querySelector('.app-header');
+  let io = null;
+  const watch = () => {
+    if (io) io.disconnect();
+    const edge = header ? Math.round(header.getBoundingClientRect().bottom) : 0;
+    io = new IntersectionObserver(
+      (entries) => {
+        if (!heading.isConnected) return;
+        const e = entries[entries.length - 1];
+        const top = e.rootBounds ? e.rootBounds.top : edge;
+        show(!e.isIntersecting && e.boundingClientRect.bottom <= top);
+      },
+      { rootMargin: `-${edge}px 0px 0px 0px` },
+    );
+    io.observe(heading);
+  };
+  watch();
+  window.addEventListener('resize', watch);
+  ctx.onLeave(() => {
+    window.removeEventListener('resize', watch);
+    io.disconnect();
+  });
+  return chip;
 }
 
 /** Persistent credit. This app rides on someone else's work. */
