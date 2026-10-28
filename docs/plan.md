@@ -895,6 +895,27 @@ The user's pick, option B of the ones shown in chat. Song detail's "longest obse
 the ⓘ, and "How gap is counted" on a tap. Both are one component, `currentGapTile()`. Its other two
 figures stay plain stats.
 
+### 0.1.85 design (2026-10-27)
+
+**Status: recorded, not built.** Three changes the user asked for on 2026-10-27; the change plan
+follows, and the look is approved from screenshots before the commit.
+
+1. **Jam chart shows stand out, in the existing jam green, on song detail AND on Gap history.** The
+   user's pick. Jam chart membership is a Carton fact — Carton marks these entries green on its own
+   setlists — so this is repackaging. Constraints stated with it: **no new colour**; **green means
+   jam chart and nothing else**, so a badge that is not about a jam chart must not wear it (the gap
+   chart's Debut badge is named for one; it moves to a neutral badge); the green is measured as a
+   graphic (3:1) and as badge text (4.5:1) in both themes.
+2. **A sticky song-title chip on song detail and on Gap history**, appearing once the screen's H1
+   has scrolled under the header. The user's pick. Constraints: driven by an IntersectionObserver on
+   the H1, no scroll handler; tapping it returns to the top; while hidden it is inert and not
+   focusable; it respects `prefers-reduced-motion`; on Gap history it **shares one sticky row with
+   the list's sort chip**, so two bars never stack; a long title **wraps rather than ellipsizes**
+   unless the measurement of the longest title at 360px says otherwise.
+3. **The row heat strip goes from 3px to 4px**, every `.gap-bar`, for legibility — mainly in the
+   light theme, where the strip relit in 0.1.84 reads thin. It must still clear the row's text at
+   360px.
+
 ## Out of scope — parked
 
 Anything crossing the scope rule goes to [`phase3_ideas.md`](phase3_ideas.md), not into the app.
