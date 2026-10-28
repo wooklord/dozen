@@ -18,11 +18,11 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import { ROUTES, REDIRECTS } from './routes.mjs';
 import { parseSongPage } from './gap-oracle.mjs';
+import { openChrome, CDP_TIMEOUT } from './cdp.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = 8123 + Math.floor(Math.random() * 400);
@@ -98,35 +98,41 @@ const pass = (msg) => console.log(`  ok    ${msg}`);
 let skips = 0;
 const skip = (msg) => { skips++; console.log(`  SKIP  ${msg}`); };
 
-server.listen(PORT, async () => {
-  const chrome = spawn(CHROME, [
-    '--headless=new', '--disable-gpu', '--no-first-run', '--hide-scrollbars',
-    `--remote-debugging-port=${DEVPORT}`,
-    `--user-data-dir=${PROFILE}`,
-    '--window-size=390,844', 'about:blank',
-  ], { stdio: 'ignore' });
+// A check that throws -- above all a CDP call that timed out -- fails the run
+// here, and the browser is still closed. Before 2026-10-28 a throw escaped the
+// listen callback as an unhandled rejection: the process died on a stack
+// trace, with no verdict and the browser left running.
+let browser = null;
+server.listen(PORT, () => run().catch(async (err) => {
+  fail(`the run stopped: ${err.message}`);
+  console.log(`\nSMOKE FAILED — ${failures} problem(s); the run stopped before its end`);
+  await finish();
+}));
 
-  await sleep(2500);
-  const targets = await (await fetch(`http://127.0.0.1:${DEVPORT}/json/list`)).json();
-  const ws = new WebSocket(targets.find((t) => t.type === 'page').webSocketDebuggerUrl);
+let finished = false;
+async function finish() {
+  if (finished) return;
+  finished = true;
+  if (browser) await browser.close();
+  server.close(() => process.exit(failures ? 1 : 0));
+  setTimeout(() => process.exit(failures ? 1 : 0), 1500).unref();
+}
 
-  let id = 0;
-  const pending = new Map();
+async function run() {
   const runtimeErrors = [];
-  ws.onmessage = (e) => {
-    const m = JSON.parse(e.data);
-    if (m.id && pending.has(m.id)) { pending.get(m.id)(m.result); pending.delete(m.id); }
-    if (m.method === 'Runtime.exceptionThrown') {
-      const d = m.params.exceptionDetails;
-      runtimeErrors.push('uncaught: ' + (d.exception?.description || d.text).split('\n')[0]);
-    }
-    if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') {
-      runtimeErrors.push('console.error: ' + m.params.args.map((a) => a.description || a.value).join(' ').split('\n')[0]);
-    }
-  };
-  await new Promise((r) => (ws.onopen = r));
-  const send = (method, params = {}) =>
-    new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
+  browser = await openChrome({
+    chrome: CHROME, port: DEVPORT, profile: PROFILE,
+    onEvent: (m) => {
+      if (m.method === 'Runtime.exceptionThrown') {
+        const d = m.params.exceptionDetails;
+        runtimeErrors.push('uncaught: ' + (d.exception?.description || d.text).split('\n')[0]);
+      }
+      if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') {
+        runtimeErrors.push('console.error: ' + m.params.args.map((a) => a.description || a.value).join(' ').split('\n')[0]);
+      }
+    },
+  });
+  const { send } = browser;
   const evaluate = async (expression) =>
     (await send('Runtime.evaluate', { expression, returnByValue: true }))?.result?.value;
   // Same thing, but resolves a promise instead of handing back "[object
@@ -251,7 +257,7 @@ server.listen(PORT, async () => {
     if (await evaluate(`!!document.querySelector('#main .screen')`)) { booted = true; break; }
   }
   console.log('');
-  if (!booted) { fail('app never finished booting'); finish(chrome); return; }
+  if (!booted) { fail('app never finished booting'); await finish(); return; }
 
   const screenText = `(document.getElementById('main').innerText || '')`;
   const errorBanner = `!!(document.querySelector('.banner strong') &&
@@ -4888,6 +4894,9 @@ server.listen(PORT, async () => {
     for (const e of [...new Set(runtimeErrors)]) fail(e);
   } else pass('none');
 
+  const { calls, slowest } = browser.stats();
+  console.log(`\nCDP: ${calls} calls, the slowest ${slowest.ms}ms (${slowest.method}); each times out at ${CDP_TIMEOUT / 1000}s`);
+
   // Skips are carried into the summary line. A run that could not check
   // something must not read as a run that checked everything, even when it is
   // otherwise clean.
@@ -4898,14 +4907,5 @@ server.listen(PORT, async () => {
         ? `SMOKE FAILED — ${failures} problem(s)${skipNote}`
         : `SMOKE PASSED — all routes rendered${skipNote}`),
   );
-  finish(chrome);
-
-  function finish(proc) {
-    try { proc.kill(); } catch {}
-    // Best effort. Chrome may still hold the profile directory, and a cleanup
-    // failure must never mask the smoke result.
-    try { fs.rmSync(PROFILE, { recursive: true, force: true, maxRetries: 3 }); } catch {}
-    server.close(() => process.exit(failures ? 1 : 0));
-    setTimeout(() => process.exit(failures ? 1 : 0), 1500).unref();
-  }
-});
+  await finish();
+}

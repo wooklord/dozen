@@ -101,6 +101,19 @@ test('the deploy check waits for a rendered screen, not for an absent loader', (
   }
 });
 
+test('only scripts/cdp.mjs launches Chrome', () => {
+  // Three scripts each launched and drove their own Chrome until 2026-10-28,
+  // and the copies drifted: one timed its calls out, two never did, and none
+  // of them closed the browser it had started. A fourth copy would start the
+  // drift again, so a launch argument anywhere else fails here.
+  const scripts = fs.readdirSync(path.join(ROOT, 'scripts')).filter((f) => f.endsWith('.mjs') && f !== 'cdp.mjs');
+  const launching = scripts.filter((f) => /[`'"]--remote-debugging-port=/.test(read(`scripts/${f}`)));
+  assert.deepEqual(launching, [], `launches its own Chrome instead of going through scripts/cdp.mjs`);
+  for (const f of ['smoke.mjs', 'layout-diff.mjs', 'verify-deploy.mjs']) {
+    assert.match(read(`scripts/${f}`), /^import \{[^}]*\bopenChrome\b[^}]*\} from '\.\/cdp\.mjs';$/m, `scripts/${f} must open Chrome through scripts/cdp.mjs`);
+  }
+});
+
 // --- cache -------------------------------------------------------------------
 
 test('the cache declares exactly the expiry it can enforce', () => {

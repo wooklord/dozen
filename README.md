@@ -126,7 +126,9 @@ what catches that.
 
 `scripts/routes.mjs` holds the route list and each route's expected marker,
 shared by all three browser checks so they cannot disagree about what a route
-should say.
+should say. `scripts/cdp.mjs` launches and drives their Chrome: every protocol
+call times out after 60s with a message naming it, and the browser is closed
+over CDP when a run ends, finished or not.
 
 ## Architecture
 

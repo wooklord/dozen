@@ -10,12 +10,12 @@
 // Settings & data sheet. So this searches the WHOLE document for the meta,
 // reads src/version.js independently, and confirms the number a person can
 // actually reach in the UI. All three must agree.
-import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { ROUTES } from './routes.mjs';
+import { openChrome } from './cdp.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HOST = process.env.DOZEN_HOST || 'https://dozen.wooklord.net';
@@ -73,36 +73,13 @@ async function checkRenderedUi() {
 
   const DEVPORT = 9500 + Math.floor(Math.random() * 400);
   const profile = path.join(os.tmpdir(), 'dozen-verify-' + Date.now());
-  const chrome = spawn(CHROME, [
-    '--headless=new', '--disable-gpu', '--no-first-run', '--hide-scrollbars',
-    `--remote-debugging-port=${DEVPORT}`, `--user-data-dir=${profile}`,
-    '--window-size=390,844', 'about:blank',
-  ], { stdio: 'ignore' });
 
+  // Every call times out and close() shuts the real browser down
+  // (scripts/cdp.mjs); a failed launch closes it before throwing.
+  let browser = null;
   try {
-    await sleep(2500);
-    const list = await (await fetch(`http://127.0.0.1:${DEVPORT}/json/list`)).json();
-    const ws = new WebSocket(list.find((t) => t.type === 'page').webSocketDebuggerUrl);
-    let id = 0; const pending = new Map();
-    ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m.result); pending.delete(m.id); } };
-    await new Promise((r) => (ws.onopen = r));
-    // EVERY CDP CALL IS TIMED OUT. Without this a dropped or lost reply leaves
-    // the promise pending forever and the script exits with "unsettled
-    // top-level await" -- no result, no failure, nothing to act on. That
-    // happened on the first run of the live route walk: a check that hangs is
-    // worse than one that fails, because it reports nothing at all.
-    const CDP_TIMEOUT = 20000;
-    const send = (method, params = {}) =>
-      new Promise((resolve, reject) => {
-        const i = ++id;
-        const timer = setTimeout(() => {
-          pending.delete(i);
-          reject(new Error(`CDP ${method} timed out after ${CDP_TIMEOUT}ms`));
-        }, CDP_TIMEOUT);
-        pending.set(i, (result) => { clearTimeout(timer); resolve(result); });
-        try { ws.send(JSON.stringify({ id: i, method, params })); }
-        catch (err) { clearTimeout(timer); pending.delete(i); reject(err); }
-      });
+    browser = await openChrome({ chrome: CHROME, port: DEVPORT, profile });
+    const { send } = browser;
     const ev = async (expression) => (await send('Runtime.evaluate', { expression, returnByValue: true }))?.result?.value;
 
     await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
@@ -187,8 +164,7 @@ async function checkRenderedUi() {
       } else ok(`${r.hash} renders live`);
     }
   } finally {
-    try { chrome.kill(); } catch {}
-    try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 }); } catch {}
+    if (browser) await browser.close();
   }
 }
 

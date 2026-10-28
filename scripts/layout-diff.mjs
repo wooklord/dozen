@@ -34,9 +34,10 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ROUTES } from './routes.mjs';
+import { openChrome } from './cdp.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REF = process.argv[2] || 'HEAD';
@@ -153,24 +154,8 @@ const main = async () => {
     ? (await import(pathToFileURL(refRoutesFile).href)).ROUTES
     : ROUTES;
 
-  const chrome = spawn(CHROME, [
-    '--headless=new', '--disable-gpu', '--no-first-run', '--hide-scrollbars',
-    `--remote-debugging-port=${DEVPORT}`, `--user-data-dir=${PROFILE}`,
-    `--window-size=${WIDTH},844`, 'about:blank',
-  ], { stdio: 'ignore' });
-
-  await sleep(2500);
-  const targets = await (await fetch(`http://127.0.0.1:${DEVPORT}/json/list`)).json();
-  const ws = new WebSocket(targets.find((t) => t.type === 'page').webSocketDebuggerUrl);
-  let id = 0;
-  const pending = new Map();
-  ws.onmessage = (e) => {
-    const m = JSON.parse(e.data);
-    if (m.id && pending.has(m.id)) { pending.get(m.id)(m.result); pending.delete(m.id); }
-  };
-  await new Promise((r) => (ws.onopen = r));
-  const send = (method, params = {}) =>
-    new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
+  browser = await openChrome({ chrome: CHROME, port: DEVPORT, profile: PROFILE, width: WIDTH });
+  const { send } = browser;
   const ev = async (expr, awaitPromise = false) => (await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise }))?.result?.value;
 
   await send('Runtime.enable');
@@ -441,17 +426,19 @@ const main = async () => {
   );
   console.log('Changed routes are only a problem if you did not intend them.');
 
-  try { chrome.kill(); } catch {}
   sA.closeAllConnections(); sA.close();
   sB.closeAllConnections(); sB.close();
 };
 
+// Closed here, not at the end of main(), so a run that throws -- a CDP call
+// timing out above all -- closes the browser too (scripts/cdp.mjs).
+let browser = null;
 main()
   .catch((err) => { failures++; console.error(`\nlayout-diff failed: ${err.message}`); })
-  .finally(() => {
+  .finally(async () => {
+    if (browser) await browser.close();
     // Best effort; a cleanup failure must never mask the result.
     try { execFileSync('git', ['worktree', 'remove', '--force', WORKTREE], { cwd: ROOT, stdio: 'pipe' }); } catch {}
     try { execFileSync('git', ['worktree', 'prune'], { cwd: ROOT, stdio: 'pipe' }); } catch {}
-    try { fs.rmSync(PROFILE, { recursive: true, force: true, maxRetries: 3 }); } catch {}
     process.exit(failures ? 1 : 0);
   });

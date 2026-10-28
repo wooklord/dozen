@@ -720,9 +720,62 @@ checks were verified this way:
   to a separate browser process and exits at once, so `proc.kill()` kills a
   process that is already gone -- measured with a scratch probe, not inferred.
   Every run of `smoke.mjs`, `verify-deploy.mjs` and `layout-diff.mjs` leaves
-  one or two behind. `Browser.close` over CDP reaches the real browser. The
-  fix in the committed scripts is proposed and not built; until it is,
-  count headless Chromes before and after a run.
+  one or two behind. `Browser.close` over CDP reaches the real browser. Fixed
+  the same day, in the bullet below.
+- The Chrome leak and the CDP timeout, fixed in `scripts/cdp.mjs`
+  (2026-10-28, scripts only, no bump). One helper launches, drives and closes
+  Chrome for the smoke test, layout-diff and verify-deploy. `close()` sends
+  `Browser.close` on the browser's own endpoint, confirms the DevTools port
+  has stopped answering, and prints a `WARN` when it has not or when the
+  throwaway profile could not be removed. Every call rejects after 60s,
+  naming its method, and a dropped connection rejects every waiting call at
+  once. The smoke test and layout-diff close the browser on a run that throws
+  as well as one that finishes; before, a throw in the smoke test escaped as
+  an unhandled rejection, with a stack trace, no verdict and the browser
+  left running. Headless `chrome.exe` processes and `dozen-*` profiles in
+  the temp directory were counted with a scratch probe before and after each
+  run, each fault staged with the Edit tool, its hash confirmed different
+  from the byte copy, and the file restored from the copy by hash:
+  - smoke, green: 0 processes and 0 profiles before, 0 and 0 after, 212 ok,
+    no `WARN`. With `Browser.close` skipped: 0 → 2 processes (one browser
+    and its helper) and 1 profile left, with both `WARN` lines, `still
+    answers after Browser.close` and `the throwaway profile was not removed
+    (EPERM)`. The verdict stayed `SMOKE PASSED`, as it must: a cleanup never
+    moves the result.
+  - a call Chrome never answers -- `Runtime.evaluate` awaiting `new
+    Promise(() => {})` -- staged in each script in turn. Smoke: `FAIL  the
+    run stopped: CDP Runtime.evaluate timed out after 60s with no reply from
+    Chrome` and `SMOKE FAILED`, exit 1 at 63s. layout-diff: `layout-diff
+    failed:` with the same message, exit 1 at 63s, its worktree removed.
+    verify-deploy: `FAIL  rendered UI check threw:` with it, `DEPLOY NOT
+    VERIFIED`, exit 1 at 63s. Chrome 0 → 0 each time. With the timeout's
+    `reject` removed, the smoke run printed nothing and was still waiting
+    when the outer limit killed it at 150s (exit 124) -- and the leak was
+    back, 0 → 2 and a profile, because a hung run never reaches its cleanup.
+    That is the second reason the timeout matters.
+  - the hygiene guard, `only scripts/cdp.mjs launches Chrome`:
+    verify-deploy put back to its committed copy, 1 unit failure naming it;
+    layout-diff's `openChrome` import removed, 1 failure naming it.
+    Restored: 246 passing.
+  - the smoke test's runtime-error check, whose events now arrive through
+    `onEvent` -- a check that never received one would read `none` on every
+    run. A `console.error` and an uncaught throw staged in the page after
+    boot: `SMOKE FAILED -- 2 problem(s)`, `console.error: STAGED console
+    error` and `uncaught: Error: STAGED uncaught`, Chrome 0 → 0.
+  - the final files, green: smoke 212 ok with 0 skips, layout-diff `HEAD 390
+    dark` 10 identical (both sides booted, stylesheets fingerprinting equal),
+    verify-deploy `DEPLOY VERIFIED -- live BUILD is 0.1.85` with 10 routes
+    rendering live -- each 0 processes and 0 profiles
+    before and after, no `WARN`.
+
+  The same cleanup found **465 throwaway profiles, 20 GB**, in the temp
+  directory, back to 2026-09-02: every run's `rmSync` had failed silently
+  against a browser still holding its profile. They were deleted. The smoke
+  test now prints its slowest call beside the timeout -- 30ms of 717 on the
+  final run, 990ms on another, so it moves from run to run; the figure was
+  checked against a scratch call the page held for 1500ms, which read
+  1514ms. The longest deliberate wait inside one call is
+  the smoke test's own 25s ceiling on `navigator.serviceWorker.ready`.
 
 Do this for every new check. It costs one minute and it is the only thing that
 separates a real check from a comforting one.
@@ -1158,6 +1211,12 @@ archive, so a bad trim fails loudly rather than quietly narrowing what the test 
 `scripts/routes.mjs` holds the route list and its markers, shared by the smoke
 test, the deploy check and the layout diff. Three copies would drift, and the
 copy that drifted would be the one checking production.
+
+`scripts/cdp.mjs` launches, drives and closes Chrome for the same three, for
+the same reason, and is not a check either. The copies it replaced (2026-10-28)
+had drifted exactly that way: one timed its calls out, two never did, and none
+closed the browser it started. `tests/hygiene.test.mjs` fails on a script that
+launches its own.
 
 **Only the smoke test and `node --test` gate a push.** The layout diff goes red
 on any *intended* layout change, which is most commits — as a gate it would
