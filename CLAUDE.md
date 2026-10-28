@@ -629,6 +629,18 @@ checks were verified this way:
     still draw a bar, e.g. Find The Cost of Freedom at opacity 0.1`, and
     Shadow's debut row the same.
   Restored, by hash the same files: 243 passing, smoke 209 ok with 0 skips.
+- The BUILD label at three and four digits (`tests/build.test.mjs`,
+  2026-10-27), which evaluates `src/version.js`'s own source with the integer
+  swapped. Two faults staged in that file, restored by hash:
+  - the label cut to its last two digits: `'BUILD 0.1.00'` against
+    `'BUILD 0.1.100'`.
+  - a decoy comment, `export const BUILD = 12`, above the declaration: the
+    swap lands on the comment and the test fails `the swapped module reads
+    BUILD 84, not 100` instead of passing on today's label. The same decoy
+    also fails the two older build tests, whose regex takes the first match in
+    the file -- as do `verify-deploy.mjs` and `wait-deploy.mjs` on the served
+    copy.
+  Restored: 244 passing.
 
 Do this for every new check. It costs one minute and it is the only thing that
 separates a real check from a comforting one.

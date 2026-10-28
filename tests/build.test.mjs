@@ -51,3 +51,23 @@ test('the service worker cache version tracks the build', () => {
     'sw.js CACHE_VERSION is out of step with BUILD — a stale shell would be served',
   );
 });
+
+// The label past two digits (2026-10-27). BUILD_LABEL is assembled from the
+// integer in src/version.js, so this evaluates THAT FILE'S OWN SOURCE with the
+// integer swapped for 100 and for 1000: the expression under test is the
+// shipped one, not a copy of it here. The swapped module must report the
+// swapped BUILD, or a swap that matched nothing would hand back today's label
+// and fail for the wrong reason -- or, at BUILD 100 itself, pass for one.
+async function labelFor(n) {
+  const src = read('src/version.js');
+  const re = /export const BUILD\s*=\s*\d+/;
+  assert.match(src, re, 'src/version.js must declare `export const BUILD = <int>` for the swap');
+  const mod = await import(`data:text/javascript,${encodeURIComponent(src.replace(re, `export const BUILD = ${n}`))}`);
+  assert.equal(mod.BUILD, n, `the swapped module reads BUILD ${mod.BUILD}, not ${n}`);
+  return mod.BUILD_LABEL;
+}
+
+test('the BUILD label carries every digit at three and four digits', async () => {
+  assert.equal(await labelFor(100), 'BUILD 0.1.100');
+  assert.equal(await labelFor(1000), 'BUILD 0.1.1000');
+});
