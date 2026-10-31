@@ -780,6 +780,76 @@ checks were verified this way:
   checked against a scratch call the page held for 1500ms, which read
   1514ms. The longest deliberate wait inside one call is
   the smoke test's own 25s ceiling on `navigator.serviceWorker.ready`.
+- The 0.1.86 checks (jam chart notes, `openSheet`, the jamcharts table on the
+  fast refresh, the `/jams/` link), 25 faults applied one at a time. **Staged
+  from a scratch Node script by exact string, not with the Edit tool,** because
+  the run was unattended: each string had to occur exactly once, the staged
+  hash was confirmed different and the new text read back before any suite ran,
+  and each file was restored from a byte copy with the hash and `git status
+  --short` confirmed. The data and the note:
+  - `jamEntryCard` setting the note with `innerHTML`: 1 unit failure, the
+    innerHTML hygiene test; smoke 5, `4 real <img> in the DOM from a note` and
+    `the onerror handler ran (window.__jamXss = 1)`.
+  - a CSP blocking inline handlers, so that sentinel could not fire: smoke 1,
+    `the positive control did not fire (before undefined, after undefined), so
+    the sentinel proves nothing`. Without the control the XSS check would pass
+    on a page where nothing could ever run.
+  - the second clean put back on the fallback path: 1 unit failure; smoke 3,
+    `"<img src=x onerror=1>", expected "&lt;img src=x onerror=1&gt;"`, on the
+    sheet, the cards and the titles.
+  - the sheet printing the first entry's note on every entry: 0 unit failures;
+    smoke 6. On Home and Shows the line first printed two identical name lists
+    as its evidence, the fault moving notes and not names. It was the right
+    red with useless evidence, and it prints the entry that differs now.
+  - " (Recommended)" on every entry: 1 unit failure; smoke 13. On none: 1 unit
+    failure; smoke 14. Each names the title, the card and the sheet.
+  - song detail printing the note without `jamNoteText`: 0 unit failures; smoke
+    1, on song 49's entries.
+  - `mergeYear` dropping the table: 2 unit failures. `fetchCurrentYear` not
+    returning it: 1. Smoke 1 for each, the same line, a real boot and refresh
+    from a table cut short: `stale table: 832 rows before the refresh, 832
+    after, The Carton has 852`.
+  - the Jams link back to `/jamcharts`: smoke 1, `the Carton link
+    https://thecarton.net/jamcharts answers 404`.
+  - two with no smoke run, unit tests only, reasoned rather than measured: a
+    stale row needs a table that has moved past it and a guard against a short
+    table needs a table that shrinks, and the live data offers neither on
+    demand. The flag read from the setlist row instead of the table: 2 unit
+    failures. The never-shrink guard off: 1.
+
+  The key line and the titles:
+  - the key a span, not a button: smoke 16, among them `the key line is not a
+    real button opening a dialog`.
+  - the target centred on the row, as first designed: smoke 2, Home only,
+    `columns 40 / 45 / 45px` at 360 and `43 / 45 / 45px` at 390. A separate
+    hit-test walk (scratch, the override as a page stylesheet) put the worst
+    card at 39 and showed the Show detail button taking the difference.
+  - the 44px in the flow, on the button: smoke 4, `the key row itself is 52px,
+    in the flow rather than an overlay`.
+  - the overlay at 36px: smoke 4, `declared 36px, columns 37 / 37 / 37px`.
+    Sampling reads a 44px region as 45, which is why the check wants the
+    declared height AND the sampled one.
+  - a `title` on every setlist title: smoke 5, `5 title(s) not on the jam chart
+    carry a title`, and the two recommended non-jam songs marked as entries.
+  - a green title finding its entry by song, not by row: 0 unit failures; smoke
+    2, only on a song charted twice in one night. The show was chosen for that.
+  - every key opening the first card's entries: smoke 6, `Home: 2 of 2 card(s)
+    open entries that are not their own, e.g. 7 entries, expected 3`.
+
+  `openSheet`, 0 unit failures on all of them, since unit tests have no DOM:
+  - `aria-labelledby` removed: smoke 2, `not named by its own heading`.
+  - the sheet not taking focus: smoke 2. Focus not handed back: smoke 5.
+  - the Escape listener removed: smoke 7, led by `Escape left 1 sheet(s) and 1
+    backdrop(s)`. Escape closing every sheet instead of the top one: smoke 1,
+    `the first Escape on a stack left {"headings":[],"focus":false}`.
+  - the hashchange listener removed: smoke 19, among them `Back left 1 sheet(s)
+    open over #/jams` and `tapping the last entry's title reached
+    #/show/1763660681 with 4 sheet part(s) left`.
+
+  Restored, by hash the same files: 261 passing, smoke 254 ok with 0 skips and
+  no `WARN` in any of the 23 smoke runs. `layout-diff 2251273`: 390 dark and
+  light, `#/song/49` changed and 9 routes identical; 360, 10 identical
+  (`docs/design.md`, 0.1.86, reads what moved).
 
 Do this for every new check. It costs one minute and it is the only thing that
 separates a real check from a comforting one.
@@ -1199,7 +1269,7 @@ landed". The second is the worse of the two because it passes.
 | Command | Speed | Network | Run it |
 |---|---|---|---|
 | `node --test` | instant | none | always, before anything else |
-| `node scripts/smoke.mjs` | ~1 min | Carton (cold pull) | **before every push** |
+| `node scripts/smoke.mjs` | ~6½ min (380s on 2026-10-31; 356s the build before, so this row's old "~1 min" had gone stale well before 0.1.86) | Carton (cold pull) | **before every push** |
 | `node scripts/gap-oracle.mjs` | ~1 min | Carton (cold pull + 20 song pages) | after any change to gap arithmetic, to the show universe in `buildIndex`, or to `gapHistory()`; it compares every Show Gap cell on 20 Carton song pages against the app's own `gapAtShow()`, and the gap history's one-entry-per-show fold (0.1.83) against the same pages grouped by show, and **SKIPs, never passes,** when Carton is unreachable. The smoke test carries a one-song spot check of the same parity |
 | `node scripts/contrast.mjs` | instant | none | when eyeballing a colour; the assertions already run in `node --test` |
 | `node scripts/deadcss.mjs` | instant | none | when a CSS rule looks inert; lists every declaration the cascade can never let win. The assertions already run in `node --test` (`tests/deadcss.test.mjs`) |

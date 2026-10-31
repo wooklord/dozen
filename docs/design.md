@@ -1662,10 +1662,19 @@ prevent. The sheet moves nothing.
 **The key line is the button, and it stays the height it was.** "jam chart entry · notes ▾" is a real
 `<button aria-haspopup="dialog">` in the row's text column; the row is 26.84px tall and its target is
 44px by `::after`, the whole width of the row, so the bullet counts. No caller can leave it off,
-because `setlistBlock` builds it. The first version centred the target like `.btn.btn-small`, and on a
-Home card that overlaps the Show detail button's own overhang by a few pixels, which the button wins.
-It is anchored to the row's bottom now, with the height going upward, where the setlist ends 16px
-above and any footnote rows between are plain text.
+because `setlistBlock` builds it. As first designed the target was centred like `.btn.btn-small`, and
+on a Home card that overlaps the Show detail button's own overhang, which the button wins. Put back
+and measured by hit test, the key's left column, the one the button sits under, read 39px at 390 and
+40px at 360 on a card with the button 8px below the row (43 and 44 with it 12px below), where the
+middle and right columns read 45; whole-pixel samples read a 44px region as 45. It is anchored to the
+row's bottom now, with the height going upward, where the setlist ends 16px above and any footnote
+rows between are plain text.
+
+**What moved.** `layout-diff` against 0.1.85, 390 dark and light: `#/song/49` alone, one card 18.8px
+taller and everything below it. That card is the only one of the song's eight entries holding
+" (Recommended)", 241.1px on 0.1.85 and 259.9px now; at 360 the word fits the note's last line and
+nothing moves. The key row is 26.84px on both builds, read directly on Home and show detail at both
+widths with the cards the same height, so those two and Shows report identical because they are.
 
 **One source for the words.** The sheet, each green title's `title` and show detail's cards all read
 `index.jamByShow`, and each entry takes its note and its flag from the jamcharts row where there is
