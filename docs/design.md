@@ -1719,6 +1719,10 @@ held to their twins on the page, width and height, and the smoke test does that 
 **No new colour.** The date inherits the sheet's ink and the venue line brings its own, so there is no
 new pair to measure.
 
+**What moved.** `layout-diff` against 0.1.86, 390 dark, 390 light and 360 dark: 10 routes identical, on
+stylesheets of 241 rules against 243. That is what it should read and all it can read: a closed sheet
+is on no route, so it says the pages did not move and nothing about the sheet.
+
 **Not measured:** a real phone, and a desktop's classic scrollbars, which narrow a sheet that newly
 crosses the cap.
 

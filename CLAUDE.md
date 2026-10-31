@@ -887,6 +887,60 @@ checks were verified this way:
   And a fourth, added because the first three cannot see it: a gate mistyped as
   `want('stale-tables')` stops the run, `a gate names "stale-tables", which is not
   in SECTIONS`, exit 1, on a full run as well as a scoped one.
+- The 0.1.87 checks (the show line in the jam notes sheet), the first run under
+  the ruling below. Each is `--only jam-notes`, staged from a scratch Node script
+  by exact string, the staged hash confirmed different and the new text read back
+  before the run, and the file restored from a byte copy by hash with `git status
+  --short` confirmed. Green: 39 checks, 34s. The four named in the plan:
+  - the first card's show on every sheet, the header alone, with the entries and
+    the Carton link left right: smoke 30, the date and the venue each on a line of
+    their own, `date reads "Sun, Oct 18, 2026", the raw row gives "Thu, Oct 15,
+    2026"` and `venue reads "High Noon Saloon · Madison, WI", the raw row gives
+    "Buffalo Iron Works · Buffalo, NY"`.
+  - the header missing: smoke 17, `the sheet has no show line` on every sheet,
+    show detail's and the cards' alike.
+  - `ingestShowRow` not decoding the venue: smoke 3, and only on encoded venues,
+    `venue reads "Garcia&#039;s Chicago · Chicago, IL", the raw row gives "Garcia's
+    Chicago · Chicago, IL"`. A check held to the index would have agreed with the
+    fault.
+  - a rule changing sheet card padding: smoke 2, `a sheet card is not the size of
+    its twin on the page, entry 1: {"w":328,"h":202.34}, expected
+    {"w":328,"h":253.19}`, at 360 and 390.
+
+  Added to the plan's list. **The header below the cards was on the list to drop
+  and was run instead,** because it leaves every word right, so neither text
+  comparison can see it: smoke 17, each `the show line is not the first thing
+  under the heading`, and no date or venue line. The other four are the check's
+  own branches, each of which would pass silently on a mistake:
+  - the card lookup returning nothing: smoke 10, `its 13 titles match no show in
+    the raw table, so its show line went unchecked`.
+  - a card matching two shows: **exit 0 by design,** 10 `SKIP` lines naming the
+    ids, and the verdict `jam-notes, 29 checks (10 checks SKIPPED, not verified)`.
+    It does not pick one. Two pairs of the 620 setlisted shows share a title
+    sequence and neither is charted, so no card reaches this today.
+  - `&#039;` taken out of the check's decoder: smoke 2, `the raw row's venue holds
+    &#039;, an entity this check cannot decode`, reported as the check's gap and
+    not as the app's fault.
+  - the twin check with no cards on the page: smoke 2, `the page has no jam cards,
+    so the sheet's had nothing to match`. Two empty lists compare equal, so
+    without this line it passes.
+
+  **Dropped, each a duplicate of a comparison shown above:**
+  - `formatShowDateShort`: the same exact match on the date, which the first fault
+    shows firing on its own line.
+  - the venue without the place: the same exact match on the venue line, which
+    the first and third faults show firing.
+  - show detail skipping the header: the same `no show line` on the same
+    `checkShow` path as the header missing.
+
+  Restored, by hash the same files: 261 passing, smoke 273 ok with 0 skips and no
+  `WARN`, against 254 on 0.1.86, with 0 lines lost and 19 gained when the two runs
+  are compared line by line, so the `--only` wrappers cost the full run nothing.
+  `layout-diff 1860451`: 390 dark, 390 light and 360 each 10 identical, stylesheets
+  241 rules against 243. **A closed sheet is not on any route, so that says the
+  pages did not move and nothing about the sheet.** The nine faults and the green
+  took 353s of smoke across ten runs, 9m35s with a 25s gap between them for
+  Carton's limit, against 386s for one full run.
 
 Do this for every new check. It is the only thing that separates a real check
 from a comforting one.
@@ -1332,12 +1386,12 @@ landed". The second is the worse of the two because it passes.
 | Command | Speed | Network | Run it |
 |---|---|---|---|
 | `node --test` | instant | none | always, before anything else |
-| `node scripts/smoke.mjs` | ~6½ min (380s on 2026-10-31; 356s the build before, so this row's old "~1 min" had gone stale well before 0.1.86) | Carton (cold pull) | **before every push** |
-| `node scripts/smoke.mjs --only <section>` | 11–34s | Carton (cold pull) | for a red proof, re-running only the section the check lives in. **Never the gate for a push:** the full run is. An unknown name or a run of zero checks fails, and the verdict says it was scoped |
+| `node scripts/smoke.mjs` | ~6½ min (386s at 0.1.87, 380s at 0.1.86, 356s at 0.1.85, so this row's old "~1 min" had gone stale well before 0.1.86) | Carton (cold pull) | **before every push** |
+| `node scripts/smoke.mjs --only <section>` | 11–41s (`jam-notes` 33–41s at 0.1.87) | Carton (cold pull) | for a red proof, re-running only the section the check lives in. **Never the gate for a push:** the full run is. An unknown name or a run of zero checks fails, and the verdict says it was scoped |
 | `node scripts/gap-oracle.mjs` | ~1 min | Carton (cold pull + 20 song pages) | after any change to gap arithmetic, to the show universe in `buildIndex`, or to `gapHistory()`; it compares every Show Gap cell on 20 Carton song pages against the app's own `gapAtShow()`, and the gap history's one-entry-per-show fold (0.1.83) against the same pages grouped by show, and **SKIPs, never passes,** when Carton is unreachable. The smoke test carries a one-song spot check of the same parity |
 | `node scripts/contrast.mjs` | instant | none | when eyeballing a colour; the assertions already run in `node --test` |
 | `node scripts/deadcss.mjs` | instant | none | when a CSS rule looks inert; lists every declaration the cascade can never let win. The assertions already run in `node --test` (`tests/deadcss.test.mjs`) |
-|  `node scripts/layout-diff.mjs [ref] [width] [theme]` | ~3 min | Carton (two cold boots) | after a deliberate layout change, to see what else moved |
+|  `node scripts/layout-diff.mjs [ref] [width] [theme]` | ~25s (24–26s on 2026-10-31; this row said ~3 min) | Carton (two cold boots) | after a deliberate layout change, to see what else moved |
 | `node scripts/wait-deploy.mjs` | until the build lands, ~1–3 min | live host | after every push, before `verify-deploy` — polls the served `version.js` for the BUILD integer so the three-place check is not run against a build still in progress. It proves one file at one edge and nothing more |
 | `node scripts/verify-deploy.mjs` | ~1 min | live host | **after every push** |
 
