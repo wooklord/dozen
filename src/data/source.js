@@ -356,14 +356,25 @@ export async function fetchFullArchive({ onProgress, verify = true } = {}) {
 }
 
 /**
- * Fast path: current year only, for merging into an existing index.
- * Covers new shows and same-year edits. It CANNOT see retroactive edits to
- * older years -- that is what the manual full rebuild is for.
+ * Fast path: the current year's setlist rows, and the shows and jamcharts
+ * tables whole, for merging into an existing index.
+ * Covers new shows, same-year edits and jam chart entries of any year. It
+ * CANNOT see retroactive edits to older years' setlist rows -- that is what the
+ * manual full rebuild is for.
  */
 export async function fetchCurrentYear(year) {
   const { rows, url } = await fetchSetlistsForYear(year);
   const shows = await fetchShows();
-  return { setlists: rows, shows: shows.rows, url, year, fetchedAt: Date.now() };
+  const jamcharts = await fetchJamcharts();
+  return {
+    setlists: rows,
+    shows: shows.rows,
+    jamcharts: jamcharts.rows,
+    jamchartsUrl: jamcharts.url,
+    url,
+    year,
+    fetchedAt: Date.now(),
+  };
 }
 
 export const __config = { BASE, FULL_LIMIT };

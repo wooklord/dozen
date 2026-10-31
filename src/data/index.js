@@ -92,6 +92,17 @@ export function jamKey(showId, songId, setnumber, position) {
 }
 
 /**
+ * A jam chart note as it reads on screen: The Carton's words, with " (Recommended)"
+ * after them when the entry is flagged. The word is not in the API text -- The
+ * Carton's page appends it to the tooltip, and this is the same word in the same
+ * place. No note, nothing to attach it to. docs/plan.md, Jam chart notes.
+ */
+export function jamNoteText(note, isRecommended) {
+  if (!note) return '';
+  return isRecommended ? `${note} (Recommended)` : note;
+}
+
+/**
  * Is this setlist row a free-text entry rather than a song?
  *
  * The Carton records banter, announcements and other non-song items as setlist
@@ -177,6 +188,7 @@ function ingestSetlistRow(r) {
     country: cleanDisplayText(r.country),
     shownotes: cleanDisplayText(r.shownotes),
     footnote: cleanDisplayText(r.footnote),
+    jamchart_notes: cleanDisplayText(r.jamchart_notes),
     songkey: normalizeSongName(r.songname),
   };
 }
@@ -556,11 +568,11 @@ export function buildIndex(raw) {
   // directly above these entries on show detail.
   //
   // The join is show + song + settype-agnostic setnumber + position, which is
-  // EXACT against live data: all 792 jamcharts rows match a setlist row, and
-  // no setlist row flagged isjamchart lacks one. Verified both directions --
-  // 779 unique (show, song) pairs from each source, zero disagreement. The 13
-  // songs charted twice in one night are separated by position, which is why
-  // the key includes it rather than stopping at song_id.
+  // EXACT against live data (2026-10-30): all 852 jamcharts rows match a setlist
+  // row, and no setlist row flagged isjamchart lacks one. Verified both
+  // directions -- 838 unique (show, song) pairs from each source, zero
+  // disagreement. The 14 songs charted twice in one night are separated by
+  // position, which is why the key includes it rather than stopping at song_id.
   const jamByKey = new Map();
   for (const j of jamcharts) {
     jamByKey.set(jamKey(j.showid, j.song_id, j.setnumber, j.position), j);
@@ -575,13 +587,21 @@ export function buildIndex(raw) {
       // A flagged row with no jamcharts row does not occur in live data, but
       // if the two tables ever diverge the setlist row still carries the note,
       // so the entry is rendered from what IS present rather than dropped.
+      //
+      // The table wins where both exist, for the note and the flag alike. Every
+      // refresh pulls it whole, while a setlist row from an older year moves
+      // only on a full rebuild, so it is the fresher of the two. Both were
+      // cleaned on the way in; a second clean here would decode twice.
+      const from = j ?? r;
       entries.push({
+        uniqueid: r.uniqueid,
         song_id: Number(r.song_id),
         songname: r.songname,
         settype: r.settype,
         setnumber: r.setnumber,
         position: Number(r.position),
-        note: j ? j.jamchartnote : cleanDisplayText(r.jamchart_notes || ''),
+        note: j ? j.jamchartnote : r.jamchart_notes,
+        isRecommended: Number(from.isrecommended) === 1,
       });
     }
     if (entries.length) jamByShow.set(showId, entries);

@@ -136,7 +136,8 @@ async function coldStart() {
 
 /**
  * Refresh.
- *   mode 'fast'  — current year only, merged into the cached index.
+ *   mode 'fast'  — current year's setlists plus the shows and jamcharts tables,
+ *                  merged into the cached index.
  *   mode 'full'  — everything, with verification. User-confirmed.
  *
  * On failure the previously cached data is kept rather than replaced with
@@ -348,7 +349,7 @@ function openSettingsSheet() {
       ]),
       el('p.note', {
         text:
-          'The quick refresh pulls only the current year. The Carton sometimes edits older ' +
+          'The quick refresh pulls this year’s setlists and the jam chart table. The Carton sometimes edits older ' +
           'setlists after the fact — a full rebuild is the only way to pick those up.',
       }),
 

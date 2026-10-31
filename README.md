@@ -159,9 +159,9 @@ replacing it with something subtly wrong. Total cold start is ~1.0 MB on the wir
 figure this used to quote is the **parsed** size, which is what has to fit in memory, not what a
 phone downloads.
 
-Afterwards, refresh pulls **the current year only** and merges it. Because Carton editors amend old
-setlists retroactively, a **full rebuild** is available behind a confirm dialog in the header's
-cache panel.
+Afterwards, refresh pulls **the current year's setlists**, plus the shows and jam chart tables, and
+merges them. Because Carton editors amend old setlists retroactively, a **full rebuild** is available
+behind a confirm dialog in the header's cache panel.
 
 Cache age, row count and newest show date are all visible in that panel — a stale or truncated
 index is diagnosable without dev tools.

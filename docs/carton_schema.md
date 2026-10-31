@@ -90,7 +90,7 @@ summing `/setlists/showyear/YYYY.json` across all 14 years also totals **6361**.
 | `songs` | 366 | ~64 KB |
 | `shows` | 804 | — |
 | `venues` | 440 | — |
-| `jamcharts` | 807 | — |
+| `jamcharts` | 807 (852 on 2026-10-30) | — |
 
 `setlists` is the only large payload. Everything else is trivial.
 
@@ -123,7 +123,7 @@ The core table. One row per song performance. `/v2/setlists/showyear/2013.json?o
 | `footnote` | string | single legacy footnote, always present, `""` when none |
 | `footnotes` | string \| null | **a JSON-encoded string**, e.g. `"[\"Debut, no lyrics\"]"`, or `null` |
 | `isjamchart` | number | 0 \| 1 |
-| `jamchart_notes` | string \| null | |
+| `jamchart_notes` | string \| null | on exactly the `isjamchart = 1` rows; see "The jam chart note" below |
 | `venue_id` | number | join key to `venues` |
 | `shownotes` | string | show-level note, repeated on every row of the show |
 | `showyear` | number | |
@@ -141,7 +141,29 @@ The core table. One row per song performance. `/v2/setlists/showyear/2013.json?o
 | `isreprise` | number | 0 \| 1 |
 | `isjam` | number | 0 \| 1 |
 | `css_class` | null | |
-| `isrecommended` | null | |
+| `isrecommended` | number \| null | 1 \| 0 \| null; see "The jam chart note" below |
+
+### The jam chart note and `isrecommended` (measured 2026-10-30)
+
+This table said `isrecommended` was always `null`. It was when it was written; it no longer is.
+
+| Check | Result |
+|---|---|
+| Setlist rows with `isjamchart = 1` | **852**, each with a `jamchart_notes`; no unflagged row has one |
+| `jamchart_notes` against `jamcharts.jamchartnote` | identical on all 852, case-sensitive and exact |
+| Note length | 30 to 512 characters, median 317 |
+| HTML, entities, newlines or URLs in a note | **0** of 852 |
+| Notes with whitespace at either end | 34; 48 notes carry non-ASCII (U+2019 and others) |
+| `isrecommended` in `setlists` | **93** are 1, 3336 are 0, 3054 are `null`; no 1 before 2024 |
+| `isrecommended` in `jamcharts` | 91 are 1, 761 are 0, and it agrees with the setlist row on all 852 |
+
+**`isrecommended` is NOT a subset of the jam chart rows.** Of the 93 flagged setlist rows, 91 are jam
+chart rows and **2 are not**: 12 Pounds of Pain and Boom or Bust, in the encore of 2024-05-10 (show
+1715403557). Neither has a note, and neither has a `jamcharts` row.
+
+**"(Recommended)" is not in the API text.** 0 of 852 notes contain the word. The Carton's page adds
+it, to the end of the tooltip, when the flag is set; nothing else on the page marks the entry. On
+the 2 non-jam rows it adds it to the song name in a `title` instead.
 
 ### Set membership and position
 
@@ -451,7 +473,7 @@ looked wrong next to it rather than merely thin.
 
 ## `jamcharts` — 21 fields
 
-807 rows. `uniqueid`, `setnumber`, `position`, `footnote`, `tracktime`, **`jamchartnote`**,
+852 rows on 2026-10-30. `uniqueid`, `setnumber`, `position`, `footnote`, `tracktime`, **`jamchartnote`**,
 `song_id`, `isrecommended`, **`showid`** (no underscore), `songname`, `song_slug`, `showdate`,
 `artist_id`, `artist`, `artist_slug`, `venuename`, `venue_slug`, `city`, `state`, `country`,
 `permalink`.
@@ -480,6 +502,8 @@ setlist row on it, with zero misses.
 - **`settype` is correctly absent from the key.** `jamcharts` has no such field and does not need
   one: the four-part tuple is unique across all 6361 setlist rows (zero collisions), and **no show
   mixes `"One Set"` with `"Set"`**, so settype carries no disambiguating information here.
+- **Re-measured 2026-10-30, the same in both directions:** 852 rows, 838 unique pairs, 14 songs
+  charted twice in a night, zero misses either way. The figures above are that first measurement.
 - `setnumber` is a string on both sides and is case-folded before comparison, so `"E"` and `"e"`
   cannot split an encore in two.
 

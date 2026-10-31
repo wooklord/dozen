@@ -155,8 +155,13 @@ export function cacheAge(archive, now = Date.now()) {
  * Rows are keyed by `uniqueid`, which is stable per song-performance. Every
  * row for the pulled year is replaced wholesale, so deletions within that year
  * are picked up too, not just additions and edits.
+ *
+ * The jamcharts table comes back whole and replaces the cached one, with the
+ * same never-shrink rule. A short table costs only itself: the year's rows are
+ * still good, so they merge and the cached table stays. A real deletion at The
+ * Carton therefore waits for a full rebuild, the same trade as the rows.
  */
-export function mergeYear(archive, { setlists, shows, year }) {
+export function mergeYear(archive, { setlists, shows, jamcharts, jamchartsUrl, year }) {
   const y = Number(year);
   const kept = archive.setlists.filter((r) => Number(r.showyear) !== y);
   const merged = kept.concat(setlists);
@@ -172,10 +177,20 @@ export function mergeYear(archive, { setlists, shows, year }) {
     return { ...archive, mergeRejected: true };
   }
 
+  const cachedJam = archive.jamcharts ?? [];
+  const jamIsShort = Boolean(jamcharts) && jamcharts.length < cachedJam.length;
+  if (jamIsShort) {
+    console.warn(
+      `[dozen] jamcharts pull had ${jamcharts.length} rows but the cache already held ` +
+        `${cachedJam.length}. Keeping the cached table.\n  url: ${jamchartsUrl}`,
+    );
+  }
+
   return {
     ...archive,
     setlists: merged,
     shows: shows ?? archive.shows,
+    jamcharts: jamcharts && !jamIsShort ? jamcharts : archive.jamcharts,
     fetchedAt: Date.now(),
     fullFetchedAt: archive.fullFetchedAt ?? archive.fetchedAt,
     mergeRejected: false,

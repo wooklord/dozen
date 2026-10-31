@@ -13,7 +13,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildIndex, jamKey } from '../src/data/index.js';
+import { buildIndex, jamKey, jamNoteText } from '../src/data/index.js';
+import { mergeYear } from '../src/data/cache.js';
 
 /**
  * One show, one set of 5 songs plus an encore, four of them jam-charted.
@@ -187,4 +188,169 @@ test('a flagged setlist row with no jamcharts row still renders, from its own no
   const mango = idx.jamByShow.get(1).find((j) => j.songname === 'Mango');
   assert.ok(mango, 'the entry must survive a missing jamcharts row');
   assert.equal(mango.note, 'fallback note for Mango');
+});
+
+// --- the note decodes once ---------------------------------------------------
+//
+// The second clean this replaces was on the fallback path alone, so a note's
+// fate depended on which table it came through. Both paths are held here, on
+// the same three spellings. A double decode turns the third into a real tag's
+// text, which the DOM would still print safely, and that is the point: this is
+// about the words being Carton's, and the DOM check is in scripts/smoke.mjs.
+
+const RAW_TAG = '<img src=x onerror="window.__x=1">';
+const ONE_ENCODED = '&lt;img src=x onerror=&quot;window.__x=1&quot;&gt;';
+const TWO_ENCODED = '&amp;lt;img src=x onerror=1&amp;gt;';
+
+function noteFor(rowNote, tableNote) {
+  const f = fixture();
+  f.setlists = f.setlists.map((r) => (r.songname === 'Mango' ? { ...r, jamchart_notes: rowNote } : r));
+  f.jamcharts = tableNote === undefined
+    ? f.jamcharts.filter((j) => j.songname !== 'Mango')
+    : f.jamcharts.map((j) => (j.songname === 'Mango' ? { ...j, jamchartnote: tableNote } : j));
+  return buildIndex(f).jamByShow.get(1).find((j) => j.songname === 'Mango').note;
+}
+
+for (const [path, read] of [
+  ['the setlist row, no jamcharts row', (s) => noteFor(s)],
+  ['the jamcharts row', (s) => noteFor('ignored', s)],
+]) {
+  test(`a note decodes exactly once through ${path}`, () => {
+    assert.equal(read(RAW_TAG), RAW_TAG, 'a literal tag stays as text; cleaning does not strip it');
+    assert.equal(read(ONE_ENCODED), RAW_TAG);
+    assert.equal(read(TWO_ENCODED), '&lt;img src=x onerror=1&gt;', 'twice would read <img');
+    assert.equal(read('  spaced   out  '), 'spaced out');
+  });
+}
+
+test('a null note on a flagged row is an empty note, not the string "null"', () => {
+  assert.equal(noteFor(null), '');
+});
+
+// --- "(Recommended)" ---------------------------------------------------------
+
+test('jamNoteText appends The Carton\'s word to a flagged note and nothing else', () => {
+  assert.equal(jamNoteText('a note', true), 'a note (Recommended)');
+  assert.equal(jamNoteText('a note', false), 'a note');
+  assert.equal(jamNoteText('', true), '', 'no note, nothing to attach the word to');
+  assert.equal(jamNoteText('', false), '');
+});
+
+function flagged(setRows, setTable) {
+  const f = fixture();
+  f.setlists = f.setlists.map((r) => ({ ...r, isrecommended: setRows(r) }));
+  f.jamcharts = f.jamcharts.map((j) => ({ ...j, isrecommended: setTable(j) }));
+  return buildIndex(f).jamByShow.get(1);
+}
+
+test('isRecommended is per performance: only the flagged Zebra of the two', () => {
+  const entries = flagged(() => null, (j) => (j.songname === 'Zebra' && j.position === 4 ? 1 : 0));
+  assert.deepEqual(
+    entries.map((e) => [e.songname, e.position, e.isRecommended]),
+    [['Zebra', 1, false], ['Mango', 3, false], ['Zebra', 4, true], ['Cider', 1, false]],
+  );
+});
+
+test('isrecommended of null and of 0 both read false', () => {
+  assert.ok(flagged(() => null, () => null).every((e) => e.isRecommended === false));
+  assert.ok(flagged(() => 0, () => 0).every((e) => e.isRecommended === false));
+});
+
+test('the jamcharts row decides the flag where one exists, the setlist row where none does', () => {
+  // The same source as the note, so an entry cannot print one table's words
+  // with the other table's flag.
+  const fromTable = flagged(() => 1, () => 0);
+  assert.ok(fromTable.every((e) => e.isRecommended === false));
+
+  const f = fixture();
+  f.setlists = f.setlists.map((r) => ({ ...r, isrecommended: r.songname === 'Mango' ? 1 : 0 }));
+  f.jamcharts = f.jamcharts.filter((j) => j.songname !== 'Mango');
+  const mango = buildIndex(f).jamByShow.get(1).find((e) => e.songname === 'Mango');
+  assert.equal(mango.isRecommended, true);
+});
+
+test('a recommended row that is not a jam chart row makes no entry', () => {
+  // Real: 12 Pounds of Pain and Boom or Bust, 2024-05-10. isrecommended is not
+  // a subset of isjamchart, so the flag must never add a row by itself.
+  const f = fixture();
+  f.setlists = f.setlists.map((r) => (r.songname === 'Apple' ? { ...r, isrecommended: 1 } : r));
+  const names = buildIndex(f).jamByShow.get(1).map((e) => e.songname);
+  assert.deepEqual(names, ['Zebra', 'Mango', 'Zebra', 'Cider']);
+});
+
+test('each entry carries the uniqueid of the setlist row it came from', () => {
+  // setlistBlock finds a title's entry by this, and the two Zebras are why it
+  // cannot be the song.
+  const entries = buildIndex(fixture()).jamByShow.get(1);
+  assert.deepEqual(entries.map((e) => e.uniqueid), ['1', '3', '4', '6']);
+});
+
+// --- the fast path keeps the jamcharts table current -------------------------
+
+function cachedArchive() {
+  const f = fixture();
+  return { ...f, setlists: f.setlists.map((r) => ({ ...r, showyear: 2020 })), fetchedAt: 1 };
+}
+
+test('mergeYear takes the pulled jamcharts table, and song detail then lists the new entry', () => {
+  const archive = cachedArchive();
+  const added = { ...archive.jamcharts[0], uniqueid: 'new', song_id: 20, songname: 'Blossom', setnumber: '1', position: 5, jamchartnote: 'new note' };
+  const pulled = [...archive.jamcharts, added];
+  const merged = mergeYear(archive, { setlists: [], shows: archive.shows, jamcharts: pulled, year: 2019 });
+
+  assert.equal(merged.mergeRejected, false);
+  assert.strictEqual(merged.jamcharts, pulled);
+  const blossom = buildIndex(merged).songsById.get(20);
+  assert.deepEqual(blossom.jamcharts.map((j) => j.jamchartnote), ['new note']);
+});
+
+test('a short jamcharts pull keeps the cached table, still merges the rows, and logs the url', (t) => {
+  const warn = t.mock.method(console, 'warn', () => {});
+  const archive = cachedArchive();
+  const row = { ...archive.setlists[0], uniqueid: 'y', showyear: 2019 };
+  const merged = mergeYear(archive, {
+    setlists: [row],
+    shows: archive.shows,
+    jamcharts: archive.jamcharts.slice(1),
+    jamchartsUrl: 'https://example.test/jamcharts.json?limit=20000',
+    year: 2019,
+  });
+
+  assert.strictEqual(merged.jamcharts, archive.jamcharts);
+  assert.equal(merged.mergeRejected, false, 'a short table is not a rejected merge');
+  assert.equal(merged.setlists.length, archive.setlists.length + 1, 'the good rows still merge');
+  assert.notEqual(merged.fetchedAt, archive.fetchedAt);
+  assert.equal(warn.mock.callCount(), 1);
+  const said = warn.mock.calls[0].arguments[0];
+  assert.match(said, /3 rows/);
+  assert.match(said, /already held 4/);
+  assert.match(said, /jamcharts\.json\?limit=20000/);
+});
+
+test('an equal-sized jamcharts pull replaces the table: an edited note comes through', (t) => {
+  const warn = t.mock.method(console, 'warn', () => {});
+  const archive = cachedArchive();
+  const pulled = archive.jamcharts.map((j) => ({ ...j, jamchartnote: `edited ${j.jamchartnote}` }));
+  const merged = mergeYear(archive, { setlists: [], shows: archive.shows, jamcharts: pulled, year: 2019 });
+  assert.strictEqual(merged.jamcharts, pulled);
+  assert.equal(warn.mock.callCount(), 0);
+});
+
+test('a pull with no jamcharts at all leaves the cached table alone', () => {
+  const archive = cachedArchive();
+  const merged = mergeYear(archive, { setlists: [], shows: archive.shows, year: 2019 });
+  assert.strictEqual(merged.jamcharts, archive.jamcharts);
+});
+
+test('a rejected year merge changes nothing, the jamcharts table included', (t) => {
+  t.mock.method(console, 'error', () => {});
+  const archive = cachedArchive();
+  const merged = mergeYear(archive, {
+    setlists: [],
+    shows: [],
+    jamcharts: [...archive.jamcharts, { ...archive.jamcharts[0], uniqueid: 'more' }],
+    year: 2020,
+  });
+  assert.equal(merged.mergeRejected, true);
+  assert.strictEqual(merged.jamcharts, archive.jamcharts);
 });

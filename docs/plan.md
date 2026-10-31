@@ -106,11 +106,14 @@ on the incremental fast path. That's the trade — the expensive pull is the one
 | Path | When | Cost |
 |---|---|---|
 | **Cold / full** | first run, or manual rebuild | 6 requests + 14 verification requests, ~1.0 MB wire / 11.6 MB parsed |
-| **Fast** | TTL expiry, or pull-to-refresh | current year only (`setlists/showyear/2026` ≈ 948 rows, ~800 KB) merged into the stored index |
+| **Fast** | TTL expiry, or pull-to-refresh | 3 requests: the current year's rows (`setlists/showyear/2026` ≈ 948 rows, ~800 KB) and the whole `shows` and `jamcharts` tables, merged into the stored index |
 | **Manual full rebuild** | user-initiated, **behind a confirm dialog** | same as cold |
 
-The full pull lands in IndexedDB once. Afterward the fast path re-pulls the **current year only**
-and merges by `uniqueid` into the stored index — that covers new shows and same-year edits.
+The full pull lands in IndexedDB once. Afterward the fast path re-pulls the **current year's setlist
+rows** and replaces that year in the stored index — that covers new shows and same-year edits. The
+`jamcharts` table comes back whole, and has since 0.1.86: before that a phone's table moved only on a
+cold start or a rebuild, while the flags on its setlist rows moved with every refresh. A short table
+keeps the cached one and logs the URL.
 
 **Carton editors amend old setlists retroactively**, which the fast path cannot see. So the manual
 full rebuild is a permanent, visible feature — surfaced in the UI with a confirm dialog explaining

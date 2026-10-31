@@ -18,7 +18,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fetchFullArchive, COLD_PULL_STEPS, quickTruncationCheck } from '../src/data/source.js';
+import { fetchFullArchive, fetchCurrentYear, COLD_PULL_STEPS, quickTruncationCheck } from '../src/data/source.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -67,6 +67,25 @@ test('COLD_PULL_STEPS equals the fetch-phase events the pull really emits', asyn
     COLD_PULL_STEPS,
     `the cold pull emitted ${labels.length} fetch steps (${labels.join(', ')}) but COLD_PULL_STEPS says ${COLD_PULL_STEPS}`,
   );
+});
+
+test('the fast path pulls the whole jamcharts table, with the oversized limit', async () => {
+  // Without this a phone's jamcharts moved only on a cold start or a rebuild:
+  // green titles kept up and song detail's entries and the Jams counts did not.
+  // The limit is asserted because a default response is silently truncated.
+  const stub = stubFetch();
+  let fresh;
+  try {
+    fresh = await fetchCurrentYear(2026);
+  } finally {
+    stub.restore();
+  }
+  const jamUrl = stub.urls.find((u) => /\/jamcharts\.json/.test(u));
+  assert.ok(jamUrl, `no jamcharts request among ${stub.urls.join(', ')}`);
+  assert.match(jamUrl, /[?&]limit=20000\b/);
+  assert.equal(fresh.jamchartsUrl, jamUrl);
+  assert.deepEqual(fresh.jamcharts, [{ id: 1 }]);
+  assert.equal(stub.urls.length, 3, `the fast path is three requests, not ${stub.urls.length}`);
 });
 
 test('the loader splits its twelve cells so no cell can un-fill', () => {
