@@ -864,6 +864,29 @@ checks were verified this way:
   no `WARN` in any of the 23 smoke runs. `layout-diff 2251273`: 390 dark and
   light, `#/song/49` changed and 9 routes identical; 360, 10 identical
   (`docs/design.md`, 0.1.86, reads what moved).
+- The scoped smoke run, `--only` (2026-10-31, scripts only, no bump). The jam
+  notes block became one function and the verdict another, so a full run executes
+  the same code in the same order, and `git diff -w` shows only the wrappers, the
+  gates, and two helpers moved above them. **Only `jam-notes`, `sheet`, `markup`
+  and `stale-table` can be scoped today.** About fifty names cross the sections
+  before them, so wrapping those would change the full run to save time on it; a
+  section joins when a proof needs it and it can stand alone. Green, against 380s
+  for a full run: `stale-table` 12s, `markup` 11s, `sheet` 18s, `jam-notes` 34s.
+  The three ways a scoped run could report health it never established:
+  - an unknown name: `--only nope`, a bare `--only`, `--only ""`, `--onyl
+    jam-notes`, `--only jam-notes,nope` and `--only=jam-notes` each print
+    `SMOKE FAILED`, naming the sections, and exit 2 with no Chrome started.
+  - zero checks: a gate staged as `if (false && want('stale-table'))` reads `FAIL
+    --only stale-table executed zero checks, so this run proved nothing` and
+    `SMOKE FAILED ... stale-table, 0 checks`, exit 1. A SKIP does not count as a
+    check, and the runtime-error line, which passes on any run, is left out.
+  - the verdict: `SMOKE PASSED — SCOPED, not a full run: stale-table, 2 checks`,
+    never "all routes rendered". `sheet,stale-table` names both and reads 15, the
+    13 and 2 of their own runs, and every count equals the run's `ok` lines less
+    the runtime-error one.
+  And a fourth, added because the first three cannot see it: a gate mistyped as
+  `want('stale-tables')` stops the run, `a gate names "stale-tables", which is not
+  in SECTIONS`, exit 1, on a full run as well as a scoped one.
 
 Do this for every new check. It is the only thing that separates a real check
 from a comforting one.
@@ -1310,6 +1333,7 @@ landed". The second is the worse of the two because it passes.
 |---|---|---|---|
 | `node --test` | instant | none | always, before anything else |
 | `node scripts/smoke.mjs` | ~6½ min (380s on 2026-10-31; 356s the build before, so this row's old "~1 min" had gone stale well before 0.1.86) | Carton (cold pull) | **before every push** |
+| `node scripts/smoke.mjs --only <section>` | 11–34s | Carton (cold pull) | for a red proof, re-running only the section the check lives in. **Never the gate for a push:** the full run is. An unknown name or a run of zero checks fails, and the verdict says it was scoped |
 | `node scripts/gap-oracle.mjs` | ~1 min | Carton (cold pull + 20 song pages) | after any change to gap arithmetic, to the show universe in `buildIndex`, or to `gapHistory()`; it compares every Show Gap cell on 20 Carton song pages against the app's own `gapAtShow()`, and the gap history's one-entry-per-show fold (0.1.83) against the same pages grouped by show, and **SKIPs, never passes,** when Carton is unreachable. The smoke test carries a one-song spot check of the same parity |
 | `node scripts/contrast.mjs` | instant | none | when eyeballing a colour; the assertions already run in `node --test` |
 | `node scripts/deadcss.mjs` | instant | none | when a CSS rule looks inert; lists every declaration the cascade can never let win. The assertions already run in `node --test` (`tests/deadcss.test.mjs`) |
