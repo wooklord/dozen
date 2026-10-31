@@ -5062,7 +5062,7 @@ async function run() {
       else if (!cards.length) skip(`${where}: no setlist card with a key on screen today, so its sheet went unchecked`);
       else {
         const bad = cards.filter((c) => JSON.stringify(c.green) !== JSON.stringify(c.got));
-        if (bad.length) fail(`${where}: ${bad.length} of ${cards.length} card(s) open entries that are not their own, e.g. ${JSON.stringify(bad[0].got.map((x) => x[0]))} for ${JSON.stringify(bad[0].green.map((x) => x[0]))}`);
+        if (bad.length) fail(`${where}: ${bad.length} of ${cards.length} card(s) open entries that are not their own, e.g. ${firstDiff(bad[0].got, bad[0].green)}`);
         else pass(`${where}: ${cards.length} keyed card(s) each open their own entries`);
       }
     }
