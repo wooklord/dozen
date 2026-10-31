@@ -39,7 +39,7 @@ export function daysBetween(a, b) {
   return Math.round((db - da) / 86400000);
 }
 
-/** "2026-08-14" -> "Fri Aug 14, 2026" */
+/** "2026-08-14" -> "Fri, Aug 14, 2026" */
 export function formatShowDate(showdate) {
   const d = parseShowDate(showdate);
   if (!d) return showdate ?? '';

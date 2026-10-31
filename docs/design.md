@@ -1697,6 +1697,31 @@ before. Back leaving the screen rather than closing only the sheet is the accept
 **The tooltip is on `.setlist-song`, a span with `role="button"`.** So a keyboard or a mouse gets it.
 Making that span a real button is a separate change and is not this one.
 
+### Jam chart notes: the show line in the sheet (0.1.87)
+
+The ruling and its alternatives are in `docs/plan.md`, "The show line in the sheet". What was built:
+the date, then `venueLine()`, as the first thing under the `h2`, from `formatShowDate` and the show the
+sheet was opened for. What measuring it found, on all 216 charted shows with the line injected into
+real sheets before it was written:
+
+**It adds 54px, and 74.25px where the venue wraps.** The date is 21.75px and the venue line 20.25px,
+with 12px under them. The venue wraps on 18 of 216 shows at 360 and 11 at 390, to 40.5px, and never to
+a third line. Dark and light measure the same.
+
+**Under the cap the sheet grows upward, so the cards do not move on screen.** The sheet sits on the
+bottom edge: a one-entry sheet goes from 364.64px to 418.64px with its card where it was. At the 80vh
+cap (675.19px on an 844 screen, 512px on a 640 screen) the stack moves down by the same 54–74px, and
+the first card is still fully in view. The line scrolls away with the entries, as the ruling says.
+
+**The cards themselves do not change.** A show page has every entry twice, so the sheet's cards can be
+held to their twins on the page, width and height, and the smoke test does that at 360 and 390.
+
+**No new colour.** The date inherits the sheet's ink and the venue line brings its own, so there is no
+new pair to measure.
+
+**Not measured:** a real phone, and a desktop's classic scrollbars, which narrow a sheet that newly
+crosses the cap.
+
 ## Attribution
 
 Not a footer afterthought. Every show, song and venue view carries a visible link home to the

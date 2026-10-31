@@ -2,7 +2,7 @@
 
 import { el, icon, ICONS, append, openSheet } from './dom.js';
 import { parseFootnotes, setLabel, isCustomEntry, longestGap, jamNoteText } from '../data/index.js';
-import { formatShowDateShort } from '../util/dates.js';
+import { formatShowDate, formatShowDateShort } from '../util/dates.js';
 import { isPicked, togglePick } from '../scratchpad.js';
 
 import { CARTON_BASE as CARTON, SONGFISH_URL, MAPS_SEARCH_BASE } from '../config.js';
@@ -484,10 +484,22 @@ export function jamEntryCard(entry, onSong) {
   ]);
 }
 
-/** One setlist's jam chart entries in played order, from its key line. */
+/**
+ * One setlist's jam chart entries in played order, from its key line.
+ *
+ * The show line says which night this is, from any screen: the same two lines
+ * as a Home or Shows card head. Every sheet gets it, show detail's too, because
+ * setlistBlock builds this for every caller and none can leave it off.
+ */
 function openJamNotes(entries, show, onSong) {
   return openSheet('Jam chart entries', (close) =>
     el('div', null, [
+      show
+        ? el('div.sheet-show', null, [
+            el('div.sheet-show-date', { text: formatShowDate(show.showdate) }),
+            venueLine(show),
+          ])
+        : null,
       entries.map((entry) =>
         jamEntryCard(entry, (id) => {
           close();

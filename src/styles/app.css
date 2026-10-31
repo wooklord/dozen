@@ -1432,6 +1432,16 @@ button.gap-figure:active {
   margin: 0 0 var(--s-3);
 }
 
+/* The night a jam notes sheet belongs to: the date at a card head's weight, then
+   the venue line, which brings its own ink. It scrolls with the sheet. */
+.sheet-show {
+  margin: 0 0 var(--s-3);
+}
+
+.sheet-show-date {
+  font-weight: 650;
+}
+
 /* Three-state control. Full-width thirds at full tap height: usable one-handed
    in a dark room without aiming. */
 .segmented {

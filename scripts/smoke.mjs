@@ -4946,6 +4946,50 @@ async function run() {
       });
       const stray = noteRows.find((r) => isRec(r) && Number(r.isjamchart) !== 1);
 
+      // The show line, held to the raw row and never to the app's index, or a fault
+      // at ingest would agree with itself. A raw venue has to be decoded first
+      // (CLAUDE.md, "HTML entity encoding"). The table is the two entities venue
+      // names carry; a third fails as this check's gap, not as the app's fault.
+      const RAW_ENTITIES = [['&#039;', "'"], ['&amp;', '&']];
+      const ENTITY = /&[#a-z0-9]+;/i;
+      const decodeRaw = (s) => RAW_ENTITIES.reduce((t, [from, to]) => t.split(from).join(to), squeeze(s));
+      const wantVenue = (r) => {
+        const place = [r.city, r.state, r.country].map(decodeRaw).filter(Boolean)
+          .filter((p, _, all) => !(p === 'USA' && all.length > 1)).join(', ');
+        return place ? `${decodeRaw(r.venuename)} · ${place}` : decodeRaw(r.venuename);
+      };
+      // In the page, for the page's locale. The showdate is split here rather than
+      // parsed, for the reason parseShowDate gives.
+      const wantDate = (showdate) => {
+        const [y, m, d] = String(showdate).split('-').map(Number);
+        return evaluate(`new Date(${y}, ${m - 1}, ${d}).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })`);
+      };
+      // Each comparison reports on its own line, so one fault shows which of them saw
+      // it. Position is its own comparison because a line in the wrong place still
+      // has the right words.
+      const READ_HEAD = `(() => {
+        const s = document.querySelector('.sheet');
+        const h = s && s.querySelector('.sheet-show');
+        if (!h) return null;
+        return {
+          date: (h.querySelector('.sheet-show-date') || { textContent: null }).textContent,
+          venue: (h.querySelector('.venue-line') || { textContent: null }).textContent,
+          first: s.querySelector('h2').nextElementSibling?.firstElementChild === h,
+        };
+      })()`;
+      const checkHead = async (tag, row, head) => {
+        if (!head) { fail(`${tag}: the sheet has no show line`); return; }
+        const venue = wantVenue(row);
+        const unread = venue.match(ENTITY);
+        if (unread) { fail(`${tag}: the raw row's venue holds ${unread[0]}, an entity this check cannot decode`); return; }
+        const date = await wantDate(row.showdate);
+        let ok = true;
+        if (head.date !== date) { ok = false; fail(`${tag}: the show line's date reads ${JSON.stringify(head.date)}, the raw row gives ${JSON.stringify(date)}`); }
+        if (head.venue !== venue) { ok = false; fail(`${tag}: the show line's venue reads ${JSON.stringify(head.venue)}, the raw row gives ${JSON.stringify(venue)}`); }
+        if (!head.first) { ok = false; fail(`${tag}: the show line is not the first thing under the heading`); }
+        if (ok) pass(`${tag}: the show line reads ${date}, ${venue}, above the entries`);
+      };
+
       const READ_SHOW = `(() => {
         const songs = [...document.querySelectorAll('.setlist-flow .setlist-song')];
         return {
@@ -4962,6 +5006,7 @@ async function run() {
         if (!s) return null;
         return {
           heading: s.querySelector('h2').textContent,
+          head: ${READ_HEAD},
           entries: [...s.querySelectorAll('.jam-card')].map((c) => ({
             name: c.querySelector('.jam-card-song').textContent,
             note: (c.querySelector('.jam-card-note') || { textContent: null }).textContent,
@@ -5015,6 +5060,7 @@ async function run() {
         if (sheet.heading !== 'Jam chart entries') fail(`${tag}: the sheet is headed ${JSON.stringify(sheet.heading)}`);
         else if (d) fail(`${tag}: the sheet, ${d}`);
         else pass(`${tag}: the sheet lists ${want.length} entries, each with its own note, in played order`);
+        await checkHead(tag, rows[0], sheet.head);
         const wantLink = `https://thecarton.net/setlists/${rows[0].permalink}`;
         if (sheet.link !== wantLink) fail(`${tag}: the sheet links to ${sheet.link}, not ${wantLink}`);
         if (!sheet.written) fail(`${tag}: the sheet does not say its notes are as written on The Carton`);
@@ -5104,8 +5150,43 @@ async function run() {
           else pass(`song ${bothSong[0]}: ${want.filter((x) => x.endsWith(' (Recommended)')).length} of ${want.length} entries read "(Recommended)", the flagged ones`);
         }
 
-        // Each card's key opens THAT card's entries. A sheet built from the first
-        // card, or from any one show, fails on the second card.
+        // The show lines most likely to read wrong, picked from the raw table so they
+        // follow the data: an entity in the name, a place abroad, no state or country
+        // at all, and the longest line, the one that wraps.
+        const firstRows = newestFirst.map(([id, rows]) => [id, rows[0]]);
+        const hardShows = [
+          ['an encoded venue name', firstRows.find(([, r]) => ENTITY.test(r.venuename))],
+          ['a show abroad', firstRows.find(([, r]) => squeeze(r.country) && squeeze(r.country) !== 'USA')],
+          ['no state or country', firstRows.find(([, r]) => !squeeze(r.state) && !squeeze(r.country))],
+          ['the longest venue line', [...firstRows].sort((a, b) => wantVenue(b[1]).length - wantVenue(a[1]).length)[0]],
+        ];
+        for (const [what, found] of hardShows) {
+          if (!found) { skip(`jam notes: no charted show has ${what} today, so that show line went unchecked`); continue; }
+          await evaluate(`location.hash = '#/show/${found[0]}';`);
+          await sleep(1100);
+          if (!(await pressKey())) { fail(`${what}: no key line to press`); continue; }
+          await checkHead(`${what}, show ${found[0]}`, found[1], await evaluate(READ_HEAD));
+          await evaluate(closeAnySheet);
+          await sleep(150);
+        }
+
+        // A card names no show, and two shows can share a date and a venue, so a card
+        // is found in the raw table by the titles it prints, every one, in order.
+        const nightRows = new Map();
+        for (const r of noteRows) {
+          const id = Number(r.show_id);
+          if (!nightRows.has(id)) nightRows.set(id, []);
+          nightRows.get(id).push(r);
+        }
+        const showsPrinting = new Map();
+        for (const [id, rows] of nightRows) {
+          rows.sort(played);
+          const key = rows.map((r) => squeeze(r.songname)).join('|');
+          showsPrinting.set(key, [...(showsPrinting.get(key) || []), id]);
+        }
+
+        // Each card's key opens THAT card's entries, under THAT card's show. A sheet
+        // built from the first card, or from any one show, fails on the second card.
         await setShowsView('detail');
         for (const [where, hash] of [['Home', '#/home'], ['Shows', '#/shows']]) {
           await evaluate(`location.hash = ${JSON.stringify(hash)};`);
@@ -5114,10 +5195,12 @@ async function run() {
             const out = [];
             for (const c of [...document.querySelectorAll('.screen .card')].filter((x) => x.querySelector('li.jam-key')).slice(0, 8)) {
               const green = [...c.querySelectorAll('.setlist-song[data-jam="true"]')].map((s) => [s.textContent, s.getAttribute('title')]);
+              const titles = [...c.querySelectorAll('.setlist-flow .setlist-song')].map((s) => s.textContent);
               c.querySelector('li.jam-key button').click();
               const got = [...document.querySelectorAll('.sheet .jam-card')].map((x) => [x.querySelector('.jam-card-song').textContent, (x.querySelector('.jam-card-note') || { textContent: null }).textContent]);
+              const head = ${READ_HEAD};
               for (const b of document.querySelectorAll('.sheet-backdrop')) b.click();
-              out.push({ green, got });
+              out.push({ green, got, titles, head });
             }
             return out;
           })()`);
@@ -5127,6 +5210,13 @@ async function run() {
             const bad = cards.filter((c) => JSON.stringify(c.green) !== JSON.stringify(c.got));
             if (bad.length) fail(`${where}: ${bad.length} of ${cards.length} card(s) open entries that are not their own, e.g. ${firstDiff(bad[0].got, bad[0].green)}`);
             else pass(`${where}: ${cards.length} keyed card(s) each open their own entries`);
+            for (const [i, c] of cards.entries()) {
+              const tag = `${where}, card ${i + 1}`;
+              const ids = showsPrinting.get(c.titles.join('|')) || [];
+              if (!ids.length) fail(`${tag}: its ${c.titles.length} titles match no show in the raw table, so its show line went unchecked`);
+              else if (ids.length > 1) skip(`${tag}: its titles match ${ids.length} shows (${ids.join(', ')}), so its show line went unchecked`);
+              else await checkHead(tag, nightRows.get(ids[0])[0], c.head);
+            }
           }
         }
 
@@ -5177,6 +5267,25 @@ async function run() {
             else if (stolen.length) fail(`${tag}: the key's target takes taps meant for "${stolen[0].stolen[0]}"`);
             else if (tall.length) fail(`${tag}: the key row itself is ${tall[0].rowHeight}px, in the flow rather than an overlay`);
             else pass(`${tag}: ${t.length} key(s), target ${t[0].declared}px declared and ${Math.min(...t[0].columns)} sampled across the row, the row itself ${t[0].rowHeight}px, no neighbour's taps taken`);
+
+            // A show page has each entry twice, so the sheet's card can be held to its
+            // twin: the show line above the cards adds a block and changes none of them.
+            if (where === 'show detail') {
+              const twins = await evaluate(`(() => {
+                const sizes = (sel) => [...document.querySelectorAll(sel)].map((c) => {
+                  const r = c.getBoundingClientRect();
+                  return { w: Math.round(r.width * 100) / 100, h: Math.round(r.height * 100) / 100 };
+                });
+                document.querySelector('.screen li.jam-key button').click();
+                const out = { sheet: sizes('.sheet .jam-card'), page: sizes('.screen .jam-card') };
+                for (const b of document.querySelectorAll('.sheet-backdrop')) b.click();
+                return out;
+              })()`);
+              const d = firstDiff(twins.sheet, twins.page);
+              if (!twins.page.length) fail(`${tag}: the page has no jam cards, so the sheet's had nothing to match`);
+              else if (d) fail(`${tag}: a sheet card is not the size of its twin on the page, ${d}`);
+              else pass(`${tag}: ${twins.page.length} sheet card(s) the size of their twins on the page`);
+            }
           }
         }
         await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
