@@ -1413,6 +1413,12 @@ button.gap-figure:active {
   margin: 0 auto;
 }
 
+/* It takes focus so a keyboard or a screen reader starts inside it. It is the
+   container and not a control, so it wears no ring. */
+.sheet:focus {
+  outline: none;
+}
+
 .sheet-grip {
   width: 36px;
   height: 4px;

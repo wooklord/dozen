@@ -127,19 +127,53 @@ export function debounce(fn, ms = 180) {
   };
 }
 
-/** Bottom sheet. Reachable, and it doesn't require precise aiming. */
+// Every sheet that is open, the topmost last. A footnote's sheet can open the gap
+// explainer's on top of it, and Escape closes one at a time.
+const openSheets = [];
+let sheetCount = 0;
+
+/**
+ * Bottom sheet. Reachable, and it doesn't require precise aiming.
+ *
+ * It is named by its heading, takes focus when it opens and hands it back when
+ * it closes, closes on Escape, and closes when the hash changes. Before 0.1.86
+ * it did none of these, and Back changed the screen underneath an open sheet.
+ *
+ * Back still LEAVES the screen rather than closing only the sheet. That is a
+ * known limit, accepted for now: it needs a history entry, deferred over the
+ * clash with the history.state Gap history keeps (docs/plan.md, Jam chart notes).
+ */
 export function openSheet(title, buildBody) {
+  const opener = document.activeElement;
+  const titleId = `sheet-title-${++sheetCount}`;
   const backdrop = el('div.sheet-backdrop', { onclick: close });
-  const sheet = el('div.sheet', { role: 'dialog', 'aria-modal': 'true' }, [
-    el('div.sheet-grip'),
-    el('h2', { text: title }),
-  ]);
+  const sheet = el(
+    'div.sheet',
+    { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId, tabindex: '-1' },
+    [el('div.sheet-grip'), el(`h2#${titleId}`, { text: title })],
+  );
   append(sheet, buildBody(close));
   document.body.append(backdrop, sheet);
+  openSheets.push(sheet);
+  document.addEventListener('keydown', onKeydown);
+  window.addEventListener('hashchange', close);
+  sheet.focus({ preventScroll: true });
 
+  function onKeydown(e) {
+    if (e.key === 'Escape' && openSheets[openSheets.length - 1] === sheet) close();
+  }
+
+  // Safe to call twice: a button in the sheet can close it and then navigate,
+  // and the hash change arrives afterwards. The opener is gone by then if the
+  // screen was replaced, which is why it is checked.
   function close() {
+    if (!sheet.isConnected) return;
+    document.removeEventListener('keydown', onKeydown);
+    window.removeEventListener('hashchange', close);
+    openSheets.splice(openSheets.indexOf(sheet), 1);
     backdrop.remove();
     sheet.remove();
+    if (opener?.isConnected) opener.focus({ preventScroll: true });
   }
   return close;
 }
