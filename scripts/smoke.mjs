@@ -4842,6 +4842,552 @@ async function run() {
   await evaluate(`(() => { const b = document.querySelector('.sheet-close, .scrim'); if (b) b.click(); })()`);
   await sleep(500);
 
+  // --- Jam chart notes (0.1.86) ----------------------------------------------
+  //
+  // Every note is held to the raw row pulled here, never to the app's index: the
+  // index built the sheet, so comparing the two is a value against itself. The
+  // shows are chosen by what they can tell apart, not hardcoded: one mixing
+  // recommended entries with others, which fails on a suffix applied to all or
+  // to none; one charting a song twice in a night, which fails on any key that
+  // loses the position; and the show holding a recommended row that is not a jam
+  // row. Network-dependent, so an unreachable Carton SKIPS the section.
+  console.log('\njam chart notes:');
+  let noteRows = null;
+  let noteTable = null;
+  try {
+    const [s, j] = await Promise.all([
+      fetch('https://thecarton.net/api/v2/setlists.json?limit=20000'),
+      fetch('https://thecarton.net/api/v2/jamcharts.json?limit=20000'),
+    ]);
+    noteRows = (await s.json()).data;
+    noteTable = (await j.json()).data;
+  } catch (err) {
+    skip(`jam chart notes not checked: The Carton's tables could not be read (${err.message})`);
+  }
+  if (noteRows && noteTable) {
+    const squeeze = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+    const isRec = (r) => Number(r.isrecommended) === 1;
+    const SET_ORDER = ['1', '2', '3', 'e', 'e2'];
+    const played = (a, b) =>
+      SET_ORDER.indexOf(String(a.setnumber).toLowerCase()) - SET_ORDER.indexOf(String(b.setnumber).toLowerCase()) ||
+      Number(a.position) - Number(b.position);
+    const wordOn = (note, flagged) => (note ? (flagged ? `${note} (Recommended)` : note) : null);
+    const wantOf = (r) => ({ name: squeeze(r.songname), note: wordOn(squeeze(r.jamchart_notes), isRec(r)) });
+    const firstDiff = (got, want) => {
+      if (got.length !== want.length) return `${got.length} entries, expected ${want.length}`;
+      const i = got.findIndex((g, n) => JSON.stringify(g) !== JSON.stringify(want[n]));
+      return i < 0 ? null : `entry ${i + 1}: ${JSON.stringify(got[i])}, expected ${JSON.stringify(want[i])}`;
+    };
+
+    const byShow = new Map();
+    for (const r of noteRows) {
+      if (Number(r.isjamchart) !== 1) continue;
+      const id = Number(r.show_id);
+      if (!byShow.has(id)) byShow.set(id, []);
+      byShow.get(id).push(r);
+    }
+    for (const rows of byShow.values()) rows.sort(played);
+    const newestFirst = [...byShow].sort((a, b) => b[1][0].showdate.localeCompare(a[1][0].showdate));
+
+    const mixed = newestFirst.find(([, rows]) => rows.some(isRec) && rows.some((r) => !isRec(r)));
+    const twice = newestFirst.find(([, rows]) => {
+      const seen = new Map();
+      for (const r of rows) {
+        const note = seen.get(Number(r.song_id));
+        if (note !== undefined && note !== squeeze(r.jamchart_notes)) return true;
+        seen.set(Number(r.song_id), squeeze(r.jamchart_notes));
+      }
+      return false;
+    });
+    const stray = noteRows.find((r) => isRec(r) && Number(r.isjamchart) !== 1);
+
+    const READ_SHOW = `(() => {
+      const songs = [...document.querySelectorAll('.setlist-flow .setlist-song')];
+      return {
+        green: songs.filter((s) => s.dataset.jam === 'true').map((s) => ({ name: s.textContent, title: s.getAttribute('title') })),
+        plainTitled: songs.filter((s) => s.dataset.jam !== 'true' && s.hasAttribute('title')).map((s) => s.textContent),
+        cards: [...document.querySelectorAll('.screen .jam-card')].map((c) => ({
+          name: c.querySelector('.jam-card-song').textContent,
+          note: (c.querySelector('.jam-card-note') || { textContent: null }).textContent,
+        })),
+      };
+    })()`;
+    const READ_SHEET = `(() => {
+      const s = document.querySelector('.sheet');
+      if (!s) return null;
+      return {
+        heading: s.querySelector('h2').textContent,
+        entries: [...s.querySelectorAll('.jam-card')].map((c) => ({
+          name: c.querySelector('.jam-card-song').textContent,
+          note: (c.querySelector('.jam-card-note') || { textContent: null }).textContent,
+        })),
+        link: (s.querySelector('.carton-link') || {}).href || null,
+        written: s.textContent.includes('Shown exactly as written on The Carton.'),
+      };
+    })()`;
+    const closeAnySheet = `(() => { for (const b of [...document.querySelectorAll('.sheet-backdrop')].reverse()) b.click(); })()`;
+    const pressAt = async (x, y) => {
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+    };
+    const pressEscape = async () => {
+      await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
+    };
+
+    // A real press at the far end of the row and below its box: only the row's
+    // hit region is there, so a key that is merely a button would not open.
+    const pressKey = async () => {
+      const at = await evaluate(`(() => {
+        const li = document.querySelector('.screen li.jam-key');
+        if (!li) return null;
+        li.scrollIntoView({ block: 'center', behavior: 'instant' });
+        const r = li.getBoundingClientRect();
+        return { x: r.right - 3, y: r.bottom + 2 };
+      })()`);
+      if (at) await pressAt(at.x, at.y);
+      await sleep(150);
+      return Boolean(at);
+    };
+
+    const checkShow = async (tag, id, rows) => {
+      const want = rows.map(wantOf);
+      await evaluate(`location.hash = '#/show/${id}';`);
+      await sleep(1100);
+      const seen = await evaluate(READ_SHOW);
+      let d = firstDiff(seen.green, want.map((w) => ({ name: w.name, title: w.note })));
+      if (d) fail(`${tag}: a green title's own title attribute, ${d}`);
+      else pass(`${tag}: ${want.length} green title(s) each carry their own note as title`);
+      if (seen.plainTitled.length) fail(`${tag}: ${seen.plainTitled.length} title(s) not on the jam chart carry a title, e.g. ${seen.plainTitled[0]}`);
+      d = firstDiff(seen.cards, want);
+      if (d) fail(`${tag}: show detail's cards, ${d}`);
+      else pass(`${tag}: show detail's cards read The Carton's notes, in played order`);
+
+      if (!(await pressKey())) { fail(`${tag}: no key line to press`); return; }
+      const sheet = await evaluate(READ_SHEET);
+      if (!sheet) { fail(`${tag}: a press on the key row opened no sheet`); return; }
+      d = firstDiff(sheet.entries, want);
+      if (sheet.heading !== 'Jam chart entries') fail(`${tag}: the sheet is headed ${JSON.stringify(sheet.heading)}`);
+      else if (d) fail(`${tag}: the sheet, ${d}`);
+      else pass(`${tag}: the sheet lists ${want.length} entries, each with its own note, in played order`);
+      const wantLink = `https://thecarton.net/setlists/${rows[0].permalink}`;
+      if (sheet.link !== wantLink) fail(`${tag}: the sheet links to ${sheet.link}, not ${wantLink}`);
+      if (!sheet.written) fail(`${tag}: the sheet does not say its notes are as written on The Carton`);
+
+      const last = rows[rows.length - 1];
+      await evaluate(`[...document.querySelectorAll('.sheet .jam-card-song')].pop().click()`);
+      await sleep(700);
+      const went = await evaluate(`({ hash: location.hash, sheets: document.querySelectorAll('.sheet, .sheet-backdrop').length })`);
+      if (went.hash !== `#/song/${Number(last.song_id)}` || went.sheets) fail(`${tag}: tapping the last entry's title reached ${went.hash} with ${went.sheets} sheet part(s) left`);
+      else pass(`${tag}: a title in the sheet closes it and opens the song`);
+    };
+
+    if (!mixed) fail('jam notes: no show mixes recommended entries with others, so the word went unchecked');
+    else {
+      const flaggedHere = mixed[1].filter(isRec).length;
+      await checkShow(`${mixed[1][0].showdate}, ${flaggedHere} of ${mixed[1].length} recommended`, mixed[0], mixed[1]);
+    }
+    if (!twice) fail('jam notes: no show charts a song twice with two notes, so the position went unchecked');
+    else await checkShow(`${twice[1][0].showdate}, a song charted twice`, twice[0], twice[1]);
+
+    if (!stray) skip('jam notes: no recommended row outside the jam chart any more, so that case went unchecked');
+    else {
+      const id = Number(stray.show_id);
+      const rows = byShow.get(id) || [];
+      if (rows.length) await checkShow(`${stray.showdate}, holding the non-jam recommended rows`, id, rows);
+      // Back on the show either way: checkShow finishes on a song.
+      await evaluate(`location.hash = '#/show/${id}';`);
+      await sleep(1100);
+      // By place in the played order, not by name: a song can be played twice in
+      // a night, and a name would find the other performance as well.
+      const allRows = noteRows.filter((r) => Number(r.show_id) === id).sort(played);
+      const places = allRows.flatMap((r, i) => (isRec(r) && Number(r.isjamchart) !== 1 ? [{ i, name: squeeze(r.songname) }] : []));
+      const r = await evaluate(`(() => {
+        const songs = [...document.querySelectorAll('.setlist-flow .setlist-song')];
+        const places = ${JSON.stringify(places)};
+        return {
+          total: songs.length,
+          misplaced: places.filter((p) => !songs[p.i] || songs[p.i].textContent !== p.name).map((p) => p.name),
+          marked: places.filter((p) => songs[p.i] && (songs[p.i].dataset.jam === 'true' || songs[p.i].hasAttribute('title'))).map((p) => p.name),
+          word: document.querySelector('.screen').textContent.includes('(Recommended)'),
+        };
+      })()`);
+      const wordWanted = rows.some(isRec);
+      if (r.total !== allRows.length || r.misplaced.length) fail(`jam notes: ${stray.showdate} renders ${r.total} titles against ${allRows.length} rows, and ${r.misplaced.join(', ') || 'none'} out of place`);
+      else if (r.marked.length) fail(`jam notes: ${r.marked.join(', ')} recommended and not charted, but marked as an entry`);
+      else if (r.word !== wordWanted) fail(`jam notes: ${stray.showdate}: "(Recommended)" on screen ${r.word}, wanted ${wordWanted} from its jam rows alone`);
+      else pass(`${stray.showdate}: ${places.map((p) => p.name).join(', ')} recommended and not charted, shown plain with no note`);
+    }
+
+    // Song detail's own cards, from the other table.
+    const songGroups = new Map();
+    for (const j of noteTable) {
+      const id = Number(j.song_id);
+      if (!songGroups.has(id)) songGroups.set(id, []);
+      songGroups.get(id).push(j);
+    }
+    const bothSong = [...songGroups].find(([, xs]) => xs.some(isRec) && xs.some((x) => !isRec(x)));
+    if (!bothSong) fail('jam notes: no song mixes recommended entries with others');
+    else {
+      await evaluate(`location.hash = '#/song/${bothSong[0]}';`);
+      await sleep(1100);
+      const got = await evaluate(`(() => {
+        const sec = [...document.querySelectorAll('.screen .section')].find((s) => s.textContent.trim().startsWith('Jam chart entries'));
+        return sec ? [...sec.querySelectorAll('.card > p')].map((p) => p.textContent) : null;
+      })()`);
+      const want = bothSong[1].map((j) => wordOn(squeeze(j.jamchartnote), isRec(j))).sort();
+      const d = got ? firstDiff([...got].sort(), want) : 'no section';
+      if (d) fail(`jam notes: song ${bothSong[0]}'s entries, ${d}`);
+      else pass(`song ${bothSong[0]}: ${want.filter((x) => x.endsWith(' (Recommended)')).length} of ${want.length} entries read "(Recommended)", the flagged ones`);
+    }
+
+    // Each card's key opens THAT card's entries. A sheet built from the first
+    // card, or from any one show, fails on the second card.
+    await setShowsView('detail');
+    for (const [where, hash] of [['Home', '#/home'], ['Shows', '#/shows']]) {
+      await evaluate(`location.hash = ${JSON.stringify(hash)};`);
+      await sleep(1600);
+      const cards = await evaluate(`(() => {
+        const out = [];
+        for (const c of [...document.querySelectorAll('.screen .card')].filter((x) => x.querySelector('li.jam-key')).slice(0, 8)) {
+          const green = [...c.querySelectorAll('.setlist-song[data-jam="true"]')].map((s) => [s.textContent, s.getAttribute('title')]);
+          c.querySelector('li.jam-key button').click();
+          const got = [...document.querySelectorAll('.sheet .jam-card')].map((x) => [x.querySelector('.jam-card-song').textContent, (x.querySelector('.jam-card-note') || { textContent: null }).textContent]);
+          for (const b of document.querySelectorAll('.sheet-backdrop')) b.click();
+          out.push({ green, got });
+        }
+        return out;
+      })()`);
+      if (!cards) fail(`${where}: reading the keyed cards threw`);
+      else if (!cards.length) skip(`${where}: no setlist card with a key on screen today, so its sheet went unchecked`);
+      else {
+        const bad = cards.filter((c) => JSON.stringify(c.green) !== JSON.stringify(c.got));
+        if (bad.length) fail(`${where}: ${bad.length} of ${cards.length} card(s) open entries that are not their own, e.g. ${JSON.stringify(bad[0].got.map((x) => x[0]))} for ${JSON.stringify(bad[0].green.map((x) => x[0]))}`);
+        else pass(`${where}: ${cards.length} keyed card(s) each open their own entries`);
+      }
+    }
+
+    // The target, by hit test: a column walked pixel by pixel at the row's two
+    // ends and its middle, not the pseudo-element's declared height. And what it
+    // must not take: every other control nearby keeps its own centre, and a
+    // card's button keeps the top of its own overhang.
+    for (const w of [360, 390]) {
+      await send('Emulation.setDeviceMetricsOverride', { width: w, height: 844, deviceScaleFactor: 2, mobile: true });
+      for (const [where, hash] of [['Home', '#/home'], ['show detail', `#/show/${mixed ? mixed[0] : ''}`]]) {
+        await evaluate(`location.hash = ${JSON.stringify(hash)};`);
+        await sleep(1300);
+        const t = await evaluate(`(() => {
+          const out = [];
+          for (const li of document.querySelectorAll('.screen li.jam-key')) {
+            li.scrollIntoView({ block: 'center', behavior: 'instant' });
+            const box = li.getBoundingClientRect();
+            const btn = li.querySelector('button');
+            const isKey = (x, y) => { const n = document.elementFromPoint(x, y); return !!(n && n.closest('button') === btn); };
+            const reach = (x) => { let px = 0; for (let y = Math.floor(box.top) - 40; y <= box.bottom + 40; y += 1) if (isKey(x, y)) px += 1; return px; };
+            const columns = [box.left + 1, box.left + box.width / 2, box.right - 1].map(reach);
+            const stolen = [];
+            const card = li.closest('.card');
+            for (const n of card.querySelectorAll('.setlist-song, button.fn-marker, .card-actions .btn')) {
+              for (const r of n.getClientRects()) {
+                if (r.bottom < box.top - 60 || r.top > box.bottom + 60) continue;
+                const points = [[r.left + r.width / 2, r.top + r.height / 2]];
+                if (n.matches('.btn')) points.push([r.left + r.width / 2, r.top - 3]);
+                for (const [x, y] of points) {
+                  const hit = document.elementFromPoint(x, y);
+                  if (hit && hit.closest('button') === btn) stolen.push(n.textContent.trim());
+                }
+              }
+            }
+            out.push({ rowHeight: box.height, declared: btn ? parseFloat(getComputedStyle(btn, '::after').height) || 0 : 0, columns, stolen, isButton: !!btn && btn.tagName === 'BUTTON' && btn.type === 'button', popup: btn ? btn.getAttribute('aria-haspopup') : null });
+          }
+          return out;
+        })()`);
+        if (!t || !t.length) { skip(`${where} at ${w}: no key line on screen, so its target went unmeasured`); continue; }
+        const tag = `${where} at ${w}`;
+        // Both: the walk samples whole pixels and can read one over, and a declared
+        // height means nothing if something on top of it wins the taps.
+        const short = t.filter((x) => Math.min(...x.columns) < 44 || x.declared < 44);
+        const stolen = t.filter((x) => x.stolen.length);
+        const tall = t.filter((x) => x.rowHeight >= 44);
+        if (t.some((x) => !x.isButton || x.popup !== 'dialog')) fail(`${tag}: the key line is not a real button opening a dialog`);
+        if (short.length) fail(`${tag}: ${short.length} of ${t.length} key(s) under the 44px floor, declared ${short[0].declared}px, columns ${short[0].columns.join(' / ')}px`);
+        else if (stolen.length) fail(`${tag}: the key's target takes taps meant for "${stolen[0].stolen[0]}"`);
+        else if (tall.length) fail(`${tag}: the key row itself is ${tall[0].rowHeight}px, in the flow rather than an overlay`);
+        else pass(`${tag}: ${t.length} key(s), target ${t[0].declared}px declared and ${Math.min(...t[0].columns)} sampled across the row, the row itself ${t[0].rowHeight}px, no neighbour's taps taken`);
+      }
+    }
+    await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+
+    // --- The sheet itself, across a footnote's and the notes' --------------------
+    //
+    // Escape is a real key event and Back a real history step: a synthetic
+    // dispatch tells nothing about what a person's key does. Focus is compared by
+    // node identity, since "something has focus" is also what body gives you.
+    console.log('\nthe sheet: name, focus, Escape, Back:');
+    const quoting = newestFirst.find(([id]) =>
+      noteRows.some((r) => Number(r.show_id) === id && /LTP|show gap/i.test(`${r.footnote} ${r.footnotes}`)));
+    if (!quoting) fail('sheet: no charted show has a footnote quoting a gap, so the stacked sheet went unchecked');
+    else {
+      const showHash = `#/show/${quoting[0]}`;
+      const footnoteOpener = `(() => {
+        const items = [...document.querySelectorAll('.screen .fn-list li:not(.jam-key)')];
+        const i = items.findIndex((li) => /LTP|show gap/i.test(li.textContent));
+        return i < 0 ? null : [...document.querySelectorAll('.screen button.fn-marker')].find((b) => b.textContent === String(i + 1));
+      })()`;
+      for (const [tag, opener, heading] of [
+        ['a footnote', footnoteOpener, 'Footnote'],
+        ['the notes', `document.querySelector('.screen li.jam-key button')`, 'Jam chart entries'],
+      ]) {
+        const open = () => evaluate(`(() => {
+          const o = ${opener};
+          if (!o) return null;
+          window.__sheetOpener = o;
+          o.focus();
+          o.click();
+          const s = document.querySelector('.sheet');
+          if (!s) return { opened: false };
+          const label = document.getElementById(s.getAttribute('aria-labelledby'));
+          return {
+            opened: true,
+            role: s.getAttribute('role'),
+            modal: s.getAttribute('aria-modal'),
+            named: !!label && label === s.querySelector('h2') && label.textContent === ${JSON.stringify(heading)},
+            focusIn: document.activeElement !== document.body && s.contains(document.activeElement),
+          };
+        })()`);
+        const after = () => evaluate(`({
+          sheets: document.querySelectorAll('.sheet').length,
+          backdrops: document.querySelectorAll('.sheet-backdrop').length,
+          focusBack: document.activeElement === window.__sheetOpener,
+          hash: location.hash,
+        })`);
+        await evaluate(`location.hash = '#/jams';`);
+        await sleep(700);
+        await evaluate(`location.hash = ${JSON.stringify(showHash)};`);
+        await sleep(1100);
+
+        const o = await open();
+        if (!o || !o.opened) { fail(`sheet, ${tag}: did not open (${JSON.stringify(o)})`); continue; }
+        if (o.role !== 'dialog' || o.modal !== 'true') fail(`sheet, ${tag}: role ${o.role}, aria-modal ${o.modal}`);
+        if (!o.named) fail(`sheet, ${tag}: not named by its own heading "${heading}"`);
+        else pass(`${tag}: named by its heading "${heading}"`);
+        if (!o.focusIn) fail(`sheet, ${tag}: focus stayed outside the sheet when it opened`);
+        else pass(`${tag}: focus moves into the sheet`);
+
+        await pressEscape();
+        await sleep(150);
+        let a = await after();
+        if (a.sheets || a.backdrops) fail(`sheet, ${tag}: Escape left ${a.sheets} sheet(s) and ${a.backdrops} backdrop(s)`);
+        else pass(`${tag}: Escape closes it`);
+        if (!a.focusBack) fail(`sheet, ${tag}: closing with Escape did not hand focus back to the control that opened it`);
+        else pass(`${tag}: focus returns to the control that opened it`);
+
+        await open();
+        await evaluate(`document.querySelector('.sheet-backdrop').click()`);
+        await sleep(100);
+        a = await after();
+        if (a.sheets || a.backdrops || !a.focusBack) fail(`sheet, ${tag}: the backdrop left ${a.sheets} sheet(s), focus back ${a.focusBack}`);
+        else pass(`${tag}: the backdrop closes it, focus back too`);
+
+        // The audit's failure: Back with a sheet open changed the screen under it.
+        // Back leaving the screen is the accepted limit (docs/plan.md), so this
+        // asserts exactly that, and that nothing is left floating on the new one.
+        await open();
+        await evaluate(`history.back()`);
+        await sleep(900);
+        a = await after();
+        const onJams = await evaluate(`!!document.querySelector('.jam-count')`);
+        if (a.hash !== '#/jams' || !onJams) fail(`sheet, ${tag}: Back reached ${a.hash}, the Jams list rendered ${onJams}`);
+        else if (a.sheets || a.backdrops) fail(`sheet, ${tag}: Back left ${a.sheets} sheet(s) open over ${a.hash}`);
+        else pass(`${tag}: Back leaves the screen and takes the sheet with it`);
+      }
+
+      // Stacked: the footnote's "How gap is counted" opens on top of it.
+      await evaluate(`location.hash = ${JSON.stringify(showHash)};`);
+      await sleep(1100);
+      const stack = await evaluate(`(() => {
+        const o = ${footnoteOpener};
+        if (!o) return null;
+        window.__sheetOpener = o;
+        o.focus();
+        o.click();
+        const link = document.querySelector('.sheet .inline-link');
+        if (!link) return { link: false };
+        window.__stackOpener = link;
+        link.focus();
+        link.click();
+        return { link: true, sheets: document.querySelectorAll('.sheet').length };
+      })()`);
+      if (!stack || !stack.link || stack.sheets !== 2) fail(`sheet: the gap explainer did not stack on a footnote (${JSON.stringify(stack)})`);
+      else {
+        await pressEscape();
+        await sleep(100);
+        const one = await evaluate(`({ headings: [...document.querySelectorAll('.sheet h2')].map((h) => h.textContent), focus: document.activeElement === window.__stackOpener })`);
+        await pressEscape();
+        await sleep(100);
+        const none = await evaluate(`({ sheets: document.querySelectorAll('.sheet, .sheet-backdrop').length, focus: document.activeElement === window.__sheetOpener })`);
+        if (one.headings.length !== 1 || one.headings[0] !== 'Footnote' || !one.focus) fail(`sheet: the first Escape on a stack left ${JSON.stringify(one)}`);
+        else if (none.sheets || !none.focus) fail(`sheet: the second Escape on a stack left ${JSON.stringify(none)}`);
+        else pass('two stacked sheets close one Escape at a time, each handing focus back');
+      }
+    }
+
+    // --- A note carrying markup, seeded into IndexedDB ----------------------------
+    //
+    // Through the real boot, into the real sheet, card and title. Three spellings
+    // and a flagged row with no note at all, on two paths: the first two come
+    // through the jamcharts table, the last two through the setlist row alone,
+    // which is where the second clean used to be.
+    //
+    // The positive control is what makes "the sentinel never fired" mean anything:
+    // the same tag, put in with innerHTML in the same page, has to fire it. index.html
+    // has no CSP today, and one that blocked inline handlers would fail this line
+    // rather than turn the whole check into a green that proves nothing.
+    console.log('\na note carrying markup:');
+    const seedShow = newestFirst.find(([, rows]) => rows.length >= 4);
+    const IDB_JS = `
+      const db = () => new Promise((res, rej) => { const q = indexedDB.open('dozen'); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+      const readKey = async (k) => { const d = await db(); try { return await new Promise((res, rej) => { const q = d.transaction('payloads').objectStore('payloads').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); } finally { d.close(); } };
+      const writeKey = async (k, v) => { const d = await db(); try { await new Promise((res, rej) => { const t = d.transaction('payloads', 'readwrite'); t.objectStore('payloads').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); } finally { d.close(); } };
+      const dropKey = async (k) => { const d = await db(); try { await new Promise((res, rej) => { const t = d.transaction('payloads', 'readwrite'); t.objectStore('payloads').delete(k); t.oncomplete = res; t.onerror = () => rej(t.error); }); } finally { d.close(); } };
+    `;
+    const rebootAt = async (hash, ready) => {
+      await evaluate(`window.__beforeReboot = true; location.hash = ${JSON.stringify(hash)};`);
+      await send('Page.reload', {});
+      for (let i = 0; i < 80; i++) {
+        await sleep(250);
+        if (await evaluate(`!window.__beforeReboot && document.readyState === 'complete' && !!(${ready})`).catch(() => false)) return true;
+      }
+      return false;
+    };
+    if (!seedShow) fail('markup: no show has four jam entries to seed');
+    else {
+      const [seedId, seedRows] = seedShow;
+      const RAW_TAG = '<img src=x onerror="window.__jamXss=1">';
+      const ONE_ENCODED = '&lt;img src=x onerror=&quot;window.__jamXss=1&quot;&gt;';
+      const TWO_ENCODED = '&amp;lt;img src=x onerror=1&amp;gt;';
+      const TWO_ONCE = '&lt;img src=x onerror=1&gt;';
+      const plan = [
+        { uniqueid: seedRows[0].uniqueid, note: RAW_TAG, table: RAW_TAG, flag: 1 },
+        { uniqueid: seedRows[1].uniqueid, note: ONE_ENCODED, table: ONE_ENCODED, flag: 0 },
+        { uniqueid: seedRows[2].uniqueid, note: TWO_ENCODED, table: null, flag: 0 },
+        { uniqueid: seedRows[3].uniqueid, note: null, table: null, flag: 1 },
+      ];
+      const wantSeeded = [`${RAW_TAG} (Recommended)`, RAW_TAG, TWO_ONCE, null];
+
+      const seeded = await evaluateAsync(`(async () => {${IDB_JS}
+        const plan = ${JSON.stringify(plan)};
+        const a = await readKey('archive.v1');
+        await writeKey('smoke-backup', a);
+        const planned = new Map(plan.map((p) => [String(p.uniqueid), p]));
+        const hit = [];
+        a.setlists = a.setlists.map((r) => {
+          const p = planned.get(String(r.uniqueid));
+          if (!p) return r;
+          hit.push(r);
+          return { ...r, jamchart_notes: p.note, isrecommended: p.flag };
+        });
+        const sameEntry = (j, r) => Number(j.showid) === Number(r.show_id) && Number(j.song_id) === Number(r.song_id)
+          && String(j.setnumber).toLowerCase() === String(r.setnumber).toLowerCase() && Number(j.position) === Number(r.position);
+        a.jamcharts = a.jamcharts.flatMap((j) => {
+          const r = hit.find((x) => sameEntry(j, x));
+          if (!r) return [j];
+          const p = planned.get(String(r.uniqueid));
+          return p.table === null ? [] : [{ ...j, jamchartnote: p.table, isrecommended: p.flag }];
+        });
+        a.fetchedAt = Date.now();
+        await writeKey('archive.v1', a);
+        return hit.length;
+      })()`);
+      if (seeded !== plan.length) fail(`markup: seeded ${seeded} of ${plan.length} rows`);
+      else if (!(await rebootAt(`#/show/${seedId}`, `document.querySelector('.screen .jam-card')`))) fail('markup: the seeded archive did not boot to show detail');
+      else {
+        const shown = await evaluate(READ_SHOW);
+        const titles = shown.green.slice(0, 4).map((g) => g.title);
+        const notes = shown.cards.slice(0, 4).map((c) => c.note);
+        await evaluate(`document.querySelector('.screen li.jam-key button').click()`);
+        await sleep(100);
+        const sheet = await evaluate(READ_SHEET);
+        const sheetNotes = sheet ? sheet.entries.slice(0, 4).map((e) => e.note) : null;
+        await sleep(500);
+        const dom = await evaluate(`({
+          imgs: document.querySelectorAll('.screen img, .sheet img').length,
+          fired: window.__jamXss,
+        })`);
+        await evaluate(closeAnySheet);
+
+        if (dom.imgs) fail(`markup: ${dom.imgs} real <img> in the DOM from a note`);
+        else pass('no <img> reached the screen or the sheet');
+        if (dom.fired !== undefined) fail(`markup: the onerror handler ran (window.__jamXss = ${dom.fired})`);
+        else pass('the onerror handler did not run');
+        for (const [tag, got] of [['the sheet', sheetNotes], ['show detail\'s cards', notes], ['the green titles\' title', titles]]) {
+          const d = got ? firstDiff(got, wantSeeded) : 'nothing to read';
+          if (d) fail(`markup: ${tag}, ${d}`);
+          else pass(`${tag}: the tag as literal text, decoded once, and a flagged row with no note shows no note`);
+        }
+        const control = await evaluateAsync(`(async () => {
+          const before = window.__jamXss;
+          const d = document.createElement('div');
+          d.innerHTML = ${JSON.stringify(RAW_TAG)};
+          document.body.append(d);
+          await new Promise((r) => setTimeout(r, 500));
+          d.remove();
+          const after = window.__jamXss;
+          delete window.__jamXss;
+          return { before, after };
+        })()`);
+        if (control.before !== undefined || control.after !== 1) fail(`markup: the positive control did not fire (before ${control.before}, after ${control.after}), so the sentinel proves nothing`);
+        else pass('positive control: the same tag through innerHTML does fire the sentinel');
+      }
+      await evaluateAsync(`(async () => {${IDB_JS}
+        const b = await readKey('smoke-backup');
+        if (b) { await writeKey('archive.v1', b); await dropKey('smoke-backup'); }
+      })()`);
+    }
+
+    // --- A phone that has fallen behind, through the real silent refresh ----------
+    //
+    // The audit's bug, end to end: a cached jamcharts table missing the newest
+    // entries, a stale archive, a real boot, and what that boot writes back. Read
+    // from IndexedDB because the refresh is silent; held to the table pulled above.
+    console.log('\na stale jamcharts table catches up:');
+    const staleSeed = await evaluateAsync(`(async () => {${IDB_JS}
+      const a = await readKey('archive.v1');
+      const newest = [...a.jamcharts].sort((x, y) => y.showdate.localeCompare(x.showdate)).slice(0, 20);
+      const gone = new Set(newest.map((j) => String(j.uniqueid)));
+      a.jamcharts = a.jamcharts.filter((j) => !gone.has(String(j.uniqueid)));
+      a.fetchedAt = Date.now() - 7 * 60 * 60 * 1000;
+      await writeKey('archive.v1', a);
+      return { kept: a.jamcharts.length, fetchedAt: a.fetchedAt, song: Number(newest[0].song_id) };
+    })()`);
+    if (!(await rebootAt('#/jams', `document.querySelector('.screen .jam-count')`))) fail('stale table: the stale archive did not boot');
+    else {
+      let fresh = null;
+      for (let i = 0; i < 80 && !fresh; i++) {
+        const now = await evaluateAsync(`(async () => {${IDB_JS}
+          const a = await readKey('archive.v1');
+          return { jamcharts: a.jamcharts.length, fetchedAt: a.fetchedAt };
+        })()`);
+        if (now && now.fetchedAt > staleSeed.fetchedAt) fresh = now;
+        else await sleep(250);
+      }
+      if (!fresh) fail('stale table: the silent refresh never wrote the archive back');
+      else if (fresh.jamcharts !== noteTable.length) fail(`stale table: ${staleSeed.kept} rows before the refresh, ${fresh.jamcharts} after, The Carton has ${noteTable.length}`);
+      else {
+        pass(`${staleSeed.kept} cached rows became ${fresh.jamcharts}, the table on The Carton`);
+        await evaluate(`location.hash = '#/song/${staleSeed.song}';`);
+        await sleep(1100);
+        const song = await evaluate(`(() => {
+          const sec = [...document.querySelectorAll('.screen .section')].find((s) => s.textContent.trim().startsWith('Jam chart entries'));
+          return { cards: sec ? sec.querySelectorAll('.card').length : 0, flagged: document.querySelectorAll('.row-shell[data-jam="true"]').length };
+        })()`);
+        const want = noteTable.filter((j) => Number(j.song_id) === staleSeed.song).length;
+        if (song.cards !== want || song.flagged !== want) fail(`stale table: song ${staleSeed.song} lists ${song.cards} entries and flags ${song.flagged} performances, The Carton has ${want}`);
+        else pass(`song ${staleSeed.song}: its ${want} entries and ${want} flagged performances agree after the refresh`);
+      }
+    }
+  }
+
   // --- The ?nosw guard ------------------------------------------------------
   //
   // Checked by REGISTERING A WORKER FIRST and then confirming ?nosw tears it

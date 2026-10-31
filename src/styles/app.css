@@ -1662,6 +1662,38 @@ button.gap-figure:active {
  */
 .jam-key {
   color: var(--jam);
+  position: relative;
+}
+
+/* The line is the button that opens the notes (0.1.86), and the ROW is its
+ * target. ::after is the same technique as .btn.btn-small: a full --tap hit
+ * region, nothing added to the flow, so a card with a key is the height it always
+ * was. It is positioned against the <li> rather than the button so the bullet
+ * and the empty width of the row count too.
+ *
+ * ANCHORED TO THE ROW'S BOTTOM, NOT CENTRED. A card's Show detail button starts
+ * --s-2 below this row and its own hit region overhangs it by --s-1, so that
+ * region begins --s-1 below the row; centred, the two overlap and the button wins
+ * the overlap. The rest of the height goes upward, where the setlist ends --s-4
+ * above the row and any footnote rows between are plain text. Unlike .fn-marker
+ * this can therefore meet the floor. The smoke test hit-tests all of it per card.
+ *
+ * Underlined on press, not border-bottom as on .jam-card-song: a 1px border here
+ * would make the row a pixel taller than the footnote rows beside it. */
+.jam-key-open {
+  padding: 0;
+  text-align: left;
+}
+.jam-key-open::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(-1 * var(--s-1));
+  height: var(--tap);
+}
+.jam-key-open:active {
+  text-decoration: underline;
 }
 
 .jam-key-bullet {
@@ -1809,9 +1841,10 @@ button.gap-figure:active {
  * the setlist above, which is the whole point: the green word up there and the
  * note down here are one entry, and matching colour is what says so.
  *
- * The Carton carries these notes in a `title` tooltip on the setlist link.
- * Hover does not exist on a phone, so the note is rendered as real text
- * instead -- same data, reachable with a thumb.
+ * The Carton carries these notes in a hover tooltip on the setlist link, which
+ * on a phone takes a long press. So the note is real text here, on this section
+ * and in the sheet the setlist's key line opens, which wears these same cards.
+ * The green title's own `title` is the desktop courtesy on top of that.
  */
 /* The card itself. This class was emitted with NO RULE BEHIND IT while its
    three children all had one, and the spacing it should have carried lived in

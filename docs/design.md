@@ -204,9 +204,13 @@ flowing setlist text any box, weight or size change reflows the line and breaks 
 rhythm. The one accompanying change is the press underline, which follows `currentColor` on jam
 entries so a green word does not flash an orange underline.
 
-**The redundancy for colour-blind readers is structural, not typographic.** Every jam-highlighted
-song on a show page has a matching card in the "Jam chart entries" section directly below, in the
-same order, so the fact is never carried by hue alone.
+**The redundancy for colour-blind readers is structural, not typographic, and it is per setlist, not
+per title.** This used to say every highlighted song has a matching card below it, which was true of
+a show page and not of the Home and Shows cards, where nothing named the green titles. As of 0.1.86
+every setlist with green titles has a key line that opens those entries by name, in played order, and
+a show page has the cards as well. **In dark mode a title in the flow is still colour alone** (light
+adds weight): a per-title mark was the rejected alternative, for the reasons in "Jam chart notes
+(0.1.86)" below.
 
 ### The selected chip: a FILL is a channel that inline text does not have (0.1.59)
 
@@ -1639,6 +1643,50 @@ in it mid-screen (the user's answer 1).
 **Every `.gap-bar` is 4px**, up from 3, for the light theme where the strip read thin. At 360 every
 bar clears its row's text by 8px (9px at 3px) on Songs Coldest first, gap chart 1728657865,
 Shadow's gap history, song 49 and Jams, and the jam edge does the same.
+
+### Jam chart notes: a sheet from the key line, and `title` on green titles (0.1.86)
+
+The ruling and its alternatives are in `docs/plan.md`, "Jam chart notes". What was built, and what
+measuring it found:
+
+**The note was already on two screens, always open:** show detail's cards and song detail's. What
+had none was the other screens with green titles, on a phone, where The Carton's own tooltip takes a
+held press and can run off the screen (200×428px for a 517-character note, measured under emulation
+with its top 42px above the viewport).
+
+**There are no rows in a setlist to expand under.** It is flowing text on a 25.5px line. A median note
+adds 113px to a card at 390 (132px at 360) and the longest 188px (207px), so a note opened in the flow
+splits the sentence around it and moves everything below, which is what "Colour only" above exists to
+prevent. The sheet moves nothing.
+
+**The key line is the button, and it stays the height it was.** "jam chart entry · notes ▾" is a real
+`<button aria-haspopup="dialog">` in the row's text column; the row is 26.84px tall and its target is
+44px by `::after`, the whole width of the row, so the bullet counts. No caller can leave it off,
+because `setlistBlock` builds it. The first version centred the target like `.btn.btn-small`, and on a
+Home card that overlaps the Show detail button's own overhang by a few pixels, which the button wins.
+It is anchored to the row's bottom now, with the height going upward, where the setlist ends 16px
+above and any footnote rows between are plain text.
+
+**One source for the words.** The sheet, each green title's `title` and show detail's cards all read
+`index.jamByShow`, and each entry takes its note and its flag from the jamcharts row where there is
+one. So they agree after a refresh even for an older year, where the setlist row moves only on a
+rebuild and the table moves every time. `jamNoteText()` is the only thing that writes
+" (Recommended)", and `jamEntryCard()` is the only markup for an entry outside song detail.
+
+**`title` costs something and it stays.** It does nothing on a phone, and a screen reader may read it
+as the description of a green title, up to 512 characters plus the word. Kept because it is the one
+place the hover The Carton has is reproduced exactly; the note is on the green title, not the key.
+
+**No new colour and no green ground.** Note text is `--ink-dim` on `--surface`, the existing "jam entry
+notes" pair, 8.43:1 dark and 7.64:1 light. The key stays `--jam`. Sheet cards are the same `.jam-card`
+as show detail's, so a card sits on `--surface` inside a `--surface` sheet with its border as the edge.
+
+**`openSheet` is named, takes focus, and closes on Escape and on a hash change**, for every sheet in
+the app, not only this one. It does not trap Tab and does not lock the page's scroll; neither did it
+before. Back leaving the screen rather than closing only the sheet is the accepted limit in the ruling.
+
+**The tooltip is on `.setlist-song`, a span with `role="button"`.** So a keyboard or a mouse gets it.
+Making that span a real button is a separate change and is not this one.
 
 ## Attribution
 

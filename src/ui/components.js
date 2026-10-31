@@ -1,7 +1,7 @@
 // Shared UI pieces used across screens.
 
 import { el, icon, ICONS, append, openSheet } from './dom.js';
-import { parseFootnotes, setLabel, isCustomEntry, longestGap } from '../data/index.js';
+import { parseFootnotes, setLabel, isCustomEntry, longestGap, jamNoteText } from '../data/index.js';
 import { formatShowDateShort } from '../util/dates.js';
 import { isPicked, togglePick } from '../scratchpad.js';
 
@@ -463,6 +463,44 @@ export function openFootnote(text, index) {
 }
 
 /**
+ * One jam chart entry: its title, its set, and The Carton's note.
+ *
+ * Show detail's section and the key line's sheet both build through here, so
+ * the note and "(Recommended)" cannot read differently between them. The title
+ * opens the song, as the same title does in the setlist.
+ */
+export function jamEntryCard(entry, onSong) {
+  const note = jamNoteText(entry.note, entry.isRecommended);
+  return el('div.card.jam-card', null, [
+    el('div.jam-card-head', null, [
+      el('button.jam-card-song', {
+        type: 'button',
+        text: entry.songname,
+        onclick: () => onSong(entry.song_id),
+      }),
+      el('span.badge.badge-set', { text: setLabel(entry.settype, entry.setnumber) }),
+    ]),
+    note ? el('p.jam-card-note', { text: note }) : null,
+  ]);
+}
+
+/** One setlist's jam chart entries in played order, from its key line. */
+function openJamNotes(entries, show, onSong) {
+  return openSheet('Jam chart entries', (close) =>
+    el('div', null, [
+      entries.map((entry) =>
+        jamEntryCard(entry, (id) => {
+          close();
+          onSong?.(id);
+        }),
+      ),
+      el('p.note', { style: { margin: 'var(--s-3) 0 0' }, text: 'Shown exactly as written on The Carton.' }),
+      cartonLink(showPermalink(show)),
+    ]),
+  );
+}
+
+/**
  * Render a setlist faithfully.
  *
  * Carton's notation is quoted, not rewritten: "->" and ">" are DIFFERENT marks
@@ -482,17 +520,38 @@ export function openFootnote(text, index) {
  * highlight three lines further down -- one decision, not two that can
  * disagree. It is also the same flag `index.jamByShow` is built by filtering
  * on, so the key and show detail's entries section stay in step.
+ *
+ * The key is also the way to the notes (0.1.86): its line is the button that
+ * opens them, and no caller can leave that off. The sheet and each green title's
+ * `title` read `index.jamByShow`, as show detail's cards do, so the three cannot
+ * print different words for one entry.
  */
 export function setlistBlock(rows, { onSong, index } = {}) {
+  const hasJam = rows.some((r) => Number(r.isjamchart) === 1);
+  const showId = Number(rows[0]?.show_id);
+  const jams = hasJam ? index.jamByShow.get(showId) : [];
+
   // A real <li> in the footnote list rather than a block under it: as a sibling
   // it left-aligned past the footnote numbers and read as a separate note. As a
   // member it inherits the list's flex row, so the bullet lands in the marker
   // column and the words in the text column. Colour comes from --jam in CSS.
-  const hasJam = rows.some((r) => Number(r.isjamchart) === 1);
-  const jamKey = () =>
+  const keyRow = () =>
     el('li.jam-key', null, [
       el('span.jam-key-bullet', { 'aria-hidden': 'true', text: '●' }),
-      el('span', { text: 'jam chart entry' }),
+      el(
+        'button.jam-key-open',
+        {
+          type: 'button',
+          'aria-haspopup': 'dialog',
+          onclick: () => openJamNotes(jams, index.showsById.get(showId), onSong),
+        },
+        [
+          el('span', { text: 'jam chart entry' }),
+          el('span', { 'aria-hidden': 'true', text: ' · ' }),
+          el('span', { text: 'notes' }),
+          el('span', { 'aria-hidden': 'true', text: ' ▾' }),
+        ],
+      ),
     ]);
   const wrap = el('div');
   const footnotes = [];
@@ -513,12 +572,18 @@ export function setlistBlock(rows, { onSong, index } = {}) {
     const flow = el('div.setlist-flow');
     group.rows.forEach((r, i) => {
       // Carton's own flag, not a lookup: `setlists.isjamchart` and the
-      // `jamcharts` table agree exactly in live data -- 779 unique
-      // (show, song) pairs from each, zero rows flagged without an entry and
-      // zero entries without a flag. The row already carries it, so the
-      // highlight costs no join. `data-jam` is what the smoke test asserts,
+      // `jamcharts` table agree exactly in live data -- 838 unique
+      // (show, song) pairs from each on 2026-10-30, zero rows flagged without an
+      // entry and zero entries without a flag. The row already carries it, so
+      // the highlight costs no join. `data-jam` is what the smoke test asserts,
       // because a class is also what a stylesheet could set by accident.
       const isJam = Number(r.isjamchart) === 1;
+
+      // The note as a browser tooltip, for a mouse. It does nothing on a phone,
+      // which is what the key line's sheet is for. A screen reader may read it
+      // as the title's description, up to 500 characters per green title.
+      const entry = isJam ? jams.find((j) => j.uniqueid === r.uniqueid) : null;
+      const note = entry ? jamNoteText(entry.note, entry.isRecommended) : '';
 
       // A FREE-TEXT ENTRY RENDERS AS TEXT, not as a control.
       //
@@ -537,6 +602,7 @@ export function setlistBlock(rows, { onSong, index } = {}) {
         tabindex: custom ? null : '0',
         'data-jam': isJam ? 'true' : null,
         'data-custom': custom ? 'true' : null,
+        title: note || null,
         text: r.songname,
         onclick: custom ? null : () => onSong?.(Number(r.song_id)),
         onkeydown: custom
@@ -589,7 +655,7 @@ export function setlistBlock(rows, { onSong, index } = {}) {
       append(list, el('li', null, [el('span.fn-marker', { text: String(i + 1) }), el('span', { text: n })]));
     });
     // Last item in the list, after the real footnotes.
-    if (hasJam) append(list, jamKey());
+    if (hasJam) append(list, keyRow());
     append(wrap, list);
   }
 

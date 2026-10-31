@@ -3,6 +3,7 @@
 import { el, append, icon, ICONS } from '../ui/dom.js';
 import {
   setlistBlock,
+  jamEntryCard,
   attribution,
   cartonLink,
   showPermalink,
@@ -11,7 +12,7 @@ import {
   venueLine,
   venueInfoButton,
 } from '../ui/components.js';
-import { showStructure, setLabel, tourName } from '../data/index.js';
+import { showStructure, tourName } from '../data/index.js';
 import { formatShowDate } from '../util/dates.js';
 
 export function renderShow(ctx, showId) {
@@ -122,23 +123,10 @@ export function renderShow(ctx, showId) {
         el('span.badge.badge-jam', { text: String(jams.length) }),
       ),
     );
+    // Tappable to the same place the setlist title above goes, and in the same
+    // green, so the two are visibly the same entry.
     for (const j of jams) {
-      append(
-        jamSection,
-        el('div.card.jam-card', null, [
-          el('div.jam-card-head', null, [
-            // Tappable to the same place the setlist title above goes, and in
-            // the same green, so the two are visibly the same entry.
-            el('button.jam-card-song', {
-              type: 'button',
-              text: j.songname,
-              onclick: () => navigate(`#/song/${j.song_id}`),
-            }),
-            el('span.badge.badge-set', { text: setLabel(j.settype, j.setnumber) }),
-          ]),
-          j.note ? el('p.jam-card-note', { text: j.note }) : null,
-        ]),
-      );
+      append(jamSection, jamEntryCard(j, (id) => navigate(`#/song/${id}`)));
     }
     append(screen, jamSection);
   }

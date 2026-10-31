@@ -21,7 +21,7 @@ import {
   heatFor,
   titleChip,
 } from '../ui/components.js';
-import { SLOT_LABELS, SLOTS, setLabel, longestGap, gapHistory } from '../data/index.js';
+import { SLOT_LABELS, SLOTS, setLabel, longestGap, gapHistory, jamNoteText } from '../data/index.js';
 import { openGapHistory, gapStrip } from './gaphistory.js';
 import { formatShowDate, formatShowDateShort } from '../util/dates.js';
 import { isPicked, togglePick } from '../scratchpad.js';
@@ -248,7 +248,10 @@ export function renderSong(ctx, songId) {
           ]),
           venueLine(j),
           j.jamchartnote
-            ? el('p', { style: { margin: '8px 0 0', fontSize: 'var(--t-sm)' }, text: j.jamchartnote })
+            ? el('p', {
+                style: { margin: '8px 0 0', fontSize: 'var(--t-sm)' },
+                text: jamNoteText(j.jamchartnote, Number(j.isrecommended) === 1),
+              })
             : null,
           // jamcharts.permalink is the same bare filename as shows.permalink
           // and needs the /setlists/ prefix too.
