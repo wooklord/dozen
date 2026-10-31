@@ -314,14 +314,28 @@ together. Numbered variants must **not** collapse into their base name.
 user-typed input and for joining across the rare places where only a name is present — it is not
 the primary key.
 
-### HTML entity encoding is inconsistent across methods
+### HTML entity encoding varies by venue, not by table
 
-`venuename` is entity-encoded in some methods and raw in others, in the same dataset:
+`venuename` carries HTML entities on some venues and not on others, in the same table:
 
-- `shows` → `Annabel&#039;s`, `Telluride Blues &amp; Brews Festival`
-- `setlists` / `latest` → `Toad's Place` (raw)
+| Table | Rows with an encoded name | Rows with a literal `'` or `&` |
+|---|---|---|
+| `setlists` | 314 (`Garcia&#039;s Chicago`, `3rd &amp; Lindsley`) | 255 (`Toad's Place`, `Garcia's`) |
+| `shows` | 31 (`Annabel&#039;s`) | 59 (`Toad's Place`) |
 
-Decode entities once, at the data-source boundary, so nothing downstream ever sees `&#039;`.
+Measured against the live API on 2026-10-31. No venue is spelled both ways within `setlists` (0 of
+the 34 names holding a `'` or `&`). `city`, `state`, `country` and `songname` carry none in `setlists`.
+
+**Correction, 2026-10-31.** This section used to say `shows` encodes and `setlists` does not, with
+`Annabel&#039;s` and `Toad's Place` as the proof. That was wrong: those two examples differ because
+they are different venues. **The app was never affected**, because every ingest path decodes
+(`cleanDisplayText` on `venuename` in `src/data/index.js`), so the claim stood unchallenged. It came
+out while planning 0.1.87, when a check held to a raw `setlists` row read `Garcia&#039;s Chicago`.
+`docs/carton_schema.md`, `docs/plan.md` and `README.md` carried the same claim and are corrected
+with it. `latest` was not re-measured.
+
+Decode entities once, at the data-source boundary, so nothing downstream ever sees `&#039;`. **A
+check holding the app to a raw row has to decode that row too,** whichever table it came from.
 
 ---
 
@@ -851,8 +865,34 @@ checks were verified this way:
   light, `#/song/49` changed and 9 routes identical; 360, 10 identical
   (`docs/design.md`, 0.1.86, reads what moved).
 
-Do this for every new check. It costs one minute and it is the only thing that
-separates a real check from a comforting one.
+Do this for every new check. It is the only thing that separates a real check
+from a comforting one.
+
+#### How proofs are run, and how many (LOCKED 2026-10-31, the dev's pick)
+
+**The core rule stands: every new check must be seen to fail for its own reason.**
+What changes is how proofs are run and how many:
+
+- **Scoped runs.** A proof re-runs only the smoke section its check lives in. The
+  full smoke run still happens once, before the push.
+- **Scaled to risk.** Full proofs go to checks guarding security (escaping,
+  injection), data correctness (matching, decoding, caching, merges), and anything
+  that would pass silently on a mistake. Presentation-only checks get one or two
+  proofs covering their distinct comparisons. Faults that hit the same comparison
+  are not proven twice.
+- **A dropped proof is recorded as dropped, with the reason,** beside the proofs
+  that ran. Silence would read as coverage.
+
+The test for "the same comparison" is what the fault leaves true. A fault that
+leaves the text right and moves the element is not a duplicate of one that changes
+the text, however alike the two look on a list.
+
+**Why:** the smoke test grew from about 1 minute to about 6½ minutes per run, so
+0.1.86's 25 proofs took 2–3 hours. The proofs still earned their keep: the useless
+failure message, the positive control and the tap-target measurement all came out
+of that run. It is the cost that changes, not the rule. The sentence above used to
+say a proof "costs one minute", which had stopped being true well before anyone
+ran 25 of them.
 
 ### The service worker will serve you a stale shell (dev-loop hazard)
 

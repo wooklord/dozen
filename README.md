@@ -188,7 +188,8 @@ Full detail in [`docs/carton_schema.md`](docs/carton_schema.md). The ones that b
 - **A bad method or column name returns an HTML page under HTTP 200**, so `res.json()` throws.
 - **Field names differ across methods**: `showyear` vs `show_year`, `show_id` vs `showid`,
   `jamchart_notes` vs `jamchartnote`, `songname` vs `name` vs `song_name`.
-- **`venuename` is HTML-entity-encoded in `shows` but raw in `setlists`.** Decoded once at ingest.
+- **`venuename` is HTML-entity-encoded on some venues and not others, in `shows` and `setlists`
+  alike.** Decoded once at ingest.
 - **Song names use both U+2019 and U+0027 apostrophes** in the same field. Case-folding alone is
   not enough; see `tests/normalize.test.mjs`.
 - `/api/` is robots-disallowed for crawlers. This app caches aggressively, never polls, and never

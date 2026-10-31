@@ -135,7 +135,7 @@ The core table. One row per song performance. `/v2/setlists/showyear/2013.json?o
 | `slug` | string | song slug, e.g. `"yuck"` — **or the sentinel `"_custom_"`, see below** |
 | `isoriginal` | number | **1 = Eggy original, 0 = cover** |
 | `original_artist` | string | `""` when `isoriginal = 1`; the covered artist when `0` |
-| `venuename` | string | **raw here** (`"Toad's Place"`), entity-encoded in `shows` |
+| `venuename` | string | **Encoded on some venues, not others**: `"Toad's Place"`, `"Garcia&#039;s Chicago"`. See "HTML entity encoding", which corrects what this row used to say |
 | `city` / `state` / `country` | string | |
 | `timezone` | null | |
 | `isreprise` | number | 0 \| 1 |
@@ -279,7 +279,7 @@ One row per show, including **future shows**. `/v2/shows.json?order_by=showdate&
 | `artist_id` / `artist` | number / string | |
 | `showtitle` | string | |
 | `venue_id` | number | |
-| `venuename` | string | **HTML-entity-encoded here**: `"Annabel&#039;s"` |
+| `venuename` | string | **Encoded on some venues, not others**: `"Annabel&#039;s"`, `"Toad's Place"`. See "HTML entity encoding" |
 | `location` | string | `"Toronto, ON, Canada"` — also entity-encoded. **`shows` ONLY, and the UI does not use it** — see below |
 | `city` / `state` / `country` | string | |
 | `timezone` | null | |
@@ -585,8 +585,22 @@ comparing.
 
 ## HTML entity encoding
 
-Inconsistent by method. `shows` encodes (`Annabel&#039;s`, `Telluride Blues &amp; Brews Festival`);
-`setlists` and `latest` do not (`Toad's Place`). Decode once at the data-source boundary.
+**Varies by venue, not by table.** Rows whose `venuename` holds an encoded name, against rows holding
+a literal `'` or `&`, measured 2026-10-31:
+
+| Table | Encoded | Literal |
+|---|---|---|
+| `setlists` | 314 | 255 |
+| `shows` | 31 | 59 |
+
+No venue is spelled both ways within `setlists` (0 of 34). `city`, `state`, `country` and `songname`
+carry no entities in `setlists`. Decode once at the data-source boundary, and decode a raw row before
+holding the app to it.
+
+**Correction, 2026-10-31.** This section and the `venuename` rows above used to say `shows` encodes
+and `setlists` does not. That was wrong: `Annabel&#039;s` and `Toad's Place` differ because they are
+different venues, and `setlists` has `Garcia&#039;s Chicago`. Every ingest path decodes, so the app
+was unaffected. `latest` was described the same way and has not been re-measured.
 
 ## Non-JSON endpoints
 

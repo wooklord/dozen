@@ -131,7 +131,8 @@ stale or truncated index has to be diagnosable without dev tools.
 
 ### Decode once, at the boundary
 
-`venuename` is entity-encoded in `shows` (`Annabel&#039;s`) and raw in `setlists` (`Toad's Place`).
+`venuename` is entity-encoded on some venues and not others, in `shows` and `setlists` alike
+(`Annabel&#039;s`, `Garcia&#039;s Chicago`, `Toad's Place`; corrected 2026-10-31, `docs/carton_schema.md`).
 Every row is passed through a single ingest step **as it enters the index** — not at render — so
 two views can never disagree about a venue's name. The same step applies apostrophe folding for
 name matching. No view or component ever calls a decode function.
@@ -998,6 +999,28 @@ other screens that show green titles, on a phone, where The Carton's own tooltip
 said it was, and that is wrong. Measured against the live API on 2026-10-30: 93 setlist rows are
 flagged, 91 of them jam chart rows and **2 not**, both in the 2024-05-10 encore (12 Pounds of Pain
 and Boom or Bust, show 1715403557). Nothing here may assume a flagged row has a note.
+
+#### The show line in the sheet (LOCKED 2026-10-31, the dev's picks, for BUILD 0.1.87)
+
+From a Home or Shows card, the sheet gave no way to tell which night you were reading.
+
+1. **"Jam chart entries" stays the `h2`, with the show line beneath it:** the date, then the venue
+   line, the same two lines as a Home or Shows card head (`formatShowDate`, `venueLine`). The date
+   then sits at the left edge, where it sits on the card just tapped. The date inside the heading was
+   the alternative: it never wraps (268px of 328px at 360, all 216 charted shows) and saves 21.75px,
+   and it would put the night in the dialog's accessible name. The cost accepted is that the name
+   carries no date; it is next in reading order.
+2. **Show detail's sheet gets the header too, with no opt-out.** Even at the least scrolling that puts
+   the key in view, the page's date is above the sheet on 204 of 216 shows at 390×844, 173 at 360×800
+   and 47 at 360×640, dimmed by the scrim when it is there. Skipping it would take a flag through
+   `setlistBlock` or a look at the hash, and a helper a caller can opt out of is the hole `CLAUDE.md`
+   names. The cost accepted is a visible repeat on tall phones.
+3. **Tour and set structure are left out.** 54 of 216 charted shows have a tour, so a tour line would
+   change the header's height from show to show, and every entry card has its own set badge.
+4. **The header scrolls with the sheet.** Pinned, it would take 42–62px of a 512–675px sheet for good.
+5. **The 2025-04-04 same-night pair is accepted.** Two charted shows share that date and venue, so
+   their headers read the same. Their entries and Carton links differ, and one pair is not worth a
+   new field.
 
 ## Out of scope — parked
 
