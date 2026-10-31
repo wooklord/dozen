@@ -966,6 +966,36 @@ does not move when the chip appears. The alternatives put to the user were letti
 (14px for a two-line title, 33px for Rocket Man) and cutting long titles short, which the original
 constraint ruled out. One-line titles, Shadow's among them, are unaffected.
 
+### Jam chart notes (LOCKED 2026-10-31)
+
+**Status: LOCKED 2026-10-31, the dev's picks, for BUILD 0.1.86.** The audit behind it found the notes
+already render on show detail and song detail, always open. What was missing is the note on the
+other screens that show green titles, on a phone, where The Carton's own tooltip takes a long press.
+
+1. **A bottom sheet from the key line, plus `title` on green titles.** The "● jam chart entry" line
+   becomes a real button that opens one setlist's entries in played order. `title` on a green title
+   is the desktop courtesy and does nothing on a phone. A marker beside each title was the rejected
+   alternative: `.fn-marker` measures 9.6×24px and cannot grow, and 471 of the 852 jam rows already
+   carry a footnote marker there, so two tiny targets would sit side by side. The cost accepted: to
+   read one song's note you scan a list, and in dark mode a title in the flow stays colour alone.
+2. **" (Recommended)" is appended as Carton's literal word, at the end of the note.** That is how The
+   Carton's own page exposes it: the word is not in the API text, its page adds it to the tooltip.
+   **No badge, no sort, no filter, no count.** In a game about picking songs, a "Recommended" label
+   on a song row would read as this app's own tip, which the language test rejects. A row flagged
+   with no note to attach the word to shows nothing.
+3. **`jamcharts` is added to the current-year refresh.** One more request each fast refresh, at most
+   once per `ARCHIVE_TTL`. Before this the table moved only on a cold start or Rebuild everything,
+   so song detail and the Jams tab fell behind the setlist rows.
+4. **Back leaving the screen instead of closing the sheet is a KNOWN, ACCEPTED limitation for now.**
+   The sheet closes when the hash changes, so it can no longer stay open over the screen underneath,
+   but Back still leaves that screen. Making Back close only the sheet needs a history entry, and that
+   is deferred over the clash with the `history.state` Gap history keeps for its back link.
+
+**Correction: `isrecommended` is NOT a subset of the jam chart rows.** A lead carried into the audit
+said it was, and that is wrong. Measured against the live API on 2026-10-30: 93 setlist rows are
+flagged, 91 of them jam chart rows and **2 not**, both in the 2024-05-10 encore (12 Pounds of Pain
+and Boom or Bust, show 1715403557). Nothing here may assume a flagged row has a note.
+
 ## Out of scope — parked
 
 Anything crossing the scope rule goes to [`phase3_ideas.md`](phase3_ideas.md), not into the app.
