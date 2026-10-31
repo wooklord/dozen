@@ -199,6 +199,10 @@ wrong prefix returns 404 rather than redirecting. These were shipped broken in 0
 | Per-show gap chart | `/gap-chart/{permalink}` | — |
 | Song | `/song/{slug}` (**singular**) | — |
 | Venue | `/venues/{slug}` (**plural**) | `/venue/{slug}` |
+| Jam charts index | `/jams/` | `/jamcharts`, `/jam-charts`, `/jamcharts.php` |
+
+The Jams tab linked to `/jamcharts` until 0.1.86, a page that has never answered 200 in any
+measurement here (2026-10-30). The smoke test now fetches the link the tab actually renders.
 
 `jamcharts.permalink` is the same bare filename as `shows.permalink` and needs `/setlists/` too.
 Song and venue slugs from the API match the live URLs exactly (verified against the sitemap on

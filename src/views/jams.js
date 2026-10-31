@@ -96,7 +96,7 @@ export function renderJams(ctx) {
   append(screen, list);
   append(
     screen,
-    el('div', { style: { marginTop: '12px' } }, cartonLink('/jamcharts', 'Jam charts on The Carton')),
+    el('div', { style: { marginTop: '12px' } }, cartonLink('/jams/', 'Jam charts on The Carton')),
   );
   append(screen, attribution());
 

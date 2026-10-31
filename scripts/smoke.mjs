@@ -668,6 +668,28 @@ async function run() {
     fail(`jams: note says ${JSON.stringify(cov.text)}, Carton says entries begin ${expectedYears.jam}`);
   } else pass(`coverage note agrees with The Carton (entries begin ${expectedYears.jam})`);
 
+  // The tab's Carton link, read off the screen and fetched from here. It pointed
+  // at /jamcharts until 0.1.86, a 404 nothing ever asked for. redirect: 'manual'
+  // and the page's own title, because a 200 alone is what a redirect to some
+  // other page gives (CLAUDE.md, the /song/thorns row).
+  const jamsHref = await evaluate(`(() => {
+    const a = [...document.querySelectorAll('.screen .carton-link')].find((x) => x.textContent.trim() === 'Jam charts on The Carton');
+    return a ? a.href : null;
+  })()`);
+  if (!jamsHref) fail('jams: no "Jam charts on The Carton" link rendered');
+  else {
+    let answer = null;
+    try {
+      const res = await fetch(jamsHref, { redirect: 'manual' });
+      answer = { status: res.status, title: ((await res.text()).match(/<title>([^<]*)/i) || [])[1] || '' };
+    } catch (err) {
+      skip(`the Jams tab's Carton link not fetched: could not reach The Carton (${err.message})`);
+    }
+    if (answer && answer.status !== 200) fail(`jams: the Carton link ${jamsHref} answers ${answer.status}`);
+    else if (answer && !/^\s*Jams\b/.test(answer.title)) fail(`jams: the Carton link ${jamsHref} answers 200 with the page titled ${JSON.stringify(answer.title)}, not Carton's Jams page`);
+    else if (answer) pass(`the tab's Carton link answers 200 as ${JSON.stringify(answer.title.trim())}`);
+  }
+
   // --- The jam key ----------------------------------------------------------
   //
   // The key explains the green, so the check that matters is that its swatch
