@@ -206,10 +206,11 @@ entries so a green word does not flash an orange underline.
 
 **The redundancy for colour-blind readers is structural, not typographic, and it is per setlist, not
 per title.** This used to say every highlighted song has a matching card below it, which was true of
-a show page and not of the Home and Shows cards, where nothing named the green titles. As of 0.1.86
-every setlist with green titles has a key line that opens those entries by name, in played order, and
-a show page has the cards as well. **In dark mode a title in the flow is still colour alone** (light
-adds weight): a per-title mark was the rejected alternative, for the reasons in "Jam chart notes
+a show page and not of the Home and Shows cards, where nothing named the green titles. Every setlist
+with green titles has a plain key line that names the green and, as of 0.1.88, a Jam notes button that
+opens those entries by name, in played order (from 0.1.86 to 0.1.87 the key line was itself that
+button). A show page has the cards as well. **In dark mode a title in the flow is still colour alone**
+(light adds weight): a per-title mark was the rejected alternative, for the reasons in "Jam chart notes
 (0.1.86)" below.
 
 ### The selected chip: a FILL is a channel that inline text does not have (0.1.59)
@@ -1646,6 +1647,10 @@ Shadow's gap history, song 49 and Jams, and the jam edge does the same.
 
 ### Jam chart notes: a sheet from the key line, and `title` on green titles (0.1.86)
 
+**The key-line button in this section is superseded by 0.1.88, below:** the key is a plain legend again
+and the way in is a Jam notes button. The section stays as the record of what 0.1.86 built. The sheet,
+`title` on green titles and `openSheet` stand as described here.
+
 The ruling and its alternatives are in `docs/plan.md`, "Jam chart notes". What was built, and what
 measuring it found:
 
@@ -1713,6 +1718,14 @@ bottom edge: a one-entry sheet goes from 364.64px to 418.64px with its card wher
 cap (675.19px on an 844 screen, 512px on a 640 screen) the stack moves down by the same 54–74px, and
 the first card is still fully in view. The line scrolls away with the entries, as the ruling says.
 
+**0.1.88 changed these heights; the figures above are what 0.1.87 measured.** With the hairline, the
+show line now takes 67px below the `h2`, 87.25px where the venue wraps (55px or 75.25px, with the same
+12px under it). The title gave back 13.81px, so the first card ends up 0.81px higher in the sheet than
+on 0.1.87: 114.94px from the sheet's top, 135.19px on a wrapped venue, read on all 216 sheets at both
+widths. The wrap counts are unchanged. With the "as written" line gone too, a sheet under the cap is
+20.2px shorter than on 0.1.87, measured on one one-entry show, not the one quoted above: 476.58px to
+456.38px at 360 and 457.73px to 437.53px at 390. A capped sheet stays at the cap.
+
 **The cards themselves do not change.** A show page has every entry twice, so the sheet's cards can be
 held to their twins on the page, width and height, and the smoke test does that at 360 and 390.
 
@@ -1725,6 +1738,75 @@ is on no route, so it says the pages did not move and nothing about the sheet.
 
 **Not measured:** a real phone, and a desktop's classic scrollbars, which narrow a sheet that newly
 crosses the cap.
+
+### Jam chart notes: a button out of the footnotes, the legend back, the sheet's title (0.1.88)
+
+The ruling is in `docs/plan.md`, "The jam notes button". What was built, and what measuring it found,
+on the built code against a copy of 0.1.87 at 360 and 390. Every change here read the same in dark and
+light. The heights themselves need not: at 360 Shows' median card is one line taller in light, 697.59px
+against 672.09px, on both builds, because light's heavier green titles wrap differently.
+
+**A Home or Shows card does not change height.** All 18 cards, matched across the builds by their
+titles, read a change of 0px: 2 keyed and 1 not on Home, 11 and 4 on Shows. The key row is 26.84px on
+both builds, and the button goes in an action row that already had the height. It stays on one line
+on every card. The space left in that row is 21.7–21.98px at 360 and 51.7–51.98px at 390 beside the
+Carton link, 73.38px and 103.38px on Home's card without one. The button is about 113.5px wide, by its
+digit, and 36px tall.
+
+**The setlist card on show detail is 48px taller, on all 216 charted shows,** at both widths, the 3
+with no footnotes included: the 36px button and 12px under it. It sits 16px under the sets, the gap
+that was there, so the setlist is 64px from its footnotes where it was 16px. The plan's figures, 26.84px
+off a keyed card and 21.16px or 9.16px added on show detail, took the key line out. Keeping it is the
+whole of the difference.
+
+**The way in, above the tab bar on first load,** on 216 charted shows. Read off the built pages, these
+equal the figures the plan took by moving nodes:
+
+| Screen height | 360 wide: key on 0.1.87 | button | 390 wide: key on 0.1.87 | button |
+|---|---|---|---|---|
+| 640 | 71 | 164 | 77 | 184 |
+| 700 | 99 | 210 | 107 | 212 |
+| 740 | 120 | 214 | 133 | 216 |
+| 800 | 154 | 216 | 164 | 216 |
+| 844 | 168 | 216 | 184 | 216 |
+
+**The target is 44px by the same `::after` as every `.btn-small`,** and the check samples three columns,
+2px in from each edge and the middle. The declared height is not evidence on its own: with `content:
+none` it still reads 44 while the columns read 30, 37 and 28. Show detail reads 45 in every column on
+all 216, whole-pixel samples reading a 44px region as 45, and takes no title's or marker's tap. Home and
+Shows read the same on the cards the smoke test walks.
+
+**The colour is the title's, and it costs a second green dot.** Label and outline are `--jam` with a
+plain button's fill: 9.54:1 dark, 6.52:1 light, on the pairs already measured, 8.72 and 5.55 pressed,
+beside Show detail's outline at 3.43 and 3.67. On a card the legend sits directly above the button,
+both with a green dot. It is also the loudest control on a keyed card. Both are the dev's to judge on
+the phone.
+
+**The key is plain text again.** `.jam-key-open` and its `::after` are gone and the legend's styling
+stays. A click handler on the row would leave its markup plain, so the smoke test also presses it.
+
+**The sheet's title is a label, in this sheet only.** `.sheet:has(> .jam-sheet) > h2` reaches it through
+this sheet's own body, with no option on `openSheet`. It goes from 15px in the sheet's ink at 21.75px
+tall, 12px under it, to 11px uppercase `--jam` spaced 0.44px at 15.94px tall, 4px under it. The date
+stays 15px at weight 650. The label reads 9.54:1 on `rgb(28, 24, 21)` and 6.52:1 on white, against the
+4.5:1 floor, on the `jam on surface` pair, which is not new, so its `where` text changed and no pair was
+added. The hairline is 1px of `--line`, 13px under the venue and 12px above the first card. A browser
+without `:has()` drops the one rule and shows the plain heading (reasoned, not tested).
+
+**"Shown exactly as written on The Carton." is out of this sheet.** The Carton link stays, on all 216
+sheets, 8px below the last card. A footnote's sheet keeps its own copy of the line, since the ruling
+named this sheet alone.
+
+**What moved.** `layout-diff` against 0.1.87 (`7226efc`), 390 dark, 390 light and 360 dark, read the
+same three times: 244 rules against 243, 2 routes changed and 8 identical. `#/home` is 5 of 80 boxes: the
+two new buttons, with the Carton link beside them moving along its row and nothing moving down. The
+charted show is 26 of 52, `.card#0` 520.4px to 568.4px and everything under it 48px lower.
+**`#/shows` reads identical because the tool walks the compact view, which has no cards,** so it says
+nothing about Shows' cards. The figures above do. A closed sheet is on no route.
+
+**Not measured:** a real phone or its font, and a desktop. The plan's text-size figures were taken
+against moved nodes and were not re-read on the build: the row wraps at 112% text at 360 and 128% at
+390, and on a wrap Carton drops to a second line, 48px more.
 
 ## Attribution
 

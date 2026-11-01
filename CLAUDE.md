@@ -449,10 +449,11 @@ then passes for the wrong reason, and reports health it never established.
 | Poll the live `version.js` for the string `0.1.82` after a push (2026-10-25, 0.1.82) | that **the Pages build had landed** | **nothing** — the inverse case. `src/version.js` stores `BUILD = 82`, a bare integer, and never contains the label, so the loop ran its full four minutes against a host that had already flipped and reported "still not 0.1.82". A check that cannot pass is as useless as one that cannot fail, and it reads the same from outside: a red run, a plausible cause, and a deploy wrongly presumed stalled. It is `scripts/wait-deploy.mjs` now, reading the integer with the same regex `verify-deploy.mjs` uses, proved green against the live host (exit 0 in under a second) and red against a build it does not serve (timeout, exit 1) |
 | `scrollWidth > clientWidth` on the gap-history strip (2026-10-26, 0.1.83) | that **the strip's bars fit inside it** | **the overflowing strip itself**. A flex strip's bars carry `min-width: 0`, and given more bars than pixels they shrank past the edge: in a scratch page with the app's CSS, 300 bars at 360 with a fixed 1px gap ran the last bar to 332 against the strip's 327, and `scrollWidth` reported no overflow. The check compares the **last bar's right edge** with the strip's now, and a synthetic 300-bar strip in the real card reads `runs to 332, past its edge at 327` with the gap fixed |
 | "The bright strip bar is the tallest" (2026-10-26, 0.1.83) | that **the strip's heights follow the gaps** | **every bar at the same 2px**. The bars' `--h` went through `el()`'s `style` prop, which is `Object.assign` and drops custom properties without an error, so every bar sat at the floor -- and when every bar is 2px, each one is the tallest. Green on its first run; caught by the same run printing a 0px bar gap. Each bar is now held to its own row's figure, and the spacing to the fluid gap's formula. The same `el()` path kept every `.gap-bar`'s `--heat` off the page from 0.1.16 until `el()` was fixed in 0.1.84 (`docs/design.md`, under "Color") |
+| "0 Chromes left" after a run, with a kill added to `close()` (2026-11-01, after 0.1.88) | that **the kill fixed the leak** | **the leak having stopped by itself**. It was called fixed on that count. Removing the kill to prove it left the run clean, and so was the old `close()`, 2 of 2. The cause was never established. The bullet on `close()` below has the account |
 
 The shape is always a **proxy**: the check tests a side effect rather than the
-thing itself, and the side effect has more than one cause. The last row is the
-mirror image — a check whose condition has **no** cause — and the rule covers
+thing itself, and the side effect has more than one cause. The row that polls for
+`0.1.82` is the mirror image — a check whose condition has **no** cause — and the rule covers
 it too: ask what could satisfy this, and if the answer is "nothing", the check
 is not a check.
 
@@ -867,10 +868,10 @@ checks were verified this way:
 - The scoped smoke run, `--only` (2026-10-31, scripts only, no bump). The jam
   notes block became one function and the verdict another, so a full run executes
   the same code in the same order, and `git diff -w` shows only the wrappers, the
-  gates, and two helpers moved above them. **Only `jam-notes`, `sheet`, `markup`
-  and `stale-table` can be scoped today.** About fifty names cross the sections
-  before them, so wrapping those would change the full run to save time on it; a
-  section joins when a proof needs it and it can stand alone. Green, against 380s
+  gates, and two helpers moved above them. **Only `jam-button` (since 0.1.88),
+  `jam-notes`, `sheet`, `markup` and `stale-table` can be scoped.** About fifty names
+  cross the sections before them, so wrapping those would change the full run to save
+  time on it; a section joins when a proof needs it and it can stand alone. Green, against 380s
   for a full run: `stale-table` 12s, `markup` 11s, `sheet` 18s, `jam-notes` 34s.
   The three ways a scoped run could report health it never established:
   - an unknown name: `--only nope`, a bare `--only`, `--only ""`, `--onyl
@@ -941,6 +942,98 @@ checks were verified this way:
   pages did not move and nothing about the sheet.** The nine faults and the green
   took 353s of smoke across ten runs, 9m35s with a 25s gap between them for
   Carton's limit, against 386s for one full run.
+- The 0.1.88 checks (the Jam notes button, the legend, the sheet's title), the second
+  run under the ruling. Each is `--only jam-button` unless marked, staged from a
+  scratch Node script by exact string, the staged hash confirmed different and the
+  new text read back before the run, and restored from a byte copy by hash. Green,
+  `jam-button` is 109 checks in 36–47s. The button's count and presence:
+  - N counted from every title in the setlist: smoke 6, `"●Jam notes · 13" on a show
+    with 3 raw row(s)`.
+  - N counted from distinct songs: smoke 2, only where a song is charted twice, `"●Jam
+    notes · 4" on a show with 5 raw row(s)`.
+  - every button opening the first show's sheet, its count left right (`--only
+    jam-notes`): smoke 38, the entries, date, venue and Carton link, led by `the sheet,
+    7 entries, expected 5`.
+  - `setlistCard` leaving it off: smoke 10, with 4 target lines SKIP on Home and Shows
+    by design, a card's missing button being red already.
+  - `setlistBlock` leaving it off: smoke 22, among them `show detail at 360: no Jam
+    notes button, so its target went unmeasured`. That line was a skip until this build.
+  - the `hasJam` gate gone: smoke 7, `a button reading "●Jam notes · 0"`.
+
+  The legend, which leaves the button right in all four:
+  - the key turned back into a button: smoke 33, among them `2 key(s) hold a control,
+    not plain text`.
+  - a click handler on the key row, its markup left plain: smoke 6, and only `a real
+    press on the key opened a sheet`. Nothing that reads the markup can see this one.
+  - the key gone, as first proposed: smoke 36, led by `jam key: not rendered inside the
+    setlist card`.
+  - a footnote row lost from the list: smoke 5, `1 card(s) list 6 footnote(s) under
+    markers up to 7`. One function builds the list and the button.
+
+  The button's markup, place and paint:
+  - `aria-haspopup` removed: smoke 6. "1 entries" in the name: smoke 1, the one-entry
+    show alone.
+  - below the footnotes on show detail: smoke 4. In a card's body, not its row: smoke 2.
+  - a green fill: smoke 12, `filled rgb(138, 206, 152), a plain button's fill is rgb(28,
+    24, 21)`. The jam colour rule gone: smoke 12, `off the card's green`.
+  - its `::after` cancelled: smoke 6, `declared 44px, columns 30 / 37 / 28px`. The
+    declared height still reads 44, so the columns, sampled 2px in from each edge and
+    the middle, are the evidence.
+  - its `::after` 20px wider on the left: smoke 4, `the button's target takes taps meant
+    for "Show detail"`.
+
+  The two addenda, `--only jam-notes`, 45 checks in 33–36s:
+  - the "as written" line put back: smoke 3, `a line taken out in 0.1.88`. No proof that
+    had run depended on the line: none had run when it came out.
+  - the label styling removed, the dev's one proof: smoke 6, size, colour and case in
+    both themes, `15px against the date's 15px, not smaller`.
+  - the hairline removed: smoke 2. Beyond the one the dev asked for, because the new
+    check still has to be seen red.
+  - the label on every sheet's title: smoke 2, `a footnote's title (dark) took the
+    label`. It guards the scope, and the jam notes sheet stays right under it.
+
+  **The one full run found what no scoped run could reach.** The old `cards carry one
+  button` check sits before the sections and cannot be scoped, and the plan's list of
+  checks to adjust had missed it. It failed twice on correct cards, `expected exactly
+  ['Show detail'] per card`. It now holds the whole row, in order, against what the
+  card's own green titles call for, and its proof cost a full run, 408s. A plain extra
+  button staged in every row: smoke 2, those two lines and no others, `card 1 carries
+  ["Show detail","●Jam notes · 3","Staged"], expected ["Show detail","●Jam notes · 3"]`.
+  Nothing in `jam-button` sees a third button, so the old check earned its keep.
+
+  **Dropped, each with its reason:**
+  - the old key left in the list: dropped by the dev when the key stayed.
+  - the count read from the first card, and the wrong word ("Jam chart"): the same exact
+    label comparison the first fault shows firing.
+  - the key reworded: the same exact text comparison, shown firing with the key turned
+    into a button.
+  - the twin check and the sheet's focus, Escape and Back: only their opener's selector
+    changed, they were proved in 0.1.86, and a wrong selector throws.
+  - the Carton link and accessible name checks: unchanged, as the addenda said.
+  - repeats per width, theme and screen: the same comparison.
+  - the legend's alignment and colour lines: moved verbatim, not new.
+
+  Restored, by hash the same files: 261 passing, smoke 367 ok with 0 skips and no `WARN`
+  in 407s, against 273 on 0.1.87. `layout-diff 7226efc`: 390 dark, 390 light and 360 each
+  2 changed and 8 identical (`docs/design.md`, 0.1.88, reads what moved). The first 24
+  runs took 942s of smoke, 26 minutes with the gaps for Carton's limit.
+- `close()` and a Chrome that stays up (2026-11-01, scripts only, no bump). For about
+  half an hour that night, scoped runs left Chrome up and its profile behind,
+  `still answers after Browser.close` and `EPERM`. It followed the length of the run and
+  not the checks: `stale-table` held idle closed clean at 12s and did not at 48s, 62s,
+  123s or 222s. A scratch probe at 63s got `{}` back from `Browser.close`, with no
+  targets left and the port still open; a second close did nothing and `process.kill`
+  ended it. So `close()` reads the real pids first, and if the port still answers kills
+  them, the helpers too, and says so. It also retries removing the profile.
+  **That was called fixed, and it was not shown to be.** Run with the kill removed, it
+  was meant to go red and did not: clean at 52s. The old `close()` was clean at 52s too,
+  2 of 2. The fault had stopped by itself and its cause was never established, so the
+  kill is a response to a condition that may recur. It is proved by staging the condition
+  instead of waiting for it, `Browser.close` swapped for `Browser.getVersion`, with the
+  verdict `SMOKE PASSED` both ways, as it must be. With the kill: `stayed up after
+  Browser.close -- its processes were killed`, 0 Chromes, the profile removed. Without:
+  `still answers`, `EPERM`, 8 Chrome processes on that profile. Commit `9f3baf3`'s
+  message predates this; the comment in `scripts/cdp.mjs` carries the correction.
 
 Do this for every new check. It is the only thing that separates a real check
 from a comforting one.
@@ -1386,8 +1479,8 @@ landed". The second is the worse of the two because it passes.
 | Command | Speed | Network | Run it |
 |---|---|---|---|
 | `node --test` | instant | none | always, before anything else |
-| `node scripts/smoke.mjs` | ~6½ min (386s at 0.1.87, 380s at 0.1.86, 356s at 0.1.85, so this row's old "~1 min" had gone stale well before 0.1.86) | Carton (cold pull) | **before every push** |
-| `node scripts/smoke.mjs --only <section>` | 11–41s (`jam-notes` 33–41s at 0.1.87) | Carton (cold pull) | for a red proof, re-running only the section the check lives in. **Never the gate for a push:** the full run is. An unknown name or a run of zero checks fails, and the verdict says it was scoped |
+| `node scripts/smoke.mjs` | ~7 min (407s at 0.1.88, 386s at 0.1.87, 380s at 0.1.86, 356s at 0.1.85, so this row's old "~1 min" had gone stale well before 0.1.86) | Carton (cold pull) | **before every push** |
+| `node scripts/smoke.mjs --only <section>` | 11–47s (`jam-button` 36–47s and `jam-notes` 33–36s at 0.1.88) | Carton (cold pull) | for a red proof, re-running only the section the check lives in. **Never the gate for a push:** the full run is. An unknown name or a run of zero checks fails, and the verdict says it was scoped |
 | `node scripts/gap-oracle.mjs` | ~1 min | Carton (cold pull + 20 song pages) | after any change to gap arithmetic, to the show universe in `buildIndex`, or to `gapHistory()`; it compares every Show Gap cell on 20 Carton song pages against the app's own `gapAtShow()`, and the gap history's one-entry-per-show fold (0.1.83) against the same pages grouped by show, and **SKIPs, never passes,** when Carton is unreachable. The smoke test carries a one-song spot check of the same parity |
 | `node scripts/contrast.mjs` | instant | none | when eyeballing a colour; the assertions already run in `node --test` |
 | `node scripts/deadcss.mjs` | instant | none | when a CSS rule looks inert; lists every declaration the cascade can never let win. The assertions already run in `node --test` (`tests/deadcss.test.mjs`) |
