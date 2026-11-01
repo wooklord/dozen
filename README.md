@@ -18,8 +18,7 @@ back to the corresponding page there.
 | **Picks** | A local shortlist you can reorder and copy as plain text |
 | **Song detail** | Gap, times played, first/last, longest observed gap (the same figure as the list, dated or "still open"; its tile carries the song's gap strip and opens the gap history), where it has landed, album membership, jam entries, and every performance, a jam chart entry marked by a green edge and a "Jam chart" badge. The song's name rides in a chip under the header once the title has scrolled away; a tap goes back to the top |
 | **Gap history** | Every gap one song has been through, one row per show — the Show Gap figure Carton prints, "×N" and the sets when it was played more than once that night, a green "Jam" when any of them is a jam chart entry, a Debut badge on the first — plus the gap still open, under a strip of every gap oldest to newest with the longest picked out. Newest first, oldest first, or largest gap first. The song's name joins the sort row once the title has scrolled away |
-| **Show detail** | One show's full setlist, the tour it was part of (when Carton files it under one), show notes, and a link to its gap chart |
-| **Gap chart** | Every song in one night's setlist with its gap *as of that date* |
+| **Show detail** | One show's full setlist, the tour it was part of (when Carton files it under one), show notes, then its gap chart — every song in the night's setlist with its gap *as of that date*, by set, each row opening that song's gap history — and its jam chart entries, open on the page. The date and venue ride in a chip under the header once the title has scrolled away; a tap goes back to the top |
 | **Venue** | Every show at a venue, newest first, with play count and first/most recent |
 
 ## Scope

@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ROUTES } from '../scripts/routes.mjs';
+import { ROUTES, REDIRECTS } from '../scripts/routes.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -62,13 +62,19 @@ test('innerHTML appears only where the content is a literal in this repo', () =>
 
 // --- routes ------------------------------------------------------------------
 
-test('ROUTES covers the two screens that have broken in production', () => {
+test('ROUTES covers the screen that has broken in production, and the retired chart route redirects', () => {
   // Show detail served a stale module in 0.1.44; the gap chart rendered
   // nothing for three consecutive releases. Neither was in this list, so the
   // deploy gate and the layout diff walked neither, while smoke covered both.
+  // Since 0.1.90 the chart is a section of show detail, so one route walks
+  // both; its old hash must redirect to a show, because an unknown hash falls
+  // through to Home and would take every old link there in silence.
   const hashes = ROUTES.map((r) => r.hash);
   assert.ok(hashes.some((h) => h.startsWith('#/show/')), 'no show-detail route');
-  assert.ok(hashes.some((h) => h.startsWith('#/gapchart/')), 'no gap-chart route');
+  assert.ok(!hashes.some((h) => h.startsWith('#/gapchart/')), 'the retired gap-chart route is still walked as a screen');
+  const chart = REDIRECTS.find((r) => r.from.startsWith('#/gapchart/'));
+  assert.ok(chart, 'no redirect for the retired #/gapchart/ route');
+  assert.equal(chart.to, chart.from.replace('#/gapchart/', '#/show/'), 'the chart redirect must land on the same show');
 });
 
 test('every route has a marker and no two routes share one', () => {
@@ -146,6 +152,12 @@ test('the service worker precaches every module and stylesheet under src/', () =
     .map((f) => path.relative(ROOT, f).split(path.sep).join('/'))
     .filter((f) => !shell.has(f));
   assert.deepEqual(missing, [], 'these files ship but the service worker does not precache them');
+  // And the other way (0.1.90, when views/gapchart.js was retired): an entry
+  // for a file that no longer exists. The install survives it by design, one
+  // add failing on its own, so nothing on screen would ever say -- it is a
+  // 404 on every install, for good, that only this comparison can see.
+  const stale = [...shell].filter((f) => !fs.existsSync(path.join(ROOT, f)));
+  assert.deepEqual(stale, [], 'the service worker precaches these files, which no longer exist');
 });
 
 // --- tabular figures ---------------------------------------------------------

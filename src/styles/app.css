@@ -707,29 +707,21 @@ button.gap-figure:active {
 }
 
 /* The Jam notes button (0.1.88; its bullet and count came off in 0.1.89, so the
-   label is one word pair and nothing here spaces parts). --jam on the label and
-   the outline, the colour of the titles it is about, and nothing on the fill.
-   Doubled for the reason .btn.btn-small is, .btn being later in this file. It
-   sets no background, so .btn:active still presses it. */
+   label is one word pair and nothing here spaces parts; since 0.1.90 it is on
+   the Home and Shows cards only, show detail laying its entries open instead).
+   --jam on the label and the outline, the colour of the titles it is about, and
+   nothing on the fill. Doubled for the reason .btn.btn-small is, .btn being
+   later in this file. It sets no background, so .btn:active still presses it. */
 .btn.btn-jam {
   color: var(--jam);
   border-color: var(--jam);
 }
 
-/* Trailing icon action on a row, alongside the row's own navigation. */
-.row-action {
-  flex: none;
-  width: 42px;
-  min-height: var(--tap);
-  display: grid;
-  place-items: center;
-  color: var(--ink-faint);
-  border-radius: var(--r-cell);
-}
-.row-action:active {
-  background: var(--surface-up);
-  color: var(--yolk);
-}
+/* .row-action, the trailing icon that opened a night's gap chart from a song's
+   performance rows, the gap history's rows and a venue's show rows, went in
+   0.1.90 with the chart's own route: a row is one control, and the show every
+   one of those rows opens has the chart on it. No rule, because no view emits
+   the class. */
 
 /* A LEAD BAR holds chips that OPEN SHEETS rather than toggle (0.1.75 on). It
  * does not scroll: Songs' two leads and Shows' three sit on one row, and when
@@ -1703,10 +1695,21 @@ button.gap-figure:active {
   color: var(--jam);
 }
 
-/* Show detail's row for the Jam notes button, directly under the last set. Flex
- * so the button is not an inline box on a line of the card's own line height. */
-.setlist-jam {
-  display: flex;
+/* The gap chart on show detail (0.1.90), grouped by set: labels in the set
+ * labels' style (.gap-chart-label, the rule below) on the page ground, --yolk
+ * on --shell, a pair scripts/contrast.mjs measures ("set labels"). The route's
+ * intro sentence is the note under the heading, and "How gap is counted" sits
+ * in the heading's right slot at the size it had in the route's card.
+ * (.setlist-jam, show detail's row for the Jam notes button in 0.1.88 and
+ * 0.1.89, went with the button.) */
+.gap-chart-set + .gap-chart-set {
+  margin-top: var(--s-3);
+}
+.gap-chart-intro {
+  margin: 0 0 var(--s-3);
+}
+.gap-chart .section-head > .inline-link {
+  font-size: var(--t-sm);
 }
 
 .jam-key-bullet {
@@ -1726,15 +1729,20 @@ button.gap-figure:active {
   box-sizing: content-box;
 }
 
-/* Headers INSIDE the setlist card: the set labels, and the show-notes header.
+/* Headers INSIDE the setlist card: the set labels, and the show-notes header;
+ * and the gap chart's group labels under it (0.1.90), the same sets named
+ * again over the chart's lists.
  *
- * One rule so the two cannot drift apart, but two class names so neither lies
- * about what it is. Putting `.setlist-label` on the show-notes header would
- * have been fewer characters and a trap -- a selector that means "this is a
- * set" would then also match something that is not one, which is how a future
- * check reads the wrong element and passes for the wrong reason. */
+ * One rule so the three cannot drift apart, but three class names so none
+ * lies about what it is. Putting `.setlist-label` on the show-notes header
+ * would have been fewer characters and a trap -- a selector that means "this
+ * is a set" would then also match something that is not one, which is how a
+ * future check reads the wrong element and passes for the wrong reason. The
+ * chart's labels proved it the other way round: emitted as .setlist-label,
+ * they doubled a check's count of a show's sets on the full-run proof. */
 .setlist-label,
-.setlist-note-label {
+.setlist-note-label,
+.gap-chart-label {
   font-size: var(--t-xs);
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -2137,6 +2145,13 @@ button.fn-marker::after {
    rest of the breathing room. Anything more and it starts to look like the
    heading of the section below. */
 .setlist-source {
+  margin-top: 2px;
+}
+
+/* The gap chart's own Carton link, under its last list on show detail
+   (0.1.90): the same source note as the setlist's, at the same 2px. Its own
+   class, so .setlist-source still names the one node the route marker reads. */
+.gap-chart-source {
   margin-top: 2px;
 }
 

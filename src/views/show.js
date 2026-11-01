@@ -1,40 +1,66 @@
-// SHOW DETAIL — one show's full setlist, reached from a song's history.
+// SHOW DETAIL — one show's full setlist, its gap chart and its jam chart
+// entries, reached from a song's history, a card, a row, or a venue.
 
 import { el, append, icon, ICONS } from '../ui/dom.js';
 import {
   setlistBlock,
-  jamEntryCard,
   attribution,
   cartonLink,
   showPermalink,
+  gapChartPermalink,
   sectionHead,
   emptyState,
   venueLine,
   venueInfoButton,
+  titleChip,
+  openGapExplainer,
+  heatFor,
 } from '../ui/components.js';
-import { showStructure, tourName } from '../data/index.js';
-import { formatShowDate } from '../util/dates.js';
+import { showStructure, tourName, gapChartForShow } from '../data/index.js';
+import { openGapHistory } from './gaphistory.js';
+import { formatShowDate, formatShowDateShort } from '../util/dates.js';
 
 export function renderShow(ctx, showId) {
   const { index, navigate } = ctx;
   const screen = el('div.screen');
   const show = index.showsById.get(Number(showId));
 
-  append(
-    screen,
+  const backChip = () =>
     el('button.chip', { type: 'button', onclick: () => history.back(), style: { marginBottom: '12px' } }, [
       icon(ICONS.back, 16),
       'Back',
-    ]),
-  );
+    ]);
 
   if (!show) {
+    append(screen, backChip());
     append(screen, el('h1.screen-title', { text: 'Show not found' }));
     return screen;
   }
 
-  append(screen, el('h1.screen-title', { text: formatShowDate(show.showdate) }));
-  append(screen, venueLine(show));
+  // --- Header, and the chip that stands in for it (0.1.90) -------------------
+  //
+  // The song pages' pattern: a 0px sticky bar first, laid over the content, and
+  // titleChip() shows the chip once the title has gone under the header, so
+  // showing it moves nothing. The title here is two lines, the date heading
+  // and the venue line, and the chip watches the SECOND: it appears once the
+  // whole block is gone, not while the venue is still on screen under it.
+  // Focus still goes to the date heading, the screen's h1. The chip is the
+  // compact form, the short date and the venue name, picked over the two-line
+  // block for its cost at 360x640 (docs/plan.md, "Show detail layout", item
+  // 4); like the song chip it wraps on a long name and never truncates. The
+  // tour line is left out of it, as it was left out of the sheet's show line.
+  const title = el('h1.screen-title', { text: formatShowDate(show.showdate) });
+  const venue = venueLine(show);
+  const titleBar = el('div.title-bar-inner');
+  append(
+    titleBar,
+    titleChip(ctx, `${formatShowDateShort(show.showdate)} · ${show.venuename}`, title, { bar: titleBar, watch: venue }),
+  );
+  append(screen, el('div.title-bar', null, titleBar));
+
+  append(screen, backChip());
+  append(screen, title);
+  append(screen, venue);
   // The tour, named as Carton names it, and nothing for tour_id 1 -- see
   // tourName(). "Part of" because three of the eleven names do not say
   // "tour" (Winter 2020, Quarantine Streams, Winter 2022), and a bare
@@ -44,24 +70,20 @@ export function renderShow(ctx, showId) {
   if (tour) append(screen, el('p.show-tour', { text: `Part of ${tour}` }));
   const rows = index.setlistByShow.get(Number(show.show_id)) || [];
 
-  // The entries section's condition. The key and the Jam notes button read the
-  // rows' own flag in setlistParts, the flag jamByShow is built by filtering on,
-  // so the three cannot disagree about whether this show has entries.
-  const jams = index.jamByShow.get(Number(show.show_id));
-  const hasJams = Boolean(jams?.length);
-
   // Directly under the setlist, inside the same section, in both branches: the
   // link is a pointer to the source of THIS setlist, so it belongs against the
   // setlist rather than up in the action row. When no setlist was recorded it
   // matters more, not less -- it is where the reader goes to check.
   const sourceLink = () => el('div.link-row.setlist-source', null, [cartonLink(showPermalink(show))]);
 
-  // The jam key and the Jam notes button are NOT built here. setlistParts builds
-  // them wherever a setlist has jam-charted songs, so they appear on the Home and
-  // Shows cards too. `hasJams` below gates only the entries section.
+  // The jam key and the "Jam chart entries" section are NOT built here.
+  // setlistBlock returns the section beside the setlist, built by the same
+  // function that paints the green and builds the cards' Jam notes button, so
+  // this screen cannot offer both forms or neither (0.1.90, docs/plan.md,
+  // "Show detail layout", item 1). It is placed below, after the gap chart.
   //
-  // Show notes belong INSIDE the setlist card, last: setlist -> Jam notes ->
-  // footnotes -> notes. They annotate this setlist, so a card of their own below put a
+  // Show notes belong INSIDE the setlist card, last: setlist -> footnotes ->
+  // notes. They annotate this setlist, so a card of their own below put a
   // border between a note and the thing it is a note about.
   //
   // No separate guard needed for the no-setlist branch: `shownotes` is a field
@@ -76,15 +98,15 @@ export function renderShow(ctx, showId) {
     ]);
   };
 
+  let entries = null;
   if (rows.length) {
+    const block = setlistBlock(rows, { index, onSong: (id) => navigate(`#/song/${id}`) });
+    entries = block.entries;
     append(
       screen,
       el('div.section', null, [
         sectionHead('Setlist', el('span.badge.badge-set', { text: showStructure(index, show.show_id) || '' })),
-        el('div.card', null, [
-          setlistBlock(rows, { index, onSong: (id) => navigate(`#/song/${id}`) }),
-          showNotes(),
-        ]),
+        el('div.card', null, [block.setlist, showNotes()]),
         sourceLink(),
       ]),
     );
@@ -99,41 +121,129 @@ export function renderShow(ctx, showId) {
     );
   }
 
+  // --- The gap chart, inline (0.1.90) ----------------------------------------
+  //
+  // Every song in this night's setlist with its gap AS OF this show, through
+  // gapChartForShow() and gapAtShow(), the one function every gap in the app
+  // comes from. This is NOT archive-wide rotation: a song played the show
+  // before reads 1 here even if it has since gone cold, which is what the note
+  // under the heading says. It was its own route until 0.1.90; the chart is
+  // this show's, so it sits with the show, between the setlist it reads
+  // against and the entries, grouped by set in played order. A row opens that
+  // song's gap history, stamped as opened from this show so the history's back
+  // link returns here; the figure keeps its own target and explains how it was
+  // counted. Carton's own chart for the night is linked under the rows, ours
+  // labelled, theirs verbatim at the source, both true.
+  //
+  // One entry per song, not per performance, is gapChartForShow()'s rule: a
+  // repeat carries "N× tonight" rather than the same figure twice.
+  const chart = rows.length ? gapChartForShow(index, show.show_id) : [];
+  if (chart.length) {
+    const maxGap = chart.reduce((m, e) => Math.max(m, e.gap ?? 0), 1);
+    const groups = [];
+    for (const e of chart) {
+      let g = groups[groups.length - 1];
+      if (!g || g.label !== e.setLabel) {
+        g = { label: e.setLabel, entries: [] };
+        groups.push(g);
+      }
+      g.entries.push(e);
+    }
+    const section = el('div.section.gap-chart', null, [
+      sectionHead(
+        'Gap chart',
+        el('button.inline-link', {
+          type: 'button',
+          text: 'How gap is counted',
+          onclick: () => openGapExplainer(index, { atShow: true }),
+        }),
+      ),
+      el('p.note.gap-chart-intro', {
+        text:
+          'How many shows had passed since each song was last played, counted as of this ' +
+          'date. A song’s gap today is a different number — it keeps growing until the song ' +
+          'is played again.',
+      }),
+    ]);
+    for (const g of groups) {
+      const list = el('ul.rows');
+      for (const e of g.entries) {
+        append(
+          list,
+          el('li', null, [
+            // data-song-id: the row's identity, as on the Songs rows, so a check
+            // can hold where the row goes to what the row is.
+            el('div.row-shell', { 'data-song-id': String(e.song_id) }, [
+              el('span.gap-bar', {
+                style: { '--heat': String(heatFor(e.gap, maxGap)) },
+                'data-heat': e.gap === null ? 'none' : null,
+              }),
+              el(
+                'button.row',
+                { type: 'button', onclick: () => openGapHistory(navigate, e.song_id, { fromShow: show.show_id }) },
+                [
+                  el('div.row-main', null, [
+                    el('div.row-title', { text: e.songname }),
+                    el('div.row-meta', null, [
+                      e.isDebut
+                        ? el('span', { text: 'First time played' })
+                        : el('span', {
+                            text: e.previous ? `Previously ${formatShowDateShort(e.previous.showdate)}` : '',
+                          }),
+                      // Played more than once this night -- shown as a count so
+                      // the gap figure is not repeated as if it were two facts.
+                      e.occurrences > 1 ? el('span.badge', { text: `${e.occurrences}× tonight` }) : null,
+                    ]),
+                  ]),
+                ],
+              ),
+              // Debut is not a gap: gap 1 means "played at the show before",
+              // gap 0 "a second performance on the same date". Carton prints the
+              // debut date's position on a debut row; here it is a badge
+              // (ruling 2026-10-24, decision 1), the plain badge since 0.1.85:
+              // green means jam chart only.
+              e.isDebut
+                ? el('div.gap-figure', null, [el('span.badge', { text: 'Debut' })])
+                : el(
+                    'button.gap-figure',
+                    {
+                      type: 'button',
+                      'aria-label': `${e.gap} shows since previously played. How gap is counted`,
+                      onclick: (ev) => {
+                        ev.stopPropagation();
+                        openGapExplainer(index, { atShow: true });
+                      },
+                    },
+                    [el('div.gap-num.num', { text: String(e.gap) }), el('div.gap-unit', { text: 'shows' })],
+                  ),
+            ]),
+          ]),
+        );
+      }
+      // Its own class, styled by the set labels' rule: .setlist-label means a
+      // set in the setlist, and a check that counts a show's sets reads it.
+      append(section, el('div.gap-chart-set', null, [el('div.gap-chart-label', { text: g.label }), list]));
+    }
+    append(
+      section,
+      el('div.link-row.gap-chart-source', null, [cartonLink(gapChartPermalink(show), 'Gap chart on The Carton')]),
+    );
+    append(screen, section);
+  }
+
   // --- Jam chart entries for THIS show, in setlist order ---------------------
   //
-  // Directly under the setlist and in the same order it was played, so the two
-  // read together: a green title above has its note right here, in the
-  // sequence you heard it. Not alphabetical and not grouped by chart -- either
-  // would break the correspondence that makes this worth showing at all.
-  //
-  // Order comes from index.jamByShow, which is built by walking the show's
-  // sorted setlist rows, so it cannot drift from the block above.
-  //
-  // Absent rather than empty when a show has none, same rule as album
-  // membership on song detail: jamByShow only holds shows that have entries.
-  if (hasJams) {
-    const jamSection = el('div.section');
-    append(
-      jamSection,
-      sectionHead(
-        'Jam chart entries',
-        el('span.badge.badge-jam', { text: String(jams.length) }),
-      ),
-    );
-    // Tappable to the same place the setlist title above goes, and in the same
-    // green, so the two are visibly the same entry.
-    for (const j of jams) {
-      append(jamSection, jamEntryCard(j, (id) => navigate(`#/song/${id}`)));
-    }
-    append(screen, jamSection);
-  }
+  // After the chart and under the setlist, so a green title above has its note
+  // below, in the sequence it was played. Built by setlistBlock; see above.
+  if (entries) append(screen, entries);
 
   // --- Actions, BELOW the content ------------------------------------------
   //
-  // Gap chart, Venue history, Venue info. These sat between the venue line and
-  // the SETLIST heading until 0.1.72, which put three controls in front of the
-  // one thing this screen exists to show. Same reasoning as the Home cards:
-  // the setlist is what the screen is opened to read.
+  // Venue history and Venue info. These sat between the venue line and the
+  // SETLIST heading until 0.1.72, which put controls in front of the one thing
+  // this screen exists to show. Same reasoning as the Home cards: the setlist
+  // is what the screen is opened to read. Gap chart was the third control here
+  // until 0.1.90, when the chart became a section of this screen.
   //
   // BELOW THE JAM SECTION, NOT DIRECTLY UNDER THE SETLIST CARD. Two things
   // already own that spot and neither should be pushed off it:
@@ -141,11 +251,11 @@ export function renderShow(ctx, showId) {
   //  - The Carton link is a source note for the setlist card, hanging off it
   //    at 2px (.setlist-source). It is UNTOUCHED -- same place, same 10px/400
   //    --ink-faint, still inside the setlist section. Nothing was promoted and
-  //    nothing crowds it: the button row is not its neighbour, the jam section
-  //    or the section gap is.
-  //  - The jam chart entries read AGAINST the setlist, in played order -- a
-  //    green title above, its note right here. A button row between them would
-  //    break the correspondence that section is built on.
+  //    nothing crowds it: the button row is not its neighbour, the gap chart
+  //    section or the section gap is.
+  //  - The gap chart and the jam chart entries read AGAINST the setlist, in
+  //    played order. A button row between them would break the correspondence
+  //    those sections are built on.
   //
   // So the row goes after all of it, before the attribution: every control on
   // this screen follows every piece of content on it.
@@ -156,13 +266,6 @@ export function renderShow(ctx, showId) {
   append(
     screen,
     el('div.card-actions.screen-actions', null, [
-      index.setlistByShow.has(Number(show.show_id))
-        ? el(
-            'button.btn.btn-small',
-            { type: 'button', onclick: () => navigate(`#/gapchart/${show.show_id}`) },
-            'Gap chart',
-          )
-        : null,
       el(
         'button.btn.btn-small',
         { type: 'button', onclick: () => navigate(`#/venue/${show.venue_id}`) },

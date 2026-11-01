@@ -25,12 +25,13 @@
 // `selector` is optional and is checked IN ADDITION to the text, by all three
 // consumers -- so what has to be unique is the CONJUNCTION, not the text alone.
 // Show detail has no text of its own that no other screen renders: its date
-// heading also appears on cards, 'Setlist' appears on the gap chart's Carton
-// link, 'Venue history' is also a Home button, 'Jam chart entries' is also a
-// song-detail section, and 'Gap chart' is the gap chart's own heading.
-// Contriving a string for it would be worse than saying plainly that its
-// unique marker is structural: `.setlist-source` is emitted in exactly one
-// place in the app.
+// heading also appears on cards, 'Venue history' is also a Home button, 'Jam
+// chart entries' is also a song-detail section, and 'Gap chart' is its own
+// section's title since 0.1.90, when the chart's route was retired; until then
+// it was that route's heading and this screen's button. Contriving a string
+// for it would be worse than saying plainly that its unique marker is
+// structural: `.setlist-source` is emitted in exactly one place in the app
+// (the chart's Carton link under it is `.gap-chart-source`, on purpose).
 export const ROUTES = [
   { hash: '#/home', expect: 'On this date' },
   { hash: '#/songs', expect: 'songs played live' },
@@ -50,18 +51,19 @@ export const ROUTES = [
   { hash: '#/song/54/gaps', expect: 'Every gap, oldest to newest' },
   { hash: '#/venue/73', expect: 'Every show' },
 
-  // THE TWO ROUTES THAT HAVE ACTUALLY BROKEN IN PRODUCTION, and which this
-  // list did not cover until 0.1.62.
+  // THE SCREEN THAT HAS ACTUALLY BROKEN IN PRODUCTION, and which this list did
+  // not cover until 0.1.62.
   //
   // Show detail is the route that served a stale views/show.js in 0.1.44 while
-  // version.js read fresh. The gap chart is the route that rendered nothing for
-  // three consecutive releases because views/gapchart.js called venueLine()
-  // without importing it -- the failure this whole apparatus was built for.
-  // smoke.mjs covered both locally the entire time; the deploy gate and the
-  // layout diff walked neither, so the live check was blind to precisely the
-  // two screens with a track record.
+  // version.js read fresh. The gap chart was the route that rendered nothing
+  // for three consecutive releases because views/gapchart.js called
+  // venueLine() without importing it -- the failure this whole apparatus was
+  // built for. smoke.mjs covered both locally the entire time; the deploy gate
+  // and the layout diff walked neither, so the live check was blind to
+  // precisely the two screens with a track record. Since 0.1.90 the chart is a
+  // section of show detail, so this one entry walks both, and the chart's old
+  // hash is a redirect below.
   { hash: '#/show/1728657865', expect: 'Gap chart', selector: '.setlist-source' },
-  { hash: '#/gapchart/1728657865', expect: 'had passed since each song was last played' },
 ];
 
 // Redirects must land somewhere real, not merely change the hash.
@@ -69,4 +71,9 @@ export const REDIRECTS = [
   { from: '#/gap', to: '#/songs' },
   { from: '#/recent', to: '#/shows' },
   { from: '#/', to: '#/home' },
+  // The per-show gap chart's own route, retired in 0.1.90 (docs/plan.md,
+  // "Show detail layout", item 5). An unknown hash falls through to Home, so
+  // without this every bookmark and every link in an installed shell's cached
+  // pages would land there in silence.
+  { from: '#/gapchart/1728657865', to: '#/show/1728657865' },
 ];

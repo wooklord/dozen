@@ -1,10 +1,12 @@
 // Route smoke test.  Run:  node scripts/smoke.mjs
 //
 // WHY THIS EXISTS
-// A missing import in views/gapchart.js shipped in three consecutive releases.
-// The view threw, route() abandoned the render, and the screen simply stayed
-// where it was -- a dead-looking button and nothing else. The old ad-hoc
-// checks missed it for two reasons, and this script fixes both:
+// A missing import in views/gapchart.js (the per-show gap chart's own route
+// until 0.1.90, when the chart became a section of show detail) shipped in
+// three consecutive releases. The view threw, route() abandoned the render,
+// and the screen simply stayed where it was -- a dead-looking button and
+// nothing else. The old ad-hoc checks missed it for two reasons, and this
+// script fixes both:
 //
 //   1. They did not visit every route. Screens were spot-checked, and the gap
 //      chart was not in the sweep after the regression landed.
@@ -37,7 +39,7 @@ import { openChrome, CDP_TIMEOUT } from './cdp.mjs';
 // Three ways a scoped run could report health it never established, each closed:
 // a mistyped name fails here before Chrome starts, a run that executes no check
 // fails in endRun(), and its verdict line says it was scoped and how much ran.
-const SECTIONS = ['jam-button', 'jam-notes', 'sheet', 'markup', 'stale-table'];
+const SECTIONS = ['show-detail', 'jam-button', 'jam-notes', 'sheet', 'markup', 'stale-table'];
 const ONLY = parseOnly(process.argv.slice(2));
 
 function parseOnly(args) {
@@ -86,26 +88,18 @@ const TYPES = {
   '.svg': 'image/svg+xml', '.png': 'image/png',
 };
 
-// The four ways into a gap chart, as of 0.1.48. Each is clicked for real.
-//
-// The Home and Shows CARDS used to carry a Gap chart button and no longer do
-// -- those cards are an entry point, not a control panel, and the button
-// duplicated one on show detail. What remains is checked here, and the
-// now-absent ones are asserted absent below, because "the button is gone" and
-// "the route is unreachable" are different claims.
-const GAP_ENTRY_POINTS = [
-  { name: 'show detail', at: null, // filled in at runtime from a real show id
-    click: `[...document.querySelectorAll('.btn-small')].find(b => b.textContent.trim() === 'Gap chart')` },
-  // THE SHOWS ROW IS NOT AN ENTRY POINT. The Shows tab's compact rows (every
-  // show, as of 0.1.82; search results only, 0.1.64 to 0.1.81) carry no gap
-  // chart control: a row is an entry point to a show, and the gap chart lives
-  // one tap further in, on show detail -- the same reasoning that took the
-  // button off the Home and Shows cards. So there are three entry points, not
-  // four, and the Shows section asserts the rows carry no .row-action.
-  { name: 'song performance row', at: '#/song/49',
-    click: `document.querySelector('.row-action')` },
-  { name: 'venue show row', at: '#/venue/73',
-    click: `document.querySelector('.row-action')` },
+// The gap chart has no entry points of its own since 0.1.90: it is a section
+// of show detail, and the show is the way to it. Until then this held the
+// three ways into the chart's route -- show detail's button, the song
+// performance rows' icon and the venue show rows' icon -- each clicked for
+// real; the Home and Shows cards' button had already gone in 0.1.48, because
+// those cards are an entry point, not a control panel. The rows that carried
+// the icon are held to ONE control each below, with the Shows compact rows,
+// and the chart itself is read on the show page.
+const ONE_CONTROL_ROWS = [
+  ['song performance rows', '#/song/49'],
+  ['venue show rows', '#/venue/73'],
+  ['gap history rows', '#/song/54/gaps'],
 ];
 
 const server = http.createServer((req, res) => {
@@ -301,6 +295,127 @@ async function run() {
   const errorBanner = `!!(document.querySelector('.banner strong') &&
     document.querySelector('.banner strong').textContent.includes('failed to load'))`;
 
+  // --- The title chip (0.1.85): page-side state and the routine that holds a
+  // screen's chip to the ruling. Declared here, above the scoped branch, because
+  // the show-detail section (0.1.90) runs it in a scoped run; the title chip
+  // checks on song detail and Gap history, further down, run it on a full one.
+  // The edge it checks against is the h1's bottom, which on show detail is the
+  // date heading: that screen's chip watches the venue line under it, so the
+  // routine takes `edge` as the node whose bottom is the threshold.
+  const CHIP_JS = `
+    const t = (n) => ((n || {}).textContent || '').trim();
+    const chipState = (edgeSel) => {
+      const c = document.querySelector('.screen .title-chip');
+      if (!c) return null;
+      const h1 = document.querySelector('.screen h1.screen-title');
+      const edgeNode = edgeSel ? document.querySelector(edgeSel) : h1;
+      const hdr = document.querySelector('.app-header').getBoundingClientRect();
+      const r = c.getBoundingClientRect();
+      const bar = c.closest('.sortbar') || c.closest('.title-bar-inner');
+      const br = bar ? bar.getBoundingClientRect() : null;
+      const lead = bar ? bar.querySelector('.chip-lead') : null;
+      const was = document.activeElement;
+      c.focus({ preventScroll: true });
+      const focusable = document.activeElement === c;
+      if (focusable) { if (was && was !== document.body && was.focus) was.focus({ preventScroll: true }); else c.blur(); }
+      const sticky = [...document.querySelectorAll('#main *')].filter((n) => getComputedStyle(n).position === 'sticky' && n.getClientRects().length);
+      const nm = c.querySelector('.title-chip-name');
+      // Shown means a box AND visible: on Gap history a hidden chip keeps its
+      // box (visibility: hidden) so the list does not move when it appears.
+      const row = document.querySelector('.screen .rows li');
+      const a = document.activeElement;
+      return {
+        shown: c.getClientRects().length > 0 && getComputedStyle(c).visibility === 'visible', hidden: !!c.closest('[hidden]'), inert: !!c.closest('[inert]'), focusable,
+        rowTop: row ? row.getBoundingClientRect().top + window.scrollY : null,
+        active: a ? a.tagName.toLowerCase() + (a.className ? '.' + String(a.className).split(' ').join('.') : '') : null,
+        name: t(nm), aria: c.getAttribute('aria-label'), h1: t(h1),
+        h1Bottom: edgeNode ? edgeNode.getBoundingClientRect().bottom : null, headerBottom: hdr.bottom,
+        top: r.top, left: r.left, right: r.right, height: r.height,
+        nameRight: nm ? nm.getBoundingClientRect().right : null,
+        lines: nm ? Math.round(nm.getBoundingClientRect().height / parseFloat(getComputedStyle(nm).lineHeight)) : 0,
+        inSortbar: !!c.closest('.sortbar'), last: !!(c.parentElement && c.parentElement.lastElementChild === c),
+        barTop: br ? br.top : null, barLeft: br ? br.left + parseFloat(getComputedStyle(bar).paddingLeft) : null,
+        barRight: br ? br.right - parseFloat(getComputedStyle(bar).paddingRight) : null,
+        leadRight: lead ? lead.getBoundingClientRect().right : null,
+        sticky: sticky.map((n) => n.className), scrollY: window.scrollY, viewport: window.innerWidth,
+        focusH1: document.activeElement === h1,
+      };
+    };`;
+  const chipAt = async (y, edge = null) => {
+    await evaluate(`window.scrollTo(0, ${y})`);
+    await sleep(350);
+    return evaluate(`(() => {${CHIP_JS} return chipState(${JSON.stringify(edge)}); })()`);
+  };
+  // The tap: scrollY read in the same evaluate as the click, so "at once"
+  // means before any frame could run.
+  const tapChip = () => evaluate(`(() => {${CHIP_JS}
+    document.querySelector('.screen .title-chip').click();
+    return { y: window.scrollY, focusH1: document.activeElement === document.querySelector('.screen h1.screen-title') }; })()`);
+  const chipProblems = async (tag, { history, name, resize = false, edge = null }) => {
+    const p = [];
+    const at = (y) => chipAt(y, edge);
+    const s0 = await at(0);
+    if (!s0) return [`${tag}: no .title-chip on the screen`];
+    if (s0.shown || !s0.hidden || !s0.inert || s0.focusable) p.push(`${tag}: at the top the chip is ${s0.shown ? 'rendered' : 'not rendered'}, hidden ${s0.hidden}, inert ${s0.inert}, focusable ${s0.focusable} -- it must be gone, inert and unfocusable`);
+    if (s0.name !== name) p.push(`${tag}: the chip reads ${JSON.stringify(s0.name)}, the title is ${JSON.stringify(name)}`);
+    if (s0.aria !== `${name}, back to top`) p.push(`${tag}: the chip's label is ${JSON.stringify(s0.aria)}`);
+    const want = history ? ['sortbar sortbar-lead sortbar-titled'] : ['title-bar'];
+    if (JSON.stringify(s0.sticky) !== JSON.stringify(want)) p.push(`${tag}: sticky bars ${JSON.stringify(s0.sticky)}, expected ${JSON.stringify(want)} -- one bar`);
+    if (history && (!s0.inSortbar || !s0.last)) p.push(`${tag}: the chip is ${s0.inSortbar ? '' : 'not '}in the sort row and ${s0.last ? '' : 'not '}its last chip`);
+    const threshold = s0.h1Bottom - s0.headerBottom;
+    const before = await at(Math.max(0, Math.floor(threshold - 4)));
+    if (before.shown) p.push(`${tag}: shown at scrollY ${before.scrollY}, with the ${edge ? 'watched line' : 'heading'}'s bottom ${Math.round(before.h1Bottom - before.headerBottom)}px below the header's edge`);
+    const after = await at(Math.ceil(threshold + 4));
+    if (!after.shown || after.hidden || after.inert || !after.focusable) p.push(`${tag}: at scrollY ${after.scrollY}, the ${edge ? 'watched line' : 'heading'} gone, the chip is shown ${after.shown}, hidden ${after.hidden}, inert ${after.inert}, focusable ${after.focusable}`);
+    if (history && after.shown && !(after.barTop > after.headerBottom + 1)) p.push(`${tag}: at scrollY ${after.scrollY} the sort row is already stuck (top ${after.barTop}), so "mid-screen" went unchecked`);
+    if (history && after.shown && Math.abs(after.right - after.barRight) > 0.6) p.push(`${tag}: the chip ends at ${after.right}, the sort row's content at ${after.barRight} -- not its right end`);
+    if (!history && after.shown && Math.abs(after.left - after.barLeft) > 0.6) p.push(`${tag}: the chip starts at ${after.left}, the bar's content at ${after.barLeft} -- not its left`);
+    const deep = await at(1500);
+    if (!deep.shown) p.push(`${tag}: not shown at scrollY ${deep.scrollY}`);
+    else if (Math.abs(deep.barTop - deep.headerBottom) > 0.6) p.push(`${tag}: at scrollY ${deep.scrollY} the bar's top is ${deep.barTop}, the header ends at ${deep.headerBottom}`);
+    // Nothing below the bar moves when the chip appears: the list's first row
+    // sits at the same page position with the chip hidden and shown.
+    for (const s of [after, deep]) if (s.rowTop !== null && Math.abs(s.rowTop - s0.rowTop) > 0.5) p.push(`${tag}: the list's first row sits at ${s.rowTop} with the chip shown (scrollY ${s.scrollY}), ${s0.rowTop} with it hidden -- the chip moved the list ${Math.round(s.rowTop - s0.rowTop)}px`);
+    // Focus on the chip when it hides goes to the heading, not to <body>.
+    await evaluate(`document.querySelector('.screen .title-chip').focus({ preventScroll: true })`);
+    const dropped = await at(0);
+    if (dropped.shown) p.push(`${tag}: back at the top with focus on it, the chip is still shown`);
+    else if (!dropped.focusH1) p.push(`${tag}: the chip hid with focus on it and the focus went to ${dropped.active}, not the heading`);
+    if (resize) {
+      // A taller header, as a rotation can make one, then a resize: the chip
+      // must follow the new edge, not the one it was built with.
+      await evaluate(`document.documentElement.style.setProperty('--header-h', '80px'); window.dispatchEvent(new Event('resize'));`);
+      await sleep(300);
+      const r0 = await at(0);
+      const edge2 = r0.h1Bottom - r0.headerBottom;
+      const under = await at(Math.ceil(edge2 + 4));
+      const over = await at(Math.max(0, Math.floor(edge2 - 4)));
+      await evaluate(`document.documentElement.style.removeProperty('--header-h'); window.dispatchEvent(new Event('resize'));`);
+      await sleep(300);
+      if (Math.round(r0.headerBottom) !== Math.round(s0.headerBottom) + 28) p.push(`${tag}: the header ends at ${r0.headerBottom} with --header-h at 80px, ${s0.headerBottom} before -- the resize check did not take`);
+      else {
+        if (!under.shown) p.push(`${tag}: with the header 28px taller, the heading ${Math.round(under.headerBottom - under.h1Bottom)}px under it at scrollY ${under.scrollY}, the chip is not shown -- it kept the old edge`);
+        if (over.shown) p.push(`${tag}: with the header 28px taller, the heading ${Math.round(over.h1Bottom - over.headerBottom)}px below it at scrollY ${over.scrollY}, the chip is shown`);
+      }
+    }
+    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+    await at(1500);
+    const reduced = await tapChip();
+    if (reduced.y !== 0) p.push(`${tag}: under reduced motion the tap left scrollY at ${reduced.y} -- it must jump`);
+    if (!reduced.focusH1) p.push(`${tag}: focus did not move to the heading after the tap`);
+    await sleep(350);
+    const settled = await evaluate(`(() => {${CHIP_JS} return chipState(${JSON.stringify(edge)}); })()`);
+    if (settled.shown) p.push(`${tag}: back at the top, the chip is still shown`);
+    await send('Emulation.setEmulatedMedia', { features: [] });
+    await at(1500);
+    const smooth = await tapChip();
+    if (smooth.y === 0) p.push(`${tag}: without reduced motion the tap jumped -- the scroll should be smooth`);
+    let y = smooth.y;
+    for (let i = 0; i < 30 && y !== 0; i++) { await sleep(100); y = await evaluate('window.scrollY'); }
+    if (y !== 0) p.push(`${tag}: the smooth scroll stopped at ${y}, not the top`);
+    return p;
+  };
+
   if (ONLY) {
     console.log(`SCOPED RUN: ${ONLY.join(', ')}`);
     await noteSections();
@@ -384,59 +499,64 @@ async function run() {
   }
 
 
-  console.log('\ngap chart, all three entry points:');
-  for (const ep of GAP_ENTRY_POINTS) {
-    const at = ep.at || '#/shows';
-    await evaluate(`location.hash = ${JSON.stringify(at)};`);
+  console.log('\ngap chart, on the show reached from a Shows row:');
+  {
+    // Reach show detail from a Shows COMPACT ROW -- the first row WHOSE SHOW
+    // HAS SETLIST ROWS, not the first row.
+    //
+    // WHAT THIS CHECK IS FOR: the gap chart on a PLAYED show. Show detail
+    // renders the chart only when the show has setlist rows (there is nothing
+    // to chart otherwise), and the Shows landing lists every show dated on or
+    // before today, newest first. On a show day the first row is today's show,
+    // in `shows` with no setlist yet, and it has no chart BY DESIGN. Clicking
+    // the first card failed this check on 2026-10-18 for exactly that reason,
+    // with nothing wrong in the app.
+    //
+    // So walk the rows in order and open the first whose badge is not "No
+    // setlist". The badge is derived from the same rows the chart is built
+    // from, so the row chosen here is one the chart is REQUIRED on. Do not
+    // "simplify" this back to the first row: it would go red every show day
+    // and teach the reader to ignore it.
+    await evaluate(`location.hash = '#/shows';`);
     await sleep(1000);
-    if (!ep.at) {
-      // show detail: reach it from a Shows COMPACT ROW -- the first row WHOSE
-      // SHOW HAS SETLIST ROWS, not the first row.
-      //
-      // WHAT THIS CHECK IS FOR: the gap chart button on a PLAYED show. Show
-      // detail renders that button only when the show has setlist rows (there
-      // is nothing to chart otherwise), and the Shows landing lists every show
-      // dated on or before today, newest first. On a show day the first row
-      // is today's show, in `shows` with no setlist yet, and it carries no
-      // Gap chart button BY DESIGN. Clicking the first card failed this check
-      // on 2026-10-18 for exactly that reason, with nothing wrong in the app.
-      //
-      // So walk the rows in order and open the first whose badge is not
-      // "No setlist". The badge is derived from the same rows show detail
-      // renders the button from, so the row chosen here is one the button is
-      // REQUIRED on. Do not "simplify" this back to the first row: it would
-      // go red every show day and teach the reader to ignore it.
-      await setShowsView('compact');
-      const opened = await evaluate(
-        `(() => {
-           const rows = [...document.querySelectorAll('.screen .rows li .show-row')];
-           const i = rows.findIndex((r) => ((r.querySelector('.badge-sets') || {}).textContent || '').trim() !== 'No setlist');
-           if (i < 0) return { ok: false, skipped: rows.length };
-           rows[i].click(); return { ok: true, skipped: i };
-         })()`,
-      );
-      if (!opened || !opened.ok) {
-        fail(`${ep.name}: could not open a played show's detail (${opened ? opened.skipped : '?'} row(s) without a setlist)`);
-        continue;
-      }
+    await setShowsView('compact');
+    const opened = await evaluate(
+      `(() => {
+         const rows = [...document.querySelectorAll('.screen .rows li .show-row')];
+         const i = rows.findIndex((r) => ((r.querySelector('.badge-sets') || {}).textContent || '').trim() !== 'No setlist');
+         if (i < 0) return { ok: false, skipped: rows.length };
+         rows[i].click(); return { ok: true, skipped: i };
+       })()`,
+    );
+    if (!opened || !opened.ok) fail(`could not open a played show's detail (${opened ? opened.skipped : '?'} row(s) without a setlist)`);
+    else {
       if (opened.skipped) console.log(`        (skipped ${opened.skipped} row(s) with no setlist -- unplayed show(s) at the top of the list)`);
-      await sleep(900);
+      await sleep(1100);
+      const got = await evaluate(`(() => {
+        const sec = document.querySelector('.screen .section.gap-chart');
+        return { hash: location.hash, boundary: ${errorBanner}, section: !!sec,
+          rows: sec ? sec.querySelectorAll('ul.rows > li .row-shell[data-song-id]').length : 0,
+          titles: document.querySelectorAll('.screen .setlist-flow .setlist-song').length };
+      })()`);
+      if (!got.hash.startsWith('#/show/')) fail(`the Shows row did not open a show (hash ${got.hash})`);
+      else if (got.boundary) fail(`${got.hash} rendered the error boundary`);
+      else if (!got.section || !got.rows) fail(`${got.hash}: no gap chart section with rows on a played show (section ${got.section}, rows ${got.rows})`);
+      else if (got.rows > got.titles) fail(`${got.hash}: ${got.rows} chart rows for ${got.titles} setlist titles -- one row per song, never more`);
+      else pass(`${got.hash}: the gap chart is on the page, ${got.rows} row(s) for ${got.titles} titles`);
     }
-    if (ep.setup) {
-      const ready = await evaluate(ep.setup);
-      if (!ready) { fail(`${ep.name}: setup failed`); continue; }
-      await sleep(900); // search is debounced
+    // The rows that used to carry the chart's icon: one control each, like the
+    // Shows compact rows, since the show every one of them opens has the chart.
+    for (const [what, hash] of ONE_CONTROL_ROWS) {
+      await evaluate(`location.hash = ${JSON.stringify(hash)};`);
+      await sleep(1100);
+      const r = await evaluate(`(() => {
+        const shells = [...document.querySelectorAll('.screen .rows li .row-shell')];
+        return { rows: shells.length, extra: shells.filter((s) => s.querySelectorAll('button, a').length > 1 + (s.querySelector('button.gap-figure') ? 1 : 0) + (s.querySelector('.pick-btn') ? 1 : 0)).length, icons: document.querySelectorAll('.screen .rows .row-action').length };
+      })()`);
+      if (!r.rows) fail(`${what}: no rows rendered at ${hash}`);
+      else if (r.icons || r.extra) fail(`${what}: ${r.icons} gap-chart icon(s) and ${r.extra} row(s) with a second control -- a row is one control, and the show it opens has the chart`);
+      else pass(`${what}: ${r.rows} row(s), one control each, no gap-chart icon`);
     }
-    const clicked = await evaluate(`(() => { const b = ${ep.click}; if (!b) return false; b.click(); return true; })()`);
-    if (!clicked) { fail(`${ep.name}: no gap chart control found`); continue; }
-    await sleep(1100);
-    const hash = await evaluate('location.hash');
-    const text = String(await evaluate(screenText));
-    const boundary = await evaluate(errorBanner);
-    if (!String(hash).startsWith('#/gapchart/')) fail(`${ep.name}: did not navigate (hash ${hash})`);
-    else if (boundary) fail(`${ep.name}: gap chart rendered the error boundary`);
-    else if (!text.toLowerCase().includes('gap chart')) fail(`${ep.name}: gap chart did not render`);
-    else pass(`${ep.name} -> ${hash}`);
   }
 
   // The cards must carry Show detail and NOTHING else. Asserted as an exact
@@ -620,7 +740,6 @@ async function run() {
     return {
       setlistCards: cards.length,
       withShowDetail: cards.filter(c => { const a = c.querySelector('.card-actions'); return a && label(a, 'Show detail'); }).length,
-      withGapChart: cards.filter(c => { const a = c.querySelector('.card-actions'); return a && label(a, 'Gap chart'); }).length,
       // THE POSITION CHECK: actions must follow the LAST setlist song in
       // their own card, in document order.
       actionsBelowSetlist: cards.filter(c => {
@@ -629,14 +748,6 @@ async function run() {
         const last = songs[songs.length - 1];
         return a && last && !!(last.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING);
       }).length,
-      // Button order within the row: the show, then the chart derived from it.
-      buttonOrderOk: cards.every(c => {
-        const a = c.querySelector('.card-actions');
-        if (!a) return true;
-        const t = [...a.querySelectorAll('.btn-small')].map(b => b.textContent.trim());
-        const i = t.indexOf('Show detail'), j = t.indexOf('Gap chart');
-        return i === -1 || j === -1 || i < j;
-      }),
     };
   })()`;
   const home = await evaluate(CARD_PROBE);
@@ -648,8 +759,10 @@ async function run() {
   if (home.actionsBelowSetlist !== home.setlistCards) {
     fail(`Home: actions sit BELOW the setlist on only ${home.actionsBelowSetlist} of ${home.setlistCards} card(s)`);
   } else pass(`actions sit below the setlist on all ${home.setlistCards} card(s)`);
-  if (!home.buttonOrderOk) fail('Home: Show detail must come before Gap chart');
-  else pass('Show detail precedes Gap chart on every card');
+  // "Show detail precedes Gap chart" was asserted here until 0.1.90. No card
+  // has offered Gap chart since 0.1.48 and the chart has no route since
+  // 0.1.90, so the line could not fail, and a check that cannot fail is not a
+  // check. The row's order is held above, against the card's own titles.
 
   // The Shows tab is the screen Home is being made to match, and it was
   // already correct -- so it is checked too. If a shared renderer ever moves
@@ -1578,9 +1691,11 @@ async function run() {
       await sleep(900);
       lists.push(['Songs, Coldest first', await readHeat(), (r) => r.fig === null || r.fig === 0]);
     } else fail('heat: no "Coldest first" in the sort sheet');
-    await evaluate(`location.hash = '#/gapchart/1728657865';`);
+    // The gap chart is a section of show detail (0.1.90), and the only .rows on
+    // that screen, so the read takes the chart and nothing else.
+    await evaluate(`location.hash = '#/show/1728657865';`);
     await sleep(1200);
-    lists.push(['the gap chart for 1728657865', await readHeat(), (r) => r.fig === null]);
+    lists.push(['the gap chart on show 1728657865', await readHeat(), (r) => r.fig === null]);
     await evaluate(`location.hash = '#/song/54/gaps';`);
     await sleep(1200);
     const hist = await readHeat();
@@ -3209,7 +3324,9 @@ async function run() {
     if (debuts.length !== 1 || debuts[0] !== oldest) p.push(`${tag}: ${debuts.length} Debut row(s); the oldest row, ${oldest.title}, ${oldest.debut ? 'has' : 'lacks'} the badge`);
     if (debuts.some((r) => r.num !== null)) p.push(`${tag}: the Debut row carries a number (${debuts.map((r) => r.num).join(', ')}) -- Carton prints a position there, not a gap`);
     if (shows.some((r) => !r.debut && (r.num === null || r.unit !== 'show gap'))) p.push(`${tag}: a show row without a "show gap" figure`);
-    if (shows.some((r) => !r.action)) p.push(`${tag}: a show row without its gap-chart action`);
+    // One control per row since 0.1.90: the icon that opened the chart's own
+    // route went with the route, and the show the row opens has the chart.
+    if (shows.some((r) => r.action)) p.push(`${tag}: a show row carries a gap-chart icon, a second control to the show it already opens`);
     if (now && (now.unit !== 'shows since' || now.action || now.title !== 'Now · still open')) p.push(`${tag}: the Now row reads ${JSON.stringify(now.title)} / unit ${JSON.stringify(now.unit)}${now.action ? ' and carries an action' : ''}`);
     if (now && Number(h.tiles.since) !== now.num) p.push(`${tag}: Now reads ${now.num}, the shows-since tile ${h.tiles.since}`);
     const closedMax = Math.max(-1, ...shows.filter((r) => r.num !== null).map((r) => r.num));
@@ -3416,25 +3533,29 @@ async function run() {
   // (e) A row against that night's gap chart: the same song, the same figure.
   // A FOLDED row -- one carrying ×N -- because that is the case where the two
   // screens could disagree: Carton's own page prints 0 on the repeat, and the
-  // gap chart folds the night's repeats the way this list does.
+  // gap chart folds the night's repeats the way this list does. The row opens
+  // the show, and the chart is a section of it (0.1.90); the Shadow row there
+  // is found by its song id, since a name is not a key.
   {
     await openHistory(54);
     const row = await evaluate(`(() => {${HIST_JS}
       const r = histRows().find((x) => !x.now && !x.debut && x.times > 1);
       if (!r) return null;
-      document.querySelector('.screen .history-row[data-order="' + r.order + '"] button.row-action').click();
+      document.querySelector('.screen .history-row[data-order="' + r.order + '"] button.row').click();
       return r;
     })()`);
     await sleep(1100);
     const chart = await evaluate(`(() => {
       const t = (n) => ((n || {}).textContent || '').trim();
-      const li = [...document.querySelectorAll('.screen .rows li')].find((x) => t(x.querySelector('.row-title')) === 'Shadow');
-      return { hash: location.hash, num: li && li.querySelector('.gap-num') ? Number(t(li.querySelector('.gap-num'))) : null };
+      const shell = document.querySelector('.screen .section.gap-chart .row-shell[data-song-id="54"]');
+      return { hash: location.hash, num: shell && shell.querySelector('.gap-num') ? Number(t(shell.querySelector('.gap-num'))) : null,
+        tonight: shell ? t([...shell.querySelectorAll('.badge')].find((b) => /tonight$/.test(t(b)))) : null };
     })()`);
     if (!row) fail('gap history: Shadow has no ×N row to compare -- the fold went unchecked against the gap chart');
-    else if (chart.hash !== `#/gapchart/${row.showId}`) fail(`gap history: the row action for show ${row.showId} went to ${chart.hash}`);
+    else if (chart.hash !== `#/show/${row.showId}`) fail(`gap history: the row for show ${row.showId} went to ${chart.hash}`);
     else if (chart.num !== row.num) fail(`gap history: ${row.title} (×${row.times}) reads ${row.num} here and ${chart.num} on that night's gap chart`);
-    else pass(`${row.title}, played ×${row.times}: ${row.num} here, ${chart.num} for Shadow on that night's gap chart`);
+    else if (chart.tonight !== `${row.times}× tonight`) fail(`gap history: ${row.title} (×${row.times}) reads ${JSON.stringify(chart.tonight)} on that night's gap chart, not "${row.times}× tonight"`);
+    else pass(`${row.title}, played ×${row.times}: ${row.num} here, ${chart.num} and "${chart.tonight}" for Shadow on that night's gap chart`);
   }
 
   // (f) Song detail: the longest tile opens the history, carries the same
@@ -3830,9 +3951,13 @@ async function run() {
       // (Shadow's newest), and the Songs list.
       if (!shadowDebutShow) p.push("Shadow's history has no Debut row to find its debut show by");
       else {
-        await evaluate(`location.hash = '#/gapchart/${shadowDebutShow}';`);
+        // The chart is a section of the show (0.1.90), whose entries section
+        // may carry a green count beside the chart's plain Debut.
+        await evaluate(`location.hash = '#/show/${shadowDebutShow}';`);
         await sleep(1200);
-        p.push(...greenProblems(`gap chart ${shadowDebutShow} (Shadow's debut)`, await greenScan(), { debutsWanted: true }));
+        const debutScan = await greenScan();
+        if (!debutScan.dark.badges.some((b) => b.text === 'Debut')) p.push(`show ${shadowDebutShow} (Shadow's debut): no Debut badge on its gap chart`);
+        p.push(...greenProblems(`show ${shadowDebutShow}'s gap chart (Shadow's debut)`, debutScan, { debutsWanted: true, label: /^\d+$/ }));
       }
       const shadowJamShow = [...wantFor(54).keys()].sort((a, b) => dateOf.get(`54:${b}`).localeCompare(dateOf.get(`54:${a}`)))[0];
       await evaluate(`location.hash = '#/show/${shadowJamShow}';`);
@@ -3844,122 +3969,14 @@ async function run() {
       await sleep(1200);
       p.push(...greenProblems('Songs', await greenScan()));
       if (p.length) for (const x of p) fail(`jam marking: ${x}`);
-      else pass(`jam marking agrees with the jamcharts table per show and per performance, ${partialNights} partly charted night(s) among them (${notes.join('; ')}); every badge painted --jam is a .badge-jam with a jam label, on ${songs.length * 2 + 3} screens, both themes; Debut plain on Shadow's history and gap chart ${shadowDebutShow}`);
+      else pass(`jam marking agrees with the jamcharts table per show and per performance, ${partialNights} partly charted night(s) among them (${notes.join('; ')}); every badge painted --jam is a .badge-jam with a jam label, on ${songs.length * 2 + 3} screens, both themes; Debut plain on Shadow's history and on show ${shadowDebutShow}'s gap chart`);
     }
   }
 
   console.log('\ntitle chip:');
-  const CHIP_JS = `
-    const t = (n) => ((n || {}).textContent || '').trim();
-    const chipState = () => {
-      const c = document.querySelector('.screen .title-chip');
-      if (!c) return null;
-      const h1 = document.querySelector('.screen h1.screen-title');
-      const hdr = document.querySelector('.app-header').getBoundingClientRect();
-      const r = c.getBoundingClientRect();
-      const bar = c.closest('.sortbar') || c.closest('.title-bar-inner');
-      const br = bar ? bar.getBoundingClientRect() : null;
-      const lead = bar ? bar.querySelector('.chip-lead') : null;
-      const was = document.activeElement;
-      c.focus({ preventScroll: true });
-      const focusable = document.activeElement === c;
-      if (focusable) { if (was && was !== document.body && was.focus) was.focus({ preventScroll: true }); else c.blur(); }
-      const sticky = [...document.querySelectorAll('#main *')].filter((n) => getComputedStyle(n).position === 'sticky' && n.getClientRects().length);
-      const nm = c.querySelector('.title-chip-name');
-      // Shown means a box AND visible: on Gap history a hidden chip keeps its
-      // box (visibility: hidden) so the list does not move when it appears.
-      const row = document.querySelector('.screen .rows li');
-      const a = document.activeElement;
-      return {
-        shown: c.getClientRects().length > 0 && getComputedStyle(c).visibility === 'visible', hidden: !!c.closest('[hidden]'), inert: !!c.closest('[inert]'), focusable,
-        rowTop: row ? row.getBoundingClientRect().top + window.scrollY : null,
-        active: a ? a.tagName.toLowerCase() + (a.className ? '.' + String(a.className).split(' ').join('.') : '') : null,
-        name: t(nm), aria: c.getAttribute('aria-label'), h1: t(h1),
-        h1Bottom: h1 ? h1.getBoundingClientRect().bottom : null, headerBottom: hdr.bottom,
-        top: r.top, left: r.left, right: r.right, height: r.height,
-        nameRight: nm ? nm.getBoundingClientRect().right : null,
-        lines: nm ? Math.round(nm.getBoundingClientRect().height / parseFloat(getComputedStyle(nm).lineHeight)) : 0,
-        inSortbar: !!c.closest('.sortbar'), last: !!(c.parentElement && c.parentElement.lastElementChild === c),
-        barTop: br ? br.top : null, barLeft: br ? br.left + parseFloat(getComputedStyle(bar).paddingLeft) : null,
-        barRight: br ? br.right - parseFloat(getComputedStyle(bar).paddingRight) : null,
-        leadRight: lead ? lead.getBoundingClientRect().right : null,
-        sticky: sticky.map((n) => n.className), scrollY: window.scrollY, viewport: window.innerWidth,
-        focusH1: document.activeElement === h1,
-      };
-    };`;
-  const chipAt = async (y) => {
-    await evaluate(`window.scrollTo(0, ${y})`);
-    await sleep(350);
-    return evaluate(`(() => {${CHIP_JS} return chipState(); })()`);
-  };
-  // The tap: scrollY read in the same evaluate as the click, so "at once"
-  // means before any frame could run.
-  const tapChip = () => evaluate(`(() => {${CHIP_JS}
-    document.querySelector('.screen .title-chip').click();
-    return { y: window.scrollY, focusH1: document.activeElement === document.querySelector('.screen h1.screen-title') }; })()`);
-  const chipProblems = async (tag, { history, name, resize = false }) => {
-    const p = [];
-    const s0 = await chipAt(0);
-    if (!s0) return [`${tag}: no .title-chip on the screen`];
-    if (s0.shown || !s0.hidden || !s0.inert || s0.focusable) p.push(`${tag}: at the top the chip is ${s0.shown ? 'rendered' : 'not rendered'}, hidden ${s0.hidden}, inert ${s0.inert}, focusable ${s0.focusable} -- it must be gone, inert and unfocusable`);
-    if (s0.name !== name) p.push(`${tag}: the chip reads ${JSON.stringify(s0.name)}, the song is ${JSON.stringify(name)}`);
-    if (s0.aria !== `${name}, back to top`) p.push(`${tag}: the chip's label is ${JSON.stringify(s0.aria)}`);
-    const want = history ? ['sortbar sortbar-lead sortbar-titled'] : ['title-bar'];
-    if (JSON.stringify(s0.sticky) !== JSON.stringify(want)) p.push(`${tag}: sticky bars ${JSON.stringify(s0.sticky)}, expected ${JSON.stringify(want)} -- one bar`);
-    if (history && (!s0.inSortbar || !s0.last)) p.push(`${tag}: the chip is ${s0.inSortbar ? '' : 'not '}in the sort row and ${s0.last ? '' : 'not '}its last chip`);
-    const edge = s0.h1Bottom - s0.headerBottom;
-    const before = await chipAt(Math.max(0, Math.floor(edge - 4)));
-    if (before.shown) p.push(`${tag}: shown at scrollY ${before.scrollY}, with the heading's bottom ${Math.round(before.h1Bottom - before.headerBottom)}px below the header's edge`);
-    const after = await chipAt(Math.ceil(edge + 4));
-    if (!after.shown || after.hidden || after.inert || !after.focusable) p.push(`${tag}: at scrollY ${after.scrollY}, the heading gone, the chip is shown ${after.shown}, hidden ${after.hidden}, inert ${after.inert}, focusable ${after.focusable}`);
-    if (history && after.shown && !(after.barTop > after.headerBottom + 1)) p.push(`${tag}: at scrollY ${after.scrollY} the sort row is already stuck (top ${after.barTop}), so "mid-screen" went unchecked`);
-    if (history && after.shown && Math.abs(after.right - after.barRight) > 0.6) p.push(`${tag}: the chip ends at ${after.right}, the sort row's content at ${after.barRight} -- not its right end`);
-    if (!history && after.shown && Math.abs(after.left - after.barLeft) > 0.6) p.push(`${tag}: the chip starts at ${after.left}, the bar's content at ${after.barLeft} -- not its left`);
-    const deep = await chipAt(1500);
-    if (!deep.shown) p.push(`${tag}: not shown at scrollY ${deep.scrollY}`);
-    else if (Math.abs(deep.barTop - deep.headerBottom) > 0.6) p.push(`${tag}: at scrollY ${deep.scrollY} the bar's top is ${deep.barTop}, the header ends at ${deep.headerBottom}`);
-    // Nothing below the bar moves when the chip appears: the list's first row
-    // sits at the same page position with the chip hidden and shown.
-    for (const s of [after, deep]) if (s.rowTop !== null && Math.abs(s.rowTop - s0.rowTop) > 0.5) p.push(`${tag}: the list's first row sits at ${s.rowTop} with the chip shown (scrollY ${s.scrollY}), ${s0.rowTop} with it hidden -- the chip moved the list ${Math.round(s.rowTop - s0.rowTop)}px`);
-    // Focus on the chip when it hides goes to the heading, not to <body>.
-    await evaluate(`document.querySelector('.screen .title-chip').focus({ preventScroll: true })`);
-    const dropped = await chipAt(0);
-    if (dropped.shown) p.push(`${tag}: back at the top with focus on it, the chip is still shown`);
-    else if (!dropped.focusH1) p.push(`${tag}: the chip hid with focus on it and the focus went to ${dropped.active}, not the heading`);
-    if (resize) {
-      // A taller header, as a rotation can make one, then a resize: the chip
-      // must follow the new edge, not the one it was built with.
-      await evaluate(`document.documentElement.style.setProperty('--header-h', '80px'); window.dispatchEvent(new Event('resize'));`);
-      await sleep(300);
-      const r0 = await chipAt(0);
-      const edge2 = r0.h1Bottom - r0.headerBottom;
-      const under = await chipAt(Math.ceil(edge2 + 4));
-      const over = await chipAt(Math.max(0, Math.floor(edge2 - 4)));
-      await evaluate(`document.documentElement.style.removeProperty('--header-h'); window.dispatchEvent(new Event('resize'));`);
-      await sleep(300);
-      if (Math.round(r0.headerBottom) !== Math.round(s0.headerBottom) + 28) p.push(`${tag}: the header ends at ${r0.headerBottom} with --header-h at 80px, ${s0.headerBottom} before -- the resize check did not take`);
-      else {
-        if (!under.shown) p.push(`${tag}: with the header 28px taller, the heading ${Math.round(under.headerBottom - under.h1Bottom)}px under it at scrollY ${under.scrollY}, the chip is not shown -- it kept the old edge`);
-        if (over.shown) p.push(`${tag}: with the header 28px taller, the heading ${Math.round(over.h1Bottom - over.headerBottom)}px below it at scrollY ${over.scrollY}, the chip is shown`);
-      }
-    }
-    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
-    await chipAt(1500);
-    const reduced = await tapChip();
-    if (reduced.y !== 0) p.push(`${tag}: under reduced motion the tap left scrollY at ${reduced.y} -- it must jump`);
-    if (!reduced.focusH1) p.push(`${tag}: focus did not move to the heading after the tap`);
-    await sleep(350);
-    const settled = await evaluate(`(() => {${CHIP_JS} return chipState(); })()`);
-    if (settled.shown) p.push(`${tag}: back at the top, the chip is still shown`);
-    await send('Emulation.setEmulatedMedia', { features: [] });
-    await chipAt(1500);
-    const smooth = await tapChip();
-    if (smooth.y === 0) p.push(`${tag}: without reduced motion the tap jumped -- the scroll should be smooth`);
-    let y = smooth.y;
-    for (let i = 0; i < 30 && y !== 0; i++) { await sleep(100); y = await evaluate('window.scrollY'); }
-    if (y !== 0) p.push(`${tag}: the smooth scroll stopped at ${y}, not the top`);
-    return p;
-  };
+  // CHIP_JS, chipAt, tapChip and chipProblems are declared above the scoped
+  // branch (0.1.90), so the show-detail section can hold its chip to them in a
+  // scoped run as well as here.
   {
     const p = [];
     await evaluate(`location.hash = '#/song/54';`);
@@ -4042,7 +4059,7 @@ async function run() {
     const lists = [];
     if (await clickSort('Coldest first')) { await sleep(900); lists.push(['Songs, Coldest first', await evaluate(BARS_JS)]); }
     else fail('gap bars: no "Coldest first" in the sort sheet');
-    for (const [tag, hash] of [['the gap chart for 1728657865', '#/gapchart/1728657865'], ["Shadow's gap history", '#/song/54/gaps'], ['song 49, where it has landed', '#/song/49'], ['Jams', '#/jams'], ['Shadow, every performance', '#/song/54']]) {
+    for (const [tag, hash] of [['the gap chart on show 1728657865', '#/show/1728657865'], ["Shadow's gap history", '#/song/54/gaps'], ['song 49, where it has landed', '#/song/49'], ['Jams', '#/jams'], ['Shadow, every performance', '#/song/54']]) {
       await evaluate(`location.hash = '${hash}';`);
       await sleep(1200);
       lists.push([tag, await evaluate(BARS_JS)]);
@@ -4311,10 +4328,11 @@ async function run() {
 
   // --- Show detail action row: one set, not two visual weights --------------
   //
-  // Venue info was a link floating above this row and is now a third control
-  // in it. The assertion is that it is INDISTINGUISHABLE from the buttons it
-  // joined -- compared against them, not against expected literals, so it
-  // stays matched if the button treatment is ever retuned again.
+  // Venue info was a link floating above this row and is now a control in it
+  // (the third until 0.1.90, when Gap chart left the row for a section of the
+  // screen). The assertion is that it is INDISTINGUISHABLE from the button it
+  // joined -- compared against it, not against expected literals, so it stays
+  // matched if the button treatment is ever retuned again.
   //
   // Also asserts the row stays on ONE LINE. It lost a control in 0.1.36 for
   // exactly this reason: the Carton link wrapped on a narrow phone and read as
@@ -4804,19 +4822,39 @@ async function run() {
         await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
       };
 
-      // A real press at the far end of the button and below its box: only its hit
-      // region is there, so a button with none would not open.
-      const pressNotes = async () => {
+      // A show's sheet, from its card on the Shows tab (0.1.90): show detail opens
+      // no sheet any more, its entries being open on the page, so the sheet is
+      // reached the way a reader reaches it -- When set to the show's month, the
+      // detail view, and the card found by every title it prints, in order. Never
+      // by date: two shows can share one. The press lands at the far end of the
+      // button and below its box, where only its hit region is, so a button with
+      // none would not open. Each returns null, or why it could not.
+      const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const cardKey = (id) => (nightRows.get(id) || []).map((r) => squeeze(r.songname)).join('|');
+      const findCard = (id) => `[...document.querySelectorAll('.screen .card')].find((c) => [...c.querySelectorAll('.setlist-flow .setlist-song')].map((s) => s.textContent.replace(/\\s+/g, ' ').trim()).join('|') === ${JSON.stringify(cardKey(id))})`;
+      const atCard = async (id) => {
+        const date = (nightRows.get(id) || [])[0]?.showdate;
+        if (!date) return 'no raw rows for the show';
+        const [y, m] = String(date).split('-').map(Number);
+        const when = await setShowsWhen(y, MONTH_SHORT[m - 1]);
+        if (when !== 'month') return `When could not pick ${MONTH_SHORT[m - 1]} ${y} (${when})`;
+        if (!(await setShowsView('detail'))) return 'the detail view did not take';
+        return (await evaluate(`!!${findCard(id)}`)) ? null : `no card on Shows prints the show's ${cardKey(id).split('|').length} titles`;
+      };
+      const openCardSheet = async (id) => {
+        const why = await atCard(id);
+        if (why) return why;
         const at = await evaluate(`(() => {
-          const b = document.querySelector('.screen .btn-jam');
+          const b = ${findCard(id)}.querySelector('.btn-jam');
           if (!b) return null;
           b.scrollIntoView({ block: 'center', behavior: 'instant' });
           const r = b.getBoundingClientRect();
           return { x: r.right - 3, y: r.bottom + 2 };
         })()`);
-        if (at) await pressAt(at.x, at.y);
+        if (!at) return 'the card carries no Jam notes button';
+        await pressAt(at.x, at.y);
         await sleep(150);
-        return Boolean(at);
+        return (await evaluate(`!!document.querySelector('.sheet')`)) ? null : 'a press on the button opened no sheet';
       };
 
       const checkShow = async (tag, id, rows) => {
@@ -4832,9 +4870,11 @@ async function run() {
         if (d) fail(`${tag}: show detail's cards, ${d}`);
         else pass(`${tag}: show detail's cards read The Carton's notes, in played order`);
 
-        if (!(await pressNotes())) { fail(`${tag}: no Jam notes button to press`); return; }
+        // The sheet, from the same show's card on the Shows tab (0.1.90).
+        const why = await openCardSheet(id);
+        if (why) { fail(`${tag}: no sheet from the show's card on Shows: ${why}`); return; }
         const sheet = await evaluate(READ_SHEET);
-        if (!sheet) { fail(`${tag}: a press on the Jam notes button opened no sheet`); return; }
+        if (!sheet) { fail(`${tag}: a press on the card's Jam notes button opened no sheet`); return; }
         d = firstDiff(sheet.entries, want);
         if (sheet.heading !== 'Jam chart entries') fail(`${tag}: the sheet is headed ${JSON.stringify(sheet.heading)}`);
         else if (d) fail(`${tag}: the sheet, ${d}`);
@@ -4881,6 +4921,218 @@ async function run() {
         rows.sort(played);
         const key = rows.map((r) => squeeze(r.songname)).join('|');
         showsPrinting.set(key, [...(showsPrinting.get(key) || []), id]);
+      }
+
+      // --- Show detail's layout (0.1.90) ----------------------------------------
+      //
+      // docs/plan.md, "Show detail layout". The gap chart inline, between the
+      // setlist and the entries; each row the way into its song's gap history
+      // and the history's way back to the show; the chart's figures held to
+      // that history; and the header's chip. Scopable on its own, so the proofs
+      // re-run it alone. The exactly-one rule for the button and the entries
+      // section lives in jam-button, beside the cards it holds the other half to.
+      if (want('show-detail')) {
+        console.log('\nshow detail: the chart, its rows, the history and the chip:');
+        const SHOW = 1728657865;
+        const READ_CHART = `(() => {
+          const t = (n) => ((n || {}).textContent || '').trim();
+          const screen = document.querySelector('.screen');
+          const sections = [...screen.querySelectorAll(':scope > .section')];
+          const setlist = sections.find((s) => s.querySelector('.setlist-source'));
+          const chart = screen.querySelector(':scope > .section.gap-chart');
+          const entries = sections.find((s) => t(s.querySelector('.section-title')) === 'Jam chart entries');
+          const link = chart && chart.querySelector('.gap-chart-source .carton-link');
+          const source = screen.querySelector('.setlist-source .carton-link');
+          return {
+            hash: location.hash,
+            h1: t(screen.querySelector('h1.screen-title')),
+            chart: !!chart,
+            afterSetlist: !!chart && !!setlist && setlist.nextElementSibling === chart,
+            hasEntries: !!entries,
+            beforeEntries: !entries || (!!chart && chart.nextElementSibling === entries),
+            head: chart ? t(chart.querySelector('.section-head .section-title')) : null,
+            link: chart ? t(chart.querySelector('.section-head .inline-link')) : null,
+            note: chart ? t(chart.querySelector('.gap-chart-intro')) : null,
+            carton: link ? link.href : null,
+            source: source ? source.href : null,
+            labels: chart ? [...chart.querySelectorAll('.gap-chart-set .gap-chart-label')].map(t) : [],
+            setLabels: setlist ? [...setlist.querySelectorAll('.setlist-set .setlist-label')].map(t) : [],
+            rows: chart ? [...chart.querySelectorAll('ul.rows > li .row-shell')].map((s) => ({
+              songId: Number(s.dataset.songId), title: t(s.querySelector('.row-title')),
+              num: s.querySelector('.gap-num') ? Number(t(s.querySelector('.gap-num'))) : null,
+              debut: [...s.querySelectorAll('.badge')].some((b) => t(b) === 'Debut'),
+              tonight: Number(((([...s.querySelectorAll('.badge')].map(t).find((x) => / tonight$/.test(x)) || '1× tonight').match(/^(\\d+)×/) || [])[1]) || 1),
+              rowH: s.querySelector('button.row') ? s.querySelector('button.row').getBoundingClientRect().height : 0,
+              figureButton: !!s.querySelector('button.gap-figure'),
+            })) : [],
+            actions: [...screen.querySelectorAll('.screen-actions .btn, .screen-actions a')].map(t),
+            buttons: screen.querySelectorAll('.btn-jam').length,
+          };
+        })()`;
+
+        await evaluate(`location.hash = '#/show/${SHOW}';`);
+        await sleep(1300);
+        const c = await evaluate(READ_CHART);
+        {
+          const p = [];
+          if (!c.chart) p.push('no gap chart section on the page');
+          else {
+            if (!c.afterSetlist) p.push('the chart is not the section right after the Setlist section');
+            if (!c.hasEntries) p.push('no entries section to place the chart above -- this show was chosen for having entries');
+            else if (!c.beforeEntries) p.push('the entries section is not the section right after the chart');
+            if (c.head !== 'Gap chart') p.push(`the chart's heading reads ${JSON.stringify(c.head)}`);
+            if (c.link !== 'How gap is counted') p.push(`the heading's link reads ${JSON.stringify(c.link)}`);
+            if (!/^How many shows had passed since each song was last played, counted as of this date\./.test(c.note || '')) p.push(`the note under the heading reads ${JSON.stringify(c.note)}`);
+            if (!c.source || c.carton !== c.source.replace('/setlists/', '/gap-chart/')) p.push(`the chart links to ${c.carton}, the setlist to ${c.source}`);
+            if (JSON.stringify(c.labels) !== JSON.stringify(c.setLabels)) p.push(`the chart's set labels are ${JSON.stringify(c.labels)}, the setlist's ${JSON.stringify(c.setLabels)}`);
+            if (!c.rows.length) p.push('no chart rows');
+            if (c.rows.some((r) => !r.songId)) p.push('a chart row carries no song id');
+            if (c.rows.some((r) => r.rowH < 44)) p.push(`a chart row's button is ${Math.round(Math.min(...c.rows.map((r) => r.rowH)) * 10) / 10}px tall, under the 44px floor`);
+            if (c.rows.some((r) => !r.debut && !r.figureButton)) p.push('a figure is not its own button opening the explainer');
+            if (c.actions.some((a) => a.startsWith('Gap chart'))) p.push(`the action row still offers Gap chart (${c.actions.join(' · ')})`);
+            if (c.buttons) p.push(`${c.buttons} Jam notes button(s) on the page`);
+          }
+          if (p.length) for (const x of p) fail(`show ${SHOW}: ${x}`);
+          else pass(`show ${SHOW}: the chart sits between the setlist and the entries, headed "Gap chart" with "How gap is counted", the note under it, ${c.labels.length} set(s) matching the setlist's, ${c.rows.length} rows of ${Math.round(Math.min(...c.rows.map((r) => r.rowH)) * 10) / 10}px and up, Carton's chart linked under them, and neither a Gap chart button nor a Jam notes button`);
+        }
+
+        const opened = await evaluate(`(() => { const b = document.querySelector('.screen .gap-chart .section-head .inline-link'); if (!b) return null; b.click(); const h = document.querySelector('.sheet h2'); const t = h ? h.textContent.trim() : null; for (const x of document.querySelectorAll('.sheet-backdrop')) x.click(); return t; })()`);
+        if (opened !== 'How gap is counted') fail(`show ${SHOW}: the heading's link opened ${JSON.stringify(opened)}, not the explainer`);
+        else pass(`show ${SHOW}: "How gap is counted" in the heading opens the explainer`);
+
+        // (a) Every row against that song's gap history: the figure, the Debut
+        // badge and the fold, read from the history's row for THIS show. Both
+        // screens read gapAtShow(), which scripts/gap-oracle.mjs holds to Carton's
+        // own pages; this holds the chart's rows to it through the screen that
+        // lists every value of it, and ties each row's song id to a song. On the
+        // charted show the suite walks, which folds two songs, and on Shadow's
+        // debut show, found from Shadow's own history, so a Debut row is read.
+        const chartAgainstHistory = async (showId, rows) => {
+          const offs = [];
+          let compared = 0;
+          for (const r of rows) {
+            await evaluate(`location.hash = '#/song/${r.songId}/gaps';`);
+            await sleep(1000);
+            const h = await evaluate(`(() => {
+              const t = (n) => ((n || {}).textContent || '').trim();
+              const row = document.querySelector('.screen .history-row[data-show-id="${showId}"]');
+              if (!row) return null;
+              const badges = [...row.querySelectorAll('.badge')].map(t);
+              return { name: t(document.querySelector('.screen .title-chip-name')), num: row.querySelector('.gap-num') ? Number(t(row.querySelector('.gap-num'))) : null,
+                debut: badges.includes('Debut'), times: Number((badges.find((b) => /^×\\d+$/.test(b)) || '×1').slice(1)) };
+            })()`);
+            compared += 1;
+            if (!h) { offs.push(`${r.title}: no history row for show ${showId}`); continue; }
+            if (h.name !== r.title) offs.push(`row ${JSON.stringify(r.title)} (song ${r.songId}) is the history of ${JSON.stringify(h.name)}`);
+            if (h.debut !== r.debut || (!r.debut && h.num !== r.num)) offs.push(`${r.title}: ${r.debut ? 'Debut' : r.num} on the chart, ${h.debut ? 'Debut' : h.num} on the history`);
+            if (h.times !== r.tonight) offs.push(`${r.title}: ${r.tonight}× tonight on the chart, ×${h.times} on the history`);
+          }
+          if (!compared) fail(`show ${showId}: no chart rows to hold to the history`);
+          else if (offs.length) for (const x of offs) fail(`show ${showId}, the chart against the history: ${x}`);
+          else pass(`show ${showId}: all ${compared} chart rows read the same figure, Debut and fold as their song's gap history for this show (${rows.filter((r) => r.debut).length} debut, ${rows.filter((r) => r.tonight > 1).length} folded)`);
+        };
+        await chartAgainstHistory(SHOW, c.rows);
+        if (!c.rows.some((r) => r.tonight > 1)) fail(`show ${SHOW}: no folded row, so the fold went unchecked against the history`);
+        await evaluate(`location.hash = '#/song/54/gaps';`);
+        await sleep(1100);
+        const debutShow = await evaluate(`(() => { const r = [...document.querySelectorAll('.screen .history-row[data-show-id]')].find((x) => [...x.querySelectorAll('.badge')].some((b) => b.textContent.trim() === 'Debut')); return r ? Number(r.dataset.showId) : null; })()`);
+        let debutRows = [];
+        if (!debutShow) fail("Shadow's history has no Debut row to find its debut show by");
+        else {
+          await evaluate(`location.hash = '#/show/${debutShow}';`);
+          await sleep(1300);
+          debutRows = (await evaluate(READ_CHART)).rows;
+          const shadow = debutRows.find((r) => r.songId === 54);
+          if (!shadow || !shadow.debut) fail(`show ${debutShow}: Shadow's row on the chart ${shadow ? `reads ${shadow.num}, not Debut` : 'is missing'}`);
+          else await chartAgainstHistory(debutShow, debutRows);
+        }
+
+        // (b) A row opens ITS song's history, stamped as from this show: the back
+        // chip reads the show's date and steps back to the show, and forward()
+        // returns to the history, so it stepped back rather than replacing. The
+        // sample: the first row, the last and a folded row of the charted show,
+        // and the Debut row of Shadow's debut show, each from a fresh stack
+        // (Jams, then the show).
+        {
+          const sample = [...new Map([[SHOW, c.rows[0]], [SHOW, c.rows[c.rows.length - 1]], [SHOW, c.rows.find((r) => r.tonight > 1)], [debutShow, debutRows.find((r) => r.debut)]].filter(([s, r]) => s && r).map(([s, r]) => [`${s}:${r.songId}`, [s, r]])).values()];
+          const bad = [];
+          const h1s = {};
+          for (const [showId, r] of sample) {
+            await evaluate(`location.hash = '#/jams';`);
+            await sleep(500);
+            await evaluate(`location.hash = '#/show/${showId}';`);
+            await sleep(1200);
+            const h1 = await evaluate(`document.querySelector('.screen h1.screen-title').textContent.trim()`);
+            h1s[showId] = h1;
+            const clicked = await evaluate(`(() => { const s = document.querySelector('.screen .gap-chart .row-shell[data-song-id="${r.songId}"] button.row'); if (!s) return false; s.click(); return true; })()`);
+            await sleep(1000);
+            const there = await evaluate(`(() => { const ch = document.querySelector('.screen button.chip[aria-label^="Back to"]'); return { hash: location.hash, chip: ch ? ch.textContent.trim() : null, aria: ch ? ch.getAttribute('aria-label') : null, name: ((document.querySelector('.screen .title-chip-name') || {}).textContent || '').trim() }; })()`);
+            const tapped = await evaluate(`(() => { const ch = document.querySelector('.screen button.chip[aria-label^="Back to"]'); if (!ch) return false; ch.click(); return true; })()`);
+            await sleep(1000);
+            const back = await evaluate(`({ hash: location.hash, show: !!document.querySelector('.screen .setlist-source') })`);
+            await evaluate('history.forward()');
+            await sleep(1000);
+            const fwd = await evaluate('location.hash');
+            const want = `#/song/${r.songId}/gaps`;
+            const tag = `show ${showId}, ${r.title}`;
+            if (!clicked) bad.push(`${tag}: no row to tap`);
+            else if (there.hash !== want) bad.push(`${tag}: the row landed on ${there.hash}, not ${want}`);
+            else if (there.name !== r.title) bad.push(`${tag}: the history is ${JSON.stringify(there.name)}'s`);
+            else if (there.chip !== h1 || there.aria !== `Back to ${h1}`) bad.push(`${tag}: the back chip reads ${JSON.stringify(there.chip)} (${JSON.stringify(there.aria)}), the show is ${JSON.stringify(h1)}`);
+            else if (!tapped || back.hash !== `#/show/${showId}` || !back.show) bad.push(`${tag}: the back chip reached ${back.hash}${back.show ? '' : ', with no show rendered'}`);
+            else if (fwd !== want) bad.push(`${tag}: after the back chip, forward() reached ${fwd}, not the history -- the chip replaced the show instead of stepping back`);
+          }
+          if (sample.length < 2) fail(`show ${SHOW}: ${sample.length} chart row(s) to tap, so one row's path says nothing about another's`);
+          else if (bad.length) for (const x of bad) fail(`a chart row to the history and back: ${x}`);
+          else pass(`${sample.length} chart row(s) on ${Object.keys(h1s).length} show(s) each open their own song's history, whose back chip reads the show's date ("Back to ${h1s[SHOW]}") and steps back to the show, forward() returning to the history`);
+        }
+
+        // (d) The header's chip: the song pages' routine, with the venue line as
+        // the edge it watches and its name the short date and the venue name. On
+        // the charted show the suite walks, then on the widest compact title of
+        // every show with a setlist, found by measuring each in a probe chip at
+        // 360, where it must wrap rather than run past the bar.
+        {
+          const p = [];
+          await evaluate(`location.hash = '#/show/1779890028';`);
+          await sleep(1300);
+          const name = await evaluate(`(() => { const h1 = document.querySelector('.screen h1.screen-title').textContent.trim(); const v = document.querySelector('.screen > .venue-line > span'); return h1.replace(/^[A-Za-z]+, /, '') + ' · ' + (v ? v.textContent.trim() : ''); })()`);
+          p.push(...(await chipProblems('show detail', { history: false, name, edge: '.screen > .venue-line' })));
+          const cands = [...nightRows].map(([id, rows]) => { const [y, m, d] = String(rows[0].showdate).split('-').map(Number); return [id, y, m, d, decodeRaw(rows[0].venuename)]; });
+          await send('Emulation.setDeviceMetricsOverride', { width: 360, height: 844, deviceScaleFactor: 2, mobile: true });
+          const widest = await evaluate(`(() => {
+            const probe = document.createElement('button'); probe.className = 'chip title-chip'; probe.style.whiteSpace = 'nowrap'; probe.style.position = 'absolute'; probe.style.visibility = 'hidden';
+            document.body.appendChild(probe);
+            let best = null;
+            for (const [id, y, m, d, venue] of ${JSON.stringify(cands)}) {
+              probe.textContent = new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + venue;
+              const w = probe.getBoundingClientRect().width;
+              if (!best || w > best.w) best = { id, name: probe.textContent, w };
+            }
+            probe.remove(); return best; })()`);
+          let note = '';
+          if (!widest) p.push('no shows to find the widest compact title in');
+          else {
+            await evaluate(`location.hash = '#/show/${widest.id}';`);
+            await sleep(1300);
+            const top = await chipAt(0, '.screen > .venue-line');
+            const s = await chipAt(1500, '.screen > .venue-line');
+            const where = `show ${widest.id} at 360, ${JSON.stringify(widest.name)} (${Math.round(widest.w)}px on one line)`;
+            if (!s || !s.shown) p.push(`${where}: the chip is not shown`);
+            else {
+              if (top && top.rowTop !== null && Math.abs(s.rowTop - top.rowTop) > 0.5) p.push(`${where}: the chart's first row sits at ${s.rowTop} with the chip shown, ${top.rowTop} with it hidden -- the chip moved the page ${Math.round(s.rowTop - top.rowTop)}px`);
+              if (s.viewport !== 360) p.push(`${where}: the layout viewport reads ${s.viewport}px`);
+              if (s.name !== widest.name) p.push(`${where}: the chip reads ${JSON.stringify(s.name)}`);
+              if (s.right > s.barRight + 0.5 || s.nameRight > s.right + 0.5) p.push(`${where}: the chip ends at ${s.right} and its name at ${s.nameRight}, past the bar's content edge ${s.barRight}`);
+              if (s.lines < 2) p.push(`${where}: the name sits on ${s.lines} line(s) in ${Math.round(s.barRight - s.barLeft)}px -- it fits, or it was cut`);
+              note = `${s.lines} lines, ${Math.round(s.height)}px`;
+            }
+          }
+          await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+          await sleep(300);
+          if (p.length) for (const x of p) fail(`show detail chip: ${x}`);
+          else pass(`show detail chip: hidden, inert and unfocusable at the top, shown once the venue line is under the header and not before, reading ${JSON.stringify(name)}, in a 0px bar that moves nothing, focus to the date heading, back to the top at once under reduced motion and smoothly without; the widest compact title, ${JSON.stringify(widest.name)}, wraps at 360 (${note})`);
+        }
       }
 
       // --- The jam key and the Jam notes button --------------------------------
@@ -5101,8 +5353,11 @@ async function run() {
               popup: b ? b.getAttribute('aria-haspopup') : null,
               inRow: !!row && row.classList.contains('card-actions') && row.parentElement === c,
               afterDetail: !!b && !!b.previousElementSibling && b.previousElementSibling.textContent.trim() === 'Show detail',
-              underSets: !!row && row.classList.contains('setlist-jam') && sets[sets.length - 1].nextElementSibling === row,
-              aboveList: !!row && row.nextElementSibling === c.querySelector('.fn-list'),
+              // The page's "Jam chart entries" sections and their titles, the
+              // same for every card on the page: the other form of the notes.
+              sections: [...document.querySelectorAll('.screen .section')].filter((s) => ((s.querySelector('.section-title') || {}).textContent || '') === 'Jam chart entries').length,
+              entryNames: [...document.querySelectorAll('.screen .jam-card .jam-card-song')].map((n) => n.textContent),
+              greenNames: [...c.querySelectorAll('.setlist-flow .setlist-song[data-jam="true"]')].map((s) => s.textContent),
               colour: colour(b),
               outline: b ? getComputedStyle(b).borderTopColor : null,
               fill: b ? getComputedStyle(b).backgroundColor : null,
@@ -5130,6 +5385,7 @@ async function run() {
           await sleep(1600);
           const r = await evaluate(READ_CARDS);
           if (!r.length) { fail(`${screen}: no setlist cards rendered`); continue; }
+          const onShowPage = hash.startsWith('#/show/');
 
           const withJams = r.filter((x) => x.green);
           const without = r.filter((x) => !x.green);
@@ -5139,11 +5395,23 @@ async function run() {
           else if (spurious) fail(`${screen}: ${spurious} card(s) with no jam songs render a key anyway`);
           else pass(`${screen}: ${withJams.length} card(s) with jam songs keyed, ${without.length} without correctly bare`);
 
-          const notOne = withJams.filter((x) => x.buttons !== 1);
+          // EXACTLY ONE OF THE TWO FORMS (0.1.90, docs/plan.md, "Show detail
+          // layout", item 1): a card in a list carries the Jam notes button and
+          // its page no entries section; show detail carries the open section
+          // and no button; a setlist with no green has neither. The section is
+          // the page's, so it is counted once per page, and its titles are held
+          // to the green titles of the setlist it sits under.
+          const wantButtons = onShowPage ? 0 : 1;
+          const sections = r[0].sections;
+          const wantSections = onShowPage && withJams.length ? 1 : 0;
+          const notOne = withJams.filter((x) => x.buttons !== wantButtons);
           const stray = without.filter((x) => x.buttons);
-          if (notOne.length) fail(`${screen}: ${notOne.length} of ${withJams.length} card(s) with jam songs have ${notOne[0].buttons} Jam notes button(s), not 1`);
+          const offSection = onShowPage ? withJams.filter((x) => JSON.stringify(x.entryNames) !== JSON.stringify(x.greenNames)) : [];
+          if (notOne.length) fail(`${screen}: ${notOne.length} of ${withJams.length} card(s) with jam songs have ${notOne[0].buttons} Jam notes button(s), not ${wantButtons}${onShowPage ? ' -- on show detail the entries are open on the page' : ''}`);
           else if (stray.length) fail(`${screen}: ${stray.length} card(s) with no jam songs have a button reading ${JSON.stringify(stray[0].label)}`);
-          else pass(`${screen}: one Jam notes button on each of the ${withJams.length}, none on the rest`);
+          else if (sections !== wantSections) fail(`${screen}: ${sections} "Jam chart entries" section(s) on the page, expected ${wantSections}${onShowPage ? '' : ' -- a card offers the button, never the open section'}`);
+          else if (offSection.length) fail(`${screen}: the entries section lists ${JSON.stringify(offSection[0].entryNames)}, the setlist's green titles are ${JSON.stringify(offSection[0].greenNames)}`);
+          else pass(`${screen}: ${onShowPage ? (withJams.length ? `no Jam notes button, the ${withJams[0].entryNames.length} entries open on the page under the setlist's green titles` : 'no button and no entries section') : `one Jam notes button on each of the ${withJams.length}, none on the rest, and no entries section on the page`}`);
 
           // Every card, keyed or not: the list is built in the same function as the button.
           const lost = r.filter((x) => x.fnRows !== x.fnWanted);
@@ -5170,8 +5438,9 @@ async function run() {
           if (bare.length) pass(`${screen}: ${bare.length} keyed card(s) have no footnotes — key still in a list`);
 
           // The label is exact, and it is the name: no aria-label since 0.1.89, when
-          // the count came off, so the two cannot disagree.
-          const present = withJams.filter((x) => x.buttons);
+          // the count came off, so the two cannot disagree. Cards only: show detail
+          // has no button to read, by the rule above.
+          const present = onShowPage ? [] : withJams.filter((x) => x.buttons);
           const badLabel = present.filter((x) => x.label !== 'Jam notes');
           const named = present.filter((x) => x.name !== null);
           if (badLabel.length) fail(`${screen}: ${badLabel.length} of ${present.length} button(s) read ${JSON.stringify(badLabel[0].label)}, not exactly "Jam notes"`);
@@ -5192,15 +5461,16 @@ async function run() {
           if (wrong.length) fail(`${screen}: ${wrong.length} of ${counted} card(s) disagree, e.g. ${wrong[0]}`);
           else if (counted) pass(`${screen}: the green titles on ${counted} card(s) equal their raw rows`);
 
+          if (onShowPage) continue;
+
           const notReal = withJams.filter((x) => x.buttons && (!x.real || x.popup !== 'dialog'));
           if (notReal.length) fail(`${screen}: ${notReal.length} Jam notes button(s) are not a real button opening a dialog, aria-haspopup ${JSON.stringify(notReal[0].popup)}`);
           else pass(`${screen}: each is a real button with aria-haspopup="dialog"`);
 
-          const onShowPage = hash.startsWith('#/show/');
-          const misplaced = withJams.filter((x) => x.buttons && (onShowPage ? !x.underSets || !x.aboveList : !x.inRow || !x.afterDetail));
+          const misplaced = withJams.filter((x) => x.buttons && (!x.inRow || !x.afterDetail));
           if (misplaced.length) {
-            fail(`${screen}: ${misplaced.length} button(s) out of place, ${onShowPage ? `directly under the sets ${misplaced[0].underSets}, directly above the footnotes ${misplaced[0].aboveList}` : `in the card's action row ${misplaced[0].inRow}, right after Show detail ${misplaced[0].afterDetail}`}`);
-          } else pass(`${screen}: ${onShowPage ? 'directly under the sets, directly above the footnotes' : "in the card's action row, right after Show detail"}`);
+            fail(`${screen}: ${misplaced.length} button(s) out of place, in the card's action row ${misplaced[0].inRow}, right after Show detail ${misplaced[0].afterDetail}`);
+          } else pass(`${screen}: in the card's action row, right after Show detail`);
 
           // Both themes, read off the card's own title and a plain button beside it.
           for (const theme of ['dark', 'light']) {
@@ -5251,20 +5521,22 @@ async function run() {
               return out;
             })()`);
             const tag = `${where} at ${w}`;
-            // This show is chosen for having entries, so a button missing here is a
-            // fault. Home and Shows hold whatever played last and may have none.
-            if (!t.length) {
-              if (where === 'show detail') fail(`${tag}: no Jam notes button, so its target went unmeasured`);
-              else skip(`${tag}: no Jam notes button on screen, so its target went unmeasured`);
-              continue;
+            // This show is chosen for having entries, and since 0.1.90 its entries
+            // are open on the page, so a button here is the fault. Home and Shows
+            // hold whatever played last and may have none.
+            if (where === 'show detail') {
+              if (t.length) fail(`${tag}: ${t.length} Jam notes button(s) on show detail, whose entries are open on the page`);
+              else pass(`${tag}: no Jam notes button to measure, the entries are open on the page`);
+            } else if (!t.length) skip(`${tag}: no Jam notes button on screen, so its target went unmeasured`);
+            else {
+              // Both: the walk samples whole pixels and can read one over, and a
+              // declared height means nothing if something on top of it wins the taps.
+              const short = t.filter((x) => Math.min(...x.columns) < 44 || x.declared < 44);
+              const stolen = t.filter((x) => x.stolen.length);
+              if (short.length) fail(`${tag}: ${short.length} of ${t.length} button(s) under the 44px floor, declared ${short[0].declared}px, columns ${short[0].columns.join(' / ')}px`);
+              else if (stolen.length) fail(`${tag}: the button's target takes taps meant for "${stolen[0].stolen[0]}"`);
+              else pass(`${tag}: ${t.length} button(s), a ${t[0].box}px box, target ${t[0].declared}px declared and ${Math.min(...t[0].columns)} sampled, no neighbour's taps taken`);
             }
-            // Both: the walk samples whole pixels and can read one over, and a declared
-            // height means nothing if something on top of it wins the taps.
-            const short = t.filter((x) => Math.min(...x.columns) < 44 || x.declared < 44);
-            const stolen = t.filter((x) => x.stolen.length);
-            if (short.length) fail(`${tag}: ${short.length} of ${t.length} button(s) under the 44px floor, declared ${short[0].declared}px, columns ${short[0].columns.join(' / ')}px`);
-            else if (stolen.length) fail(`${tag}: the button's target takes taps meant for "${stolen[0].stolen[0]}"`);
-            else pass(`${tag}: ${t.length} button(s), a ${t[0].box}px box, target ${t[0].declared}px declared and ${Math.min(...t[0].columns)} sampled, no neighbour's taps taken`);
 
             const onControl = await evaluate(`(() => {
               const control = ${JSON.stringify(CONTROL)};
@@ -5378,9 +5650,8 @@ async function run() {
         ];
         for (const [what, found] of hardShows) {
           if (!found) { skip(`jam notes: no charted show has ${what} today, so that show line went unchecked`); continue; }
-          await evaluate(`location.hash = '#/show/${found[0]}';`);
-          await sleep(1100);
-          if (!(await pressNotes())) { fail(`${what}: no Jam notes button to press`); continue; }
+          const why = await openCardSheet(found[0]);
+          if (why) { fail(`${what}, show ${found[0]}: no sheet from its card on Shows: ${why}`); continue; }
           await checkHead(`${what}, show ${found[0]}`, found[1], await evaluate(READ_HEAD));
           await evaluate(closeAnySheet);
           await sleep(150);
@@ -5421,27 +5692,27 @@ async function run() {
           }
         }
 
-        // A show page has each entry twice, so the sheet's card can be held to its
-        // twin: the show line above the cards adds a block and changes none of them.
+        // A show's entries render twice, in the sheet from its card and open on its
+        // page, so the sheet's card can be held to its twin: the show line above the
+        // cards adds a block and changes none of them. Two screens since 0.1.90,
+        // the sheet from the Shows card and the page under show detail.
+        const SIZES = `(sel) => [...document.querySelectorAll(sel)].map((c) => {
+          const r = c.getBoundingClientRect();
+          return { w: Math.round(r.width * 100) / 100, h: Math.round(r.height * 100) / 100 };
+        })`;
         for (const w of [360, 390]) {
           await send('Emulation.setDeviceMetricsOverride', { width: w, height: 844, deviceScaleFactor: 2, mobile: true });
-          await evaluate(`location.hash = '#/show/${mixed ? mixed[0] : ''}';`);
+          const tag = `show ${mixed ? mixed[0] : '?'} at ${w}`;
+          const why = mixed ? await openCardSheet(mixed[0]) : 'no show mixes recommended entries with others';
+          if (why) { fail(`${tag}: no sheet from its card on Shows: ${why}`); continue; }
+          const sheetCards = await evaluate(`(() => { const out = (${SIZES})('.sheet .jam-card'); for (const b of document.querySelectorAll('.sheet-backdrop')) b.click(); return out; })()`);
+          await evaluate(`location.hash = '#/show/${mixed[0]}';`);
           await sleep(1300);
-          const tag = `show detail at ${w}`;
-          const twins = await evaluate(`(() => {
-            const sizes = (sel) => [...document.querySelectorAll(sel)].map((c) => {
-              const r = c.getBoundingClientRect();
-              return { w: Math.round(r.width * 100) / 100, h: Math.round(r.height * 100) / 100 };
-            });
-            document.querySelector('.screen .btn-jam').click();
-            const out = { sheet: sizes('.sheet .jam-card'), page: sizes('.screen .jam-card') };
-            for (const b of document.querySelectorAll('.sheet-backdrop')) b.click();
-            return out;
-          })()`);
-          const d = firstDiff(twins.sheet, twins.page);
-          if (!twins.page.length) fail(`${tag}: the page has no jam cards, so the sheet's had nothing to match`);
+          const pageCards = await evaluate(`(${SIZES})('.screen .jam-card')`);
+          const d = firstDiff(sheetCards, pageCards);
+          if (!pageCards.length) fail(`${tag}: the page has no jam cards, so the sheet's had nothing to match`);
           else if (d) fail(`${tag}: a sheet card is not the size of its twin on the page, ${d}`);
-          else pass(`${tag}: ${twins.page.length} sheet card(s) the size of their twins on the page`);
+          else pass(`${tag}: ${pageCards.length} sheet card(s) the size of their twins on the page`);
         }
         await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
 
@@ -5449,9 +5720,8 @@ async function run() {
         // label in --jam over the date, a hairline, then the entries. Size, colour,
         // case and the hairline each report on their own line, in both themes, on the
         // real sheet, against the tokens as that theme resolves them. And only this
-        // sheet: a footnote's title stays the plain heading it was.
-        await evaluate(`location.hash = '#/show/1779890028';`);
-        await sleep(1300);
+        // sheet: a footnote's title stays the plain heading it was. The jam sheet
+        // opens from the show's card on Shows, the footnote's from show detail.
         const READ_TITLE = `(() => {
           const s = document.querySelector('.sheet');
           const h2 = s && s.querySelector('h2');
@@ -5484,13 +5754,13 @@ async function run() {
         for (const theme of ['dark', 'light']) {
           await evaluate(`document.documentElement.setAttribute('data-theme', ${JSON.stringify(theme)});`);
           await sleep(200);
-          await evaluate(`document.querySelector('.screen .btn-jam').click()`);
-          await sleep(150);
-          const t = await evaluate(READ_TITLE);
+          const why = await openCardSheet(1779890028);
+          const t = why ? null : await evaluate(READ_TITLE);
           await evaluate(closeAnySheet);
           await sleep(150);
           const tag = `the sheet's title (${theme})`;
-          if (!t.h2 || !t.date) fail(`${tag}: no title or no date to compare, ${JSON.stringify(t)}`);
+          if (why) fail(`${tag}: no sheet from show 1779890028's card on Shows: ${why}`);
+          else if (!t.h2 || !t.date) fail(`${tag}: no title or no date to compare, ${JSON.stringify(t)}`);
           else {
             if (!(t.h2.size < t.date.size)) fail(`${tag}: ${t.h2.size}px against the date's ${t.date.size}px, not smaller`);
             else pass(`${tag}: ${t.h2.size}px under the date's ${t.date.size}px`);
@@ -5499,13 +5769,15 @@ async function run() {
             if (t.h2.transform !== 'uppercase' || t.h2.spacing === 'normal' || t.date.transform === 'uppercase') fail(`${tag}: case ${t.h2.transform} and spacing ${t.h2.spacing}, the date's case ${t.date.transform}`);
             else pass(`${tag}: uppercase and spaced ${t.h2.spacing}, the date ${t.date.transform}`);
           }
-          const r = t.rule;
+          const r = t ? t.rule : null;
           if (!r) fail(`the sheet's hairline (${theme}): no show line to carry it`);
           else if (r.style !== 'solid' || !(r.width >= 1)) fail(`the sheet's hairline (${theme}): none under the show line, ${r.width}px ${r.style}`);
           else if (r.colour !== t.token.line) fail(`the sheet's hairline (${theme}): ${r.colour}, where --line is ${t.token.line}`);
           else if (!r.nextIsCard || !(r.above > r.width) || !(r.below > 0)) fail(`the sheet's hairline (${theme}): not between the show line and the first card, ${JSON.stringify(r)}`);
           else pass(`the sheet's hairline (${theme}): ${r.width}px of --line, ${r.above}px under the venue and ${r.below}px above the first card`);
 
+          await evaluate(`location.hash = '#/show/1779890028';`);
+          await sleep(1300);
           await evaluate(`document.querySelector('.screen button.fn-marker').click()`);
           await sleep(150);
           const other = await evaluate(READ_TITLE);
@@ -5535,9 +5807,13 @@ async function run() {
             const i = items.findIndex((li) => /LTP|show gap/i.test(li.textContent));
             return i < 0 ? null : [...document.querySelectorAll('.screen button.fn-marker')].find((b) => b.textContent === String(i + 1));
           })()`;
-          for (const [tag, opener, heading] of [
-            ['a footnote', footnoteOpener, 'Footnote'],
-            ['the notes', `document.querySelector('.screen .btn-jam')`, 'Jam chart entries'],
+          // The notes' sheet opens from the show's card on Shows (0.1.90), reached
+          // through When and the detail view; the footnote's from show detail.
+          const goShow = async () => { await evaluate(`location.hash = ${JSON.stringify(showHash)};`); await sleep(1100); return null; };
+          const goCard = async () => { await evaluate(`location.hash = '#/shows';`); await sleep(1000); return atCard(quoting[0]); };
+          for (const [tag, go, opener, heading, backTo] of [
+            ['a footnote', goShow, footnoteOpener, 'Footnote', showHash],
+            ['the notes', goCard, `${findCard(quoting[0])}?.querySelector('.btn-jam')`, 'Jam chart entries', '#/shows'],
           ]) {
             const open = () => evaluate(`(() => {
               const o = ${opener};
@@ -5564,8 +5840,8 @@ async function run() {
             })`);
             await evaluate(`location.hash = '#/jams';`);
             await sleep(700);
-            await evaluate(`location.hash = ${JSON.stringify(showHash)};`);
-            await sleep(1100);
+            const why = await go();
+            if (why) { fail(`sheet, ${tag}: could not reach the opener: ${why}`); continue; }
 
             const o = await open();
             if (!o || !o.opened) { fail(`sheet, ${tag}: did not open (${JSON.stringify(o)})`); continue; }
@@ -5593,14 +5869,18 @@ async function run() {
             // The audit's failure: Back with a sheet open changed the screen under it.
             // Back leaving the screen is the accepted limit (docs/plan.md), so this
             // asserts exactly that, and that nothing is left floating on the new one.
+            // The screen beneath is Jams either way: When and the view are picked
+            // without a hash change, so Shows is one entry over it.
             await open();
+            const from = await evaluate('location.hash');
             await evaluate(`history.back()`);
             await sleep(900);
             a = await after();
             const onJams = await evaluate(`!!document.querySelector('.jam-count')`);
-            if (a.hash !== '#/jams' || !onJams) fail(`sheet, ${tag}: Back reached ${a.hash}, the Jams list rendered ${onJams}`);
+            if (from !== backTo) fail(`sheet, ${tag}: opened over ${from}, expected ${backTo}`);
+            else if (a.hash !== '#/jams' || !onJams) fail(`sheet, ${tag}: Back reached ${a.hash}, the Jams list rendered ${onJams}`);
             else if (a.sheets || a.backdrops) fail(`sheet, ${tag}: Back left ${a.sheets} sheet(s) open over ${a.hash}`);
-            else pass(`${tag}: Back leaves the screen and takes the sheet with it`);
+            else pass(`${tag}: Back leaves ${from} and takes the sheet with it`);
           }
 
           // Stacked: the footnote's "How gap is counted" opens on top of it.
@@ -5693,9 +5973,12 @@ async function run() {
             const shown = await evaluate(READ_SHOW);
             const titles = shown.green.slice(0, 4).map((g) => g.title);
             const notes = shown.cards.slice(0, 4).map((c) => c.note);
-            await evaluate(`document.querySelector('.screen .btn-jam').click()`);
-            await sleep(100);
-            const sheet = await evaluate(READ_SHEET);
+            await sleep(500);
+            const pageImgs = await evaluate(`document.querySelectorAll('.screen img').length`);
+            // The sheet, from the seeded show's card on Shows (0.1.90); the
+            // card's green titles carry the seeded notes as `title` too.
+            const why = await openCardSheet(seedId);
+            const sheet = why ? null : await evaluate(READ_SHEET);
             const sheetNotes = sheet ? sheet.entries.slice(0, 4).map((e) => e.note) : null;
             await sleep(500);
             const dom = await evaluate(`({
@@ -5704,8 +5987,9 @@ async function run() {
             })`);
             await evaluate(closeAnySheet);
 
-            if (dom.imgs) fail(`markup: ${dom.imgs} real <img> in the DOM from a note`);
-            else pass('no <img> reached the screen or the sheet');
+            if (why) fail(`markup: no sheet from the seeded show's card on Shows: ${why}`);
+            if (dom.imgs + pageImgs) fail(`markup: ${dom.imgs + pageImgs} real <img> in the DOM from a note`);
+            else pass('no <img> reached show detail, the Shows cards or the sheet');
             if (dom.fired !== undefined) fail(`markup: the onerror handler ran (window.__jamXss = ${dom.fired})`);
             else pass('the onerror handler did not run');
             for (const [tag, got] of [['the sheet', sheetNotes], ['show detail\'s cards', notes], ['the green titles\' title', titles]]) {

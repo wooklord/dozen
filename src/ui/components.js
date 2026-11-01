@@ -488,8 +488,9 @@ export function jamEntryCard(entry, onSong) {
  * One setlist's jam chart entries in played order, from its Jam notes button.
  *
  * The show line says which night this is, from any screen: the same two lines
- * as a Home or Shows card head. Every sheet gets it, show detail's too, because
- * setlistParts builds this for every setlist and no caller can leave it off.
+ * as a Home or Shows card head. Every sheet gets it, because this function
+ * builds it and no caller can leave it off; since 0.1.90 the sheet opens only
+ * from a card on Home or Shows, show detail laying its entries open instead.
  *
  * `.jam-sheet` is how app.css reaches this sheet's title: openSheet owns the h2
  * and takes no option for it, so the rule selects it through this body.
@@ -522,7 +523,8 @@ function openJamNotes(entries, show, onSong) {
  * inline clutter -- hover does not exist on a phone.
  */
 /**
- * THE JAM KEY AND THE JAM NOTES BUTTON ARE BUILT HERE, not by callers.
+ * THE JAM KEY, THE JAM NOTES BUTTON AND THE ENTRIES SECTION ARE BUILT HERE, not
+ * by callers.
  *
  * The rule is "the key follows the colour": anywhere a setlist renders with
  * jam-charted songs in it, the key naming that colour renders too. This
@@ -533,20 +535,36 @@ function openJamNotes(entries, show, onSong) {
  * The condition is the rows' own `isjamchart`, which is exactly what drives the
  * highlight three lines further down -- one decision, not two that can
  * disagree. It is also the same flag `index.jamByShow` is built by filtering
- * on, so the key and show detail's entries section stay in step.
+ * on, so the key, the button and the entries section stay in step.
  *
- * The button is the way to the notes (0.1.88, docs/plan.md, "The jam notes
- * button"). It left the footnote list, where it read as a footnote; the key stays
- * there as plain text, explaining the green. This function is private and its two
- * callers, setlistBlock and setlistCard, each place all three parts, because a
- * card's action row is setlistCard's and a flag here would be a way to leave the
- * button off. The sheet and each green title's `title` read `index.jamByShow`, as
- * show detail's cards do, so the three cannot print different words for one entry.
+ * The notes are offered on the same screen as every setlist with entries, in
+ * one of two forms and never both (0.1.90, docs/plan.md, "Show detail
+ * layout", item 1): the button where the setlist is a card in a list, opening
+ * the sheet; the open entries section on the show's own page, where a button
+ * would be an extra tap to reach entries already on it. Both are built here
+ * from the same list, and WHICH ONE A SETLIST GETS IS FIXED BY ITS COMPOSER:
+ * setlistCard places the button and never the section, setlistBlock returns the
+ * section and never builds the button. Neither takes a parameter for it, so no
+ * caller can ask for the other form or for neither; a flag here was rejected as
+ * the opt-out hole CLAUDE.md names. The sheet, the section and each green
+ * title's `title` all read `index.jamByShow`, so the three cannot print
+ * different words for one entry.
  */
 function setlistParts(rows, { onSong, index } = {}) {
   const hasJam = rows.some((r) => Number(r.isjamchart) === 1);
   const showId = Number(rows[0]?.show_id);
   const jams = hasJam ? index.jamByShow.get(showId) : [];
+
+  // The entries section, in played order: a green title above has its note
+  // here, in the sequence it was heard. The order is index.jamByShow's, built
+  // by walking the show's sorted setlist rows, so it cannot drift from the
+  // sets. Absent rather than empty when a show has none.
+  const jamEntries = hasJam
+    ? el('div.section', null, [
+        sectionHead('Jam chart entries', el('span.badge.badge-jam', { text: String(jams.length) })),
+        jams.map((j) => jamEntryCard(j, (id) => onSong?.(id))),
+      ])
+    : null;
 
   // A real <li> in the footnote list rather than a block under it: as a sibling
   // it left-aligned past the footnote numbers and read as a separate note. As a
@@ -674,13 +692,22 @@ function setlistParts(rows, { onSong, index } = {}) {
     if (hasJam) append(list, keyRow());
   }
 
-  return { sets: setNodes, footnotes: list, jamButton };
+  return { sets: setNodes, footnotes: list, jamButton, jamEntries };
 }
 
-/** A setlist on its own: the sets, the Jam notes button, then the footnotes. */
+/**
+ * A setlist on its own page: the sets and the footnotes as one node, and the
+ * "Jam chart entries" section as another, for the caller to place below the
+ * setlist. No Jam notes button, by construction and not by option: on the
+ * show's own page the entries are open on it, and a button was an extra tap to
+ * reach them (0.1.90). setlistCard is the composer that places the button, and
+ * it never places the section. The one thing a caller can still get wrong is
+ * to drop `entries`, and the smoke test holds show detail to exactly one of
+ * the two forms.
+ */
 export function setlistBlock(rows, opts = {}) {
-  const { sets, footnotes, jamButton } = setlistParts(rows, opts);
-  return el('div', null, [sets, jamButton ? el('div.setlist-jam', null, jamButton) : null, footnotes]);
+  const { sets, footnotes, jamEntries } = setlistParts(rows, opts);
+  return { setlist: el('div', null, [sets, footnotes]), entries: jamEntries };
 }
 
 /**
@@ -729,9 +756,10 @@ export function setlistCard({
   // was four edits that could each be forgotten. It is now one.
   //
   // These cards are an ENTRY POINT, not a control panel. Gap chart used to sit
-  // here and does not any more: it duplicated the button on show detail, which
-  // is where you are heading anyway. That makes a gap chart two taps from Home
-  // rather than one, deliberately.
+  // here and does not any more: it duplicated a way into the chart that show
+  // detail already had, and since 0.1.90 the chart is a section of show detail
+  // itself, which is where you are heading anyway. A card offers the way to the
+  // show and the notes, and nothing the show's own page already lays open.
   //
   // `extraActions` is for things genuinely specific to one screen -- the Shows
   // tab's Carton link -- not for re-adding navigation removed on purpose.
@@ -953,8 +981,14 @@ export function emptyState(text) {
  * built on the old edge would show the chip early or late. The observer is
  * rebuilt on every resize; it and the listener go when the screen leaves
  * (ctx.onLeave, app.js).
+ *
+ * `watch` is the node the observer follows when it is not the heading (0.1.90):
+ * show detail's title is two lines, the date heading and the venue line, and
+ * the chip stands in for both, so it watches the venue line and appears once
+ * the whole block is gone. Focus still goes to the heading, the screen's h1.
  */
-export function titleChip(ctx, name, heading, { bar = null } = {}) {
+export function titleChip(ctx, name, heading, { bar = null, watch: follow = null } = {}) {
+  const watched = follow || heading;
   const chip = el(
     'button.chip.title-chip',
     {
@@ -986,14 +1020,14 @@ export function titleChip(ctx, name, heading, { bar = null } = {}) {
     const edge = header ? Math.round(header.getBoundingClientRect().bottom) : 0;
     io = new IntersectionObserver(
       (entries) => {
-        if (!heading.isConnected) return;
+        if (!watched.isConnected) return;
         const e = entries[entries.length - 1];
         const top = e.rootBounds ? e.rootBounds.top : edge;
         show(!e.isIntersecting && e.boundingClientRect.bottom <= top);
       },
       { rootMargin: `-${edge}px 0px 0px 0px` },
     );
-    io.observe(heading);
+    io.observe(watched);
   };
   watch();
   window.addEventListener('resize', watch);

@@ -567,10 +567,14 @@ disagree with you; it locked the assumption in and then read as evidence for it.
 - **A row is ONE control.** The Shows search rows carried a second, icon-only gap chart button; it
   was removed in 0.1.64, the same reasoning that took the gap chart button off the Home and Shows
   cards. A row is an entry point to a show, and the gap chart lives one tap further in on show
-  detail. Three entry points remain — show detail, song performance rows and venue show rows — and
-  removing this one **was** removing an entry point, not preserving it: the Shows tab's compact
+  detail. Three entry points remained then — show detail, song performance rows and venue show rows
+  — and removing this one **was** removing an entry point, not preserving it: the Shows tab's compact
   rows only existed for search results (until 0.1.82, when every show became a compact row — still
   with no second control), so "the Shows list rows" and "the Shows search rows" were the same rows.
+  **Since 0.1.90 the chart is a section of show detail and has no entry points of its own:** the
+  icon on song detail's performance rows, the gap history's rows and a venue's show rows went under
+  this same rule, because the show each of those rows already opens has the chart on it, and the
+  chart's old route redirects to the show (`docs/plan.md`, "Show detail layout", item 5).
 - **On a narrow row, the widest thing must not be the least important one.** The set-structure
   badge read `Set 1 + Set 2 + Encore` — 22 characters beside a venue name, which is the thing the
   row is actually scanned for. It is abbreviated to `S1+S2+E`, worst case `S1+S2+S3+E` at ten

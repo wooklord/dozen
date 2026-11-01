@@ -25,7 +25,6 @@ import { renderSong } from './views/song.js';
 import { renderGapHistory } from './views/gaphistory.js';
 import { renderShow } from './views/show.js';
 import { renderVenue } from './views/venue.js';
-import { renderGapChart } from './views/gapchart.js';
 import { renderJams } from './views/jams.js';
 import { renderPicks } from './views/picks.js';
 
@@ -637,6 +636,15 @@ function route() {
     history.replaceState(null, '', '#/home');
     return route();
   }
+  // #/gapchart/{id} was the per-show gap chart's own route until 0.1.90, when
+  // the chart became a section of show detail. Kept as a redirect for bookmarks
+  // and an already-installed shell: an unknown hash falls through to Home
+  // below, which would turn every old link into a silent trip to the landing.
+  const oldChart = /^#\/gapchart\/(\d+)/.exec(hash);
+  if (oldChart) {
+    history.replaceState(null, '', `#/show/${oldChart[1]}`);
+    return route();
+  }
 
   // Order matters: '#/show/' and '#/shows' share a prefix, and '#/songs' /
   // '#/song/' likewise, so the more specific pattern is tested first. The gap
@@ -653,7 +661,6 @@ function route() {
     if (gaps) view = renderGapHistory(ctx, gaps[1]);
     else if (hash.startsWith('#/song/')) view = renderSong(ctx, hash.slice('#/song/'.length));
     else if (hash.startsWith('#/songs')) view = renderSongs(ctx);
-    else if (hash.startsWith('#/gapchart/')) view = renderGapChart(ctx, hash.slice('#/gapchart/'.length));
     else if (hash.startsWith('#/show/')) view = renderShow(ctx, hash.slice('#/show/'.length));
     else if (hash.startsWith('#/shows')) view = renderShows(ctx);
     else if (hash.startsWith('#/venue/')) view = renderVenue(ctx, hash.slice('#/venue/'.length));

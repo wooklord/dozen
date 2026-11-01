@@ -302,16 +302,8 @@ export function renderSong(ctx, songId) {
                 el('span.badge.badge-set', { text: setLabel(p.settype, p.setnumber) }),
               ],
             ),
-            // Gap chart for that night, one tap from the history row.
-            el(
-              'button.row-action',
-              {
-                type: 'button',
-                'aria-label': `Gap chart for ${p.showdate}`,
-                onclick: () => navigate(`#/gapchart/${p.show_id}`),
-              },
-              icon(ICONS.gap, 18),
-            ),
+            // The trailing gap-chart action went in 0.1.90 with the chart's own
+            // route: a row is one control, and the show it opens has the chart.
           ]),
         ]),
       );

@@ -128,17 +128,8 @@ export function renderVenue(ctx, venueId) {
                   : el('span.badge', { text: isUpcoming ? 'Upcoming' : 'No setlist recorded' }),
               ],
             ),
-            hasSetlist
-              ? el(
-                  'button.row-action',
-                  {
-                    type: 'button',
-                    'aria-label': `Gap chart for ${show.showdate}`,
-                    onclick: () => navigate(`#/gapchart/${show.show_id}`),
-                  },
-                  icon(ICONS.gap, 18),
-                )
-              : null,
+            // The trailing gap-chart action went in 0.1.90 with the chart's own
+            // route: a row is one control, and the show it opens has the chart.
           ]),
         ]),
       );

@@ -45,24 +45,34 @@ const SORTS = [
 const sortOf = (key) => SORTS.find(([k]) => k === key) || SORTS[0];
 
 // Where the back link goes. Opened from the song, it steps back, so the
-// browser's own stack stays song -> history; anything else -- a deep link, a
-// pasted URL -- has no song beneath it and replaces itself with the song.
+// browser's own stack stays song -> history; opened from a show's gap chart
+// (0.1.90) it steps back to the show, and reads that show's date; anything
+// else -- a deep link, a pasted URL -- has no screen beneath it that it knows
+// of and replaces itself with the song.
 //
-// Which of the two is recorded ON THE HISTORY ENTRY, in history.state, by
+// Which of the three is recorded ON THE HISTORY ENTRY, in history.state, by
 // openGapHistory() below. It was module memory, set by comparing the previous
 // route, and that was lost or wrong three ways: a reload or a discarded tab
 // reset it, the refresh button re-rendered with the previous route equal to
 // this one, and a second song's history opened in between left the flag
 // naming the second song. Each entry carrying its own fact survives all
 // three. (Cold review, 0.1.83.)
+//
+// Before 0.1.90 the in-page link could not return to a show at all: a history
+// reached from a show carried no state, so the chip read the song's name and
+// replaced the screen with the song, and only the browser's Back went back.
 const FROM_SONG = 'gapHistoryFromSong';
+const FROM_SHOW = 'gapHistoryFromShow';
 
-/** Open a song's gap history from that song, so its back link steps back. */
-export function openGapHistory(navigate, songId) {
+/**
+ * Open a song's gap history from that song, or from a show's gap chart
+ * (`fromShow`, the show id), so its back link steps back to where it came from.
+ */
+export function openGapHistory(navigate, songId, { fromShow = null } = {}) {
   navigate(`#/song/${songId}/gaps`);
   // location.hash has already pushed the new entry; this stamps that entry,
-  // not the song's. The hashchange that renders it fires after.
-  history.replaceState({ [FROM_SONG]: Number(songId) }, '');
+  // not the one beneath it. The hashchange that renders it fires after.
+  history.replaceState(fromShow === null ? { [FROM_SONG]: Number(songId) } : { [FROM_SHOW]: Number(fromShow) }, '');
 }
 
 const FLASH_MS = 1200;
@@ -82,20 +92,26 @@ export function renderGapHistory(ctx, songId) {
   const songHash = `#/song/${song.song_id}`;
 
   // --- Header ---------------------------------------------------------------
+  // Read at render, not at the tap: the chip's label says where it goes. A
+  // show id the index does not know falls through to the deep-link case.
+  const came = history.state || {};
+  const fromSong = came[FROM_SONG] === song.song_id;
+  const fromShow = Number.isInteger(came[FROM_SHOW]) ? index.showsById.get(came[FROM_SHOW]) || null : null;
+  const backName = fromShow ? formatShowDate(fromShow.showdate) : song.name;
   append(
     screen,
     el(
       'button.chip',
       {
         type: 'button',
-        'aria-label': `Back to ${song.name}`,
+        'aria-label': `Back to ${backName}`,
         onclick: () => {
-          if (history.state && history.state[FROM_SONG] === song.song_id) history.back();
+          if (fromSong || fromShow) history.back();
           else navigate(songHash, true);
         },
         style: { marginBottom: '12px' },
       },
-      [icon(ICONS.back, 16), song.name],
+      [icon(ICONS.back, 16), backName],
     ),
   );
   const title = el('h1.screen-title', { text: 'Gap history' });
@@ -331,8 +347,9 @@ function listJoin(items) {
 /**
  * One show. The figure is the gap at that show; a debut carries the badge
  * instead of a number (Carton prints a position there, not a gap). Tap opens
- * the show; the trailing action opens that night's gap chart, where this song
- * carries the same figure.
+ * the show, where that night's gap chart carries the same figure for this
+ * song. The trailing action that opened the chart's own route went in 0.1.90
+ * with the route: a row is one control, and the show it opens has the chart.
  *
  * "Jam" (0.1.85) is green and PER SHOW, like the row: it is there when any of
  * the song's performances at that show is a jam chart entry -- `isJam`, from
@@ -377,23 +394,13 @@ function showRow(e, max, navigate) {
             el('div.gap-num.num', { text: e.gap === null ? '—' : String(e.gap) }),
             el('div.gap-unit', { text: 'show gap' }),
           ]),
-      el(
-        'button.row-action',
-        {
-          type: 'button',
-          'aria-label': `Gap chart for ${e.showdate}`,
-          onclick: () => navigate(`#/gapchart/${e.show_id}`),
-        },
-        icon(ICONS.gap, 18),
-      ),
     ],
   );
 }
 
 /**
  * The gap running now: shows since the last performance, still open. Not a
- * show, so not a control; an empty action column keeps its figure in line with
- * the rows below it.
+ * show, so not a control.
  */
 function nowRow(c, max) {
   const heat = heatFor(c.gap, max);
@@ -415,7 +422,6 @@ function nowRow(c, max) {
         el('div.gap-num.num', { text: String(c.gap) }),
         el('div.gap-unit', { text: 'shows since' }),
       ]),
-      el('div.row-action', { 'aria-hidden': 'true' }),
     ],
   );
 }
