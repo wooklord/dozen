@@ -1750,8 +1750,8 @@ against 672.09px, on both builds, because light's heavier green titles wrap diff
 titles, read a change of 0px: 2 keyed and 1 not on Home, 11 and 4 on Shows. The key row is 26.84px on
 both builds, and the button goes in an action row that already had the height. It stays on one line
 on every card. The space left in that row is 21.7–21.98px at 360 and 51.7–51.98px at 390 beside the
-Carton link, 73.38px and 103.38px on Home's card without one. The button is about 113.5px wide, by its
-digit, and 36px tall.
+Carton link, 73.38px and 103.38px on Home's card without one. The button was about 113.5px wide, by
+its digit, and 36px tall, on 0.1.88; 0.1.89 takes the dot and the count off it (below).
 
 **The setlist card on show detail is 48px taller, on all 216 charted shows,** at both widths, the 3
 with no footnotes included: the 36px button and 12px under it. It sits 16px under the sets, the gap
@@ -1776,11 +1776,11 @@ none` it still reads 44 while the columns read 30, 37 and 28. Show detail reads 
 all 216, whole-pixel samples reading a 44px region as 45, and takes no title's or marker's tap. Home and
 Shows read the same on the cards the smoke test walks.
 
-**The colour is the title's, and it costs a second green dot.** Label and outline are `--jam` with a
-plain button's fill: 9.54:1 dark, 6.52:1 light, on the pairs already measured, 8.72 and 5.55 pressed,
-beside Show detail's outline at 3.43 and 3.67. On a card the legend sits directly above the button,
-both with a green dot. It is also the loudest control on a keyed card. Both are the dev's to judge on
-the phone.
+**The colour is the title's, and on 0.1.88 it cost a second green dot.** Label and outline are `--jam`
+with a plain button's fill: 9.54:1 dark, 6.52:1 light, on the pairs already measured, 8.72 and 5.55
+pressed, beside Show detail's outline at 3.43 and 3.67. On a card the legend sat directly above the
+button, both with a green dot, and the button was the loudest control on a keyed card. The phone check
+decided against the dot and the count: 0.1.89, below, takes both off and keeps the colour.
 
 **The key is plain text again.** `.jam-key-open` and its `::after` are gone and the legend's styling
 stays. A click handler on the row would leave its markup plain, so the smoke test also presses it.

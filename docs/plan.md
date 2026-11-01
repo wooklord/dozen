@@ -1068,6 +1068,17 @@ out of the footnote list, and the plan built on it measured that and recommended
 dev kept it. Chat's removal was a scope addition the dev had not asked for: the ask was to separate
 the trigger from the footnotes, and it said nothing against the legend.
 
+#### Amendment: the button reads "Jam notes" (2026-11-01, the dev's call, for BUILD 0.1.89)
+
+**This supersedes the wording in item 1 above.** After the 0.1.88 phone check the dev took the bullet
+and the count off the button: it reads exactly "Jam notes". The count is gone from the UI; the sheet
+still lists the entries. Nothing else changes: the legend keeps its dot and its words, and the button
+keeps its `--jam` outline, its placement and `aria-haspopup="dialog"`. The `aria-label` goes with the
+count, since the visible text now names the control. In the smoke test the exact-label check reads
+"Jam notes", and the comparison of the label and the name against each show's raw row count is
+removed, its target gone; the green titles stay held to the raw rows, and each button still opens its
+own show's sheet.
+
 ## Out of scope — parked
 
 Anything crossing the scope rule goes to [`phase3_ideas.md`](phase3_ideas.md), not into the app.
