@@ -458,23 +458,29 @@ async function run() {
   await sleep(1000);
 
   await setShowsView('detail');
-  console.log('\ncards carry one button:');
+  console.log('\ncards carry Show detail, and Jam notes where the setlist has green titles:');
   for (const [screen, hash] of [['Home', '#/home'], ['Shows', '#/shows']]) {
     await evaluate(`location.hash = ${JSON.stringify(hash)};`);
     await sleep(1600);
+    // The whole row, in order, against what the card's own green titles call for.
     const r = await evaluate(`(() => {
       const cards = [...document.querySelectorAll('.card')].filter(c => c.querySelector('.setlist-song'));
       return {
         cards: cards.length,
         buttonSets: cards.map(c => [...c.querySelectorAll('.card-actions .btn-small')].map(b => b.textContent.trim())),
+        wanted: cards.map(c => {
+          const green = c.querySelectorAll('.setlist-song[data-jam="true"]').length;
+          return green ? ['Show detail', '●Jam notes · ' + green] : ['Show detail'];
+        }),
         anyGapChart: cards.some(c => [...c.querySelectorAll('.btn-small')].some(b => b.textContent.trim() === 'Gap chart')),
       };
     })()`);
+    const off = r.buttonSets.findIndex((s, i) => JSON.stringify(s) !== JSON.stringify(r.wanted[i]));
     if (!r.cards) fail(`${screen}: no setlist cards rendered`);
     else if (r.anyGapChart) fail(`${screen}: a card still offers Gap chart`);
-    else if (!r.buttonSets.every((s) => s.length === 1 && s[0] === 'Show detail')) {
-      fail(`${screen}: expected exactly ['Show detail'] per card, got ${JSON.stringify(r.buttonSets)}`);
-    } else pass(`${screen}: all ${r.cards} card(s) carry exactly ['Show detail']`);
+    else if (off !== -1) {
+      fail(`${screen}: card ${off + 1} carries ${JSON.stringify(r.buttonSets[off])}, expected ${JSON.stringify(r.wanted[off])}`);
+    } else pass(`${screen}: all ${r.cards} card(s) carry Show detail, ${r.wanted.filter((w) => w.length === 2).length} of them Jam notes beside it`);
   }
 
   // --- Jam chart highlight + per-show jam entries ---------------------------
