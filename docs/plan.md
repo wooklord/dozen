@@ -1112,7 +1112,9 @@ items; each names what it supersedes.
    row. The 0.1.72 rule that controls go below the content stands; the chart is content.
    **Correction: chat's mockup drew the chart as thin single-line bars.** The real rows are two lines
    at about 56px each, 55.3 to 57.4px on all 216 shows, which is why the measured cost is about 750px
-   and not the mockup's. The decision was made with the measured cost, not the drawn one.
+   and not the mockup's. The decision was made with the measured cost, not the drawn one. **Built, the
+   cost reads 810px, 353 to 1471:** the plan's injection left out the note under the heading, which
+   this item keeps, and the built section is 58px taller for it (`docs/design.md`, 0.1.90).
 3. **The gap history's back link learns a second way in.** `openGapHistory()` stamps the history entry
    with the show it was opened from, the chip reads "Back to {show date}" and steps back; opened from
    the song it reads the song's name and steps back as before; a deep link still replaces itself with

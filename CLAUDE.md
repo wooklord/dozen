@@ -871,8 +871,9 @@ checks were verified this way:
   gates, and two helpers moved above them. **Only `jam-button` (since 0.1.88),
   `jam-notes`, `sheet`, `markup` and `stale-table` can be scoped.** About fifty names
   cross the sections before them, so wrapping those would change the full run to save
-  time on it; a section joins when a proof needs it and it can stand alone. Green, against 380s
-  for a full run: `stale-table` 12s, `markup` 11s, `sheet` 18s, `jam-notes` 34s.
+  time on it; a section joins when a proof needs it and it can stand alone (`show-detail`
+  joined in 0.1.90). Green, against 380s for a full run: `stale-table` 12s, `markup` 11s,
+  `sheet` 18s, `jam-notes` 34s.
   The three ways a scoped run could report health it never established:
   - an unknown name: `--only nope`, a bare `--only`, `--only ""`, `--onyl
     jam-notes`, `--only jam-notes,nope` and `--only=jam-notes` each print
@@ -1059,6 +1060,80 @@ checks were verified this way:
   the charted show 1 of 52, every one the button or the link beside it, 8 identical
   (`docs/design.md`, 0.1.89). Against 0.1.87 the three runs read what 0.1.88's did,
   which is why the first set was re-run: "only the width" is a claim against 0.1.88.
+- The 0.1.90 checks (show detail's layout, 2026-11-01): a new scoped section,
+  `show-detail`, and the proofs under the ruling, each `--only show-detail` unless marked,
+  staged from a scratch script by exact string, the staged hash confirmed different and
+  the new text read back, the file restored by hash with `git status --short` confirmed.
+  The section holds the inline chart's place and parts; every row's figure, Debut and fold
+  to that song's gap history for the show, on the charted show the suite walks and on
+  Shadow's debut show; a sample of rows to their histories and back through the chip; and
+  the header's chip through the title-chip routine, with the venue line as its edge.
+  Green, 6 checks in 69–118s with the boot.
+  - the chart's figures swapped for each song's current gap: smoke 23, every row of both
+    shows, `Apology: 5 on the chart, 4 on the history`.
+  - every row opening the first row's song: smoke 3, `Shadow: the row landed on
+    #/song/5/gaps, not #/song/54/gaps`, on the second, third and Debut rows; the first
+    row's own line stayed green, which is why the sample is more than one row.
+  - every row's `data-song-id` set to the first song's, the navigation left right: smoke
+    25, `row "Backyard Bear" (song 5) is the history of "Apology"` on ten rows, their
+    figures with them, `Shadow's row on the chart is missing` on the debut show, and two
+    round trips.
+  - the from-show stamp not written: smoke 4, `the back chip reads "Apology" ("Back to
+    Apology"), the show is "Tue, Dec 31, 2024"`.
+  - `setlistBlock` keeping the button beside the section (`--only jam-button`): smoke 6,
+    `show detail: 1 of 1 card(s) with jam songs have 1 Jam notes button(s), not 0 -- on
+    show detail the entries are open on the page` on the four show pages and the two
+    target lines, nothing on Home or Shows.
+  - show detail dropping the section (`--only jam-button`): smoke 4, `show detail: 0 "Jam
+    chart entries" section(s) on the page, expected 1`.
+  - the entries section moved above the chart: smoke 2, `the chart is not the section
+    right after the Setlist section` and `the entries section is not the section right
+    after the chart`.
+  - the chip watching the date heading instead of the venue line: smoke 1, `shown at
+    scrollY 109, with the watched line's bottom 5px below the header's edge`. The plan
+    named "the bar never hidden"; that cannot be staged from show.js alone, since
+    `titleChip()` hides its parts as it builds them and the observer hides them again,
+    and it was proved in 0.1.85 on the routine itself. What is new on this screen is the
+    node the observer follows, so that is what was staged.
+  - the redirect removed, a full run (532s): `#/gapchart/1728657865 ->
+    #/gapchart/1728657865, expected #/show/1728657865`, the one line the fault owns.
+    **The same run found a defect in the build as it then stood,** three lines of `Shows
+    Sets = 2: row 1 (Wed, Oct 21, 2026): 4 non-encore sets on detail, expected exactly 2`:
+    the chart's group labels were emitted as `.setlist-label`, and the filter check
+    counts that class on show detail as the show's sets. They are `.gap-chart-label` now,
+    styled by the same rule, and `.setlist-label` keeps meaning a set in the setlist. The
+    full-run proof earned its keep; no scoped run reads that count.
+  - a precache entry for the deleted view: 1 unit failure, `the service worker precaches
+    these files, which no longer exist`. The test is new, because the install survives a
+    stale entry by design, one add failing on its own, so nothing on screen would ever say.
+
+  **Dropped, each with its reason:**
+  - the row opening the song page: the same hash comparison the second proof shows firing.
+  - the entries section built on a card: the same count comparison as the fifth proof, on
+    another screen.
+  - the bar given a height in flow: proved in 0.1.85 on the routine this screen reuses.
+  - the per-performance fold: `gapChartForShow()` is unit-tested, and the section's fold
+    line is shown firing by the third proof, `Buying Time: 3× tonight on the chart, ×1 on
+    the history`.
+
+  **Changed with the layout:** the three gap-chart entry points go with the route, and the
+  rows that carried the icon are held to one control each; "Show detail precedes Gap
+  chart" goes, because no card has offered Gap chart since 0.1.48 and a check that cannot
+  fail is not a check; the gap history's rows are held to no icon where they were held to
+  one; the heat, bars, green and parity reads that visited the route read the show page's
+  chart; six sheet checks open the sheet from the show's card on the Shows tab, through
+  When and the detail view, the card found by its titles; the twin check compares that
+  sheet with the show page; the route list loses the chart and the redirects gain it; the
+  title-chip routine moved above the scoped branch and takes the node whose bottom is its
+  edge.
+
+  Green: 261 passing, smoke 347 ok with 0 skips and no `WARN` in 490s, against 367 on
+  0.1.89, the lines that read show detail's button gone with it. `layout-diff` against
+  0.1.89 (`36b2eb8`), 390 dark, 390 light and 360, reads the same three times: the charted
+  show 39 of 64 boxes; `#/song/49` 135 of 312 and `#/song/54/gaps` 141 of 298, which are
+  exactly their 135 performance rows and Shadow's 141 shows, each row's venue line 42px
+  and 30px wider at the same place, the icon's width given back; 6 identical; the chart's
+  old route reported `REMOVED`, as it should be (`docs/design.md`, 0.1.90).
 
 Do this for every new check. It is the only thing that separates a real check
 from a comforting one.
@@ -1504,8 +1579,8 @@ landed". The second is the worse of the two because it passes.
 | Command | Speed | Network | Run it |
 |---|---|---|---|
 | `node --test` | instant | none | always, before anything else |
-| `node scripts/smoke.mjs` | ~7 min (407s at 0.1.88, 386s at 0.1.87, 380s at 0.1.86, 356s at 0.1.85, so this row's old "~1 min" had gone stale well before 0.1.86) | Carton (cold pull) | **before every push** |
-| `node scripts/smoke.mjs --only <section>` | 11–47s (`jam-button` 36–47s and `jam-notes` 33–36s at 0.1.88) | Carton (cold pull) | for a red proof, re-running only the section the check lives in. **Never the gate for a push:** the full run is. An unknown name or a run of zero checks fails, and the verdict says it was scoped |
+| `node scripts/smoke.mjs` | ~8 min (490s at 0.1.90, 404s at 0.1.89, 407s at 0.1.88, 386s at 0.1.87, 380s at 0.1.86, 356s at 0.1.85, so this row's old "~1 min" had gone stale well before 0.1.86) | Carton (cold pull) | **before every push** |
+| `node scripts/smoke.mjs --only <section>` | 11–120s (`show-detail` 69–118s, `jam-button` ~80s and `jam-notes` ~70s at 0.1.90, with the boot; `jam-notes` reaches each sheet through the Shows tab now) | Carton (cold pull) | for a red proof, re-running only the section the check lives in. **Never the gate for a push:** the full run is. An unknown name or a run of zero checks fails, and the verdict says it was scoped |
 | `node scripts/gap-oracle.mjs` | ~1 min | Carton (cold pull + 20 song pages) | after any change to gap arithmetic, to the show universe in `buildIndex`, or to `gapHistory()`; it compares every Show Gap cell on 20 Carton song pages against the app's own `gapAtShow()`, and the gap history's one-entry-per-show fold (0.1.83) against the same pages grouped by show, and **SKIPs, never passes,** when Carton is unreachable. The smoke test carries a one-song spot check of the same parity |
 | `node scripts/contrast.mjs` | instant | none | when eyeballing a colour; the assertions already run in `node --test` |
 | `node scripts/deadcss.mjs` | instant | none | when a CSS rule looks inert; lists every declaration the cascade can never let win. The assertions already run in `node --test` (`tests/deadcss.test.mjs`) |

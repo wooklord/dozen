@@ -1837,6 +1837,78 @@ stay held to the raw rows, since theirs did not. `CLAUDE.md` has the proofs.
 
 **Not measured:** a real phone.
 
+### Show detail: the gap chart inline, the entries open, no button, a pinned chip (0.1.90)
+
+The ruling is in `docs/plan.md`, "Show detail layout". Measured twice: by injection on the built 0.1.89
+pages for the plan, then read off the built 0.1.90 pages the same way, all 216 charted shows at 360
+and 390 in both themes. Dark and light read the same on every figure here.
+
+**The page is a median 810px taller, 353 to 1471,** at both widths: 2781px median at 360 against
+1954.5 on 0.1.89, 2693.5 at 390 against 1883. The setlist card gives back the button's 48px on all
+216. The chart section takes 834.5px, 377.3 to 1494.7: 11 rows median, 4 to 22, in 2 sets median, 1 to
+4, each row 55.3 to 57.4px with its `button.row` the full row, above the 44px floor. It sits right
+after the Setlist section on all 216, and the entries section's top moves from 813px to 1631px
+median at 360. **The plan's figures were 776px for the section and 752px added, and the built page
+reads 58px more:** the injection left out the note under the heading, which the ruling keeps. The
+decision was taken on the lower figure; the difference is one note's height and is recorded on the
+ruling.
+
+**Above the fold on first load,** the fold at the tab bar's top, on the built pages:
+
+| Screen | Chart heading in view | First chart row fully in view | Entries heading in view |
+|---|---|---|---|
+| 360×640 | 14 of 216 | 0 | 0 |
+| 360×700 | 40 | 2 | 0 |
+| 360×740 | 60 | 7 | 0 |
+| 360×800 | 84 | 18 | 0 |
+| 360×844 | 109 | 40 | 0 |
+| 390×640 | 16 | 0 | 0 |
+| 390×844 | 118 | 47 | 0 |
+
+The entries heading was in view on 7 of 216 at 360×640 and 81 at 360×844 before; the chart moves it
+below every fold measured. The Jam notes button, which it replaces as the way to the notes on this
+screen, was in view on 164 at 360×640 and all 216 at 360×800.
+
+**The chip** is the compact form, the short date and the venue name in a `.chip.title-chip`, in the
+song pages' 0px sticky bar: in the flow it is 0px on all 216. Shown, the bar is 50px tall with a 34px
+chip, 63.7px with a 47.7px chip where the text wraps to two lines: 12 of 216 shows at 360 and 4 at
+390, "Aug 24, 2024 · Everwise Amphitheater at White River State Park" among them. Its top sits on
+the header's bottom edge, 52px, on every show. That is 9.4% of a 360×640 content viewport (12%
+wrapped), 7.2% at 360×800 and 6.8% at 390×844, the viewport less the 52px header and 58px tab bar.
+The alternatives measured for the plan by injection: the full two-line block, 65.1px and 85.3 where
+the venue wraps inside the chip (46 of 216 at 360, 19 at 390), 12.3 to 16.1% at 360×640, rejected for
+that cost; the date alone, 50px and never wrapping, which loses the venue two Brooklyn Bowls differ
+by; the full date with the full venue line, 63.7px on 128 of 216 at 360. The chip watches the venue
+line, so it shows once the whole title block is gone, at scrollY 113.8 on a one-line venue and 134
+on a wrapped one, where the date heading alone goes under the header at 89.5. The title block it
+stands in for is 51.8px from the date's top to the venue's bottom, 72 wrapped, plus 18.8 on the 54
+shows with a tour line, which the chip leaves out as the sheet's show line does.
+
+**The round trip, before and after.** On 0.1.89 a gap history reached from a show carried no state:
+the chip read "Back to {song}" and replaced the screen with the song, and only the browser's Back
+returned to the show (measured on show 1728657865: the chip landed on `#/song/5`, Back from there
+on the show). Now a chart row stamps the entry with the show, the chip reads "Back to Tue, Dec 31,
+2024" and steps back, and `forward()` returns to the history, which is how the smoke test tells a
+step back from a replace.
+
+**What moved.** `layout-diff` against 0.1.89 (`36b2eb8`), 390 dark, 390 light and 360 dark, reads
+the same three times, on 244 rules against 243: the charted show 39 of 64 boxes, the button out,
+the chart in, everything under the card moved; `#/song/49` 135 of 312 boxes and `#/song/54/gaps`
+141 of 298, which are exactly its 135 performance rows and Shadow's 141 shows, each row's venue line
+42px and 30px wider at the same place, the removed icon's width given back to the row; 6 routes
+identical, Home and Shows among them, so the cards did not move; and the chart's old route reported
+`REMOVED`, a route on the reference side only. The stylesheet's one extra rule is the chart's.
+
+**The smoke test** holds show detail to exactly one of the two forms of the notes, the chart's rows to
+each song's gap history for the show, a sample of rows through the history and back, and the chip
+through the song pages' routine with the venue line as its edge; the sheet checks open the sheet
+from the show's card on the Shows tab. `CLAUDE.md` has the proofs, one of which, the full run with
+the redirect removed, found the chart's group labels doubling a count the Shows filter check reads
+off show detail; they carry their own class now.
+
+**Not measured:** a real phone, and a fold with any browser chrome beyond the app's own header and
+tab bar.
+
 ## Attribution
 
 Not a footer afterthought. Every show, song and venue view carries a visible link home to the
