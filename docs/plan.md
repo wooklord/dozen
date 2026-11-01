@@ -1052,6 +1052,16 @@ stays as history.
    takes a flag. `setlistBlock` has never owned a card's action row, so `setlistCard` places the button
    there itself. An option on `setlistBlock` was rejected as the hole `CLAUDE.md` names, and CSS `order`
    because focus order would then disagree with the screen.
+5. **"Shown exactly as written on The Carton." comes out of the jam notes sheet (the dev's call,
+   2026-11-01).** The sheet's Carton link to the show stays, under the attribution and deep-link rule.
+   This is `openJamNotes` alone: a footnote's sheet keeps its own copy of the line.
+6. **The sheet's title becomes a small label, because it blended into the show line beneath it (the
+   dev's call, 2026-11-01).** "Jam chart entries" stays the `h2` and the dialog's accessible name, now
+   uppercase and letter-spaced at `--t-xs` in `--jam`, the shape of the SORT and FILTER chip labels. The
+   show line stays the prominent line, and a hairline in `--line` separates it from the first entry.
+   Jam notes sheet only, with no new option on `openSheet`: `.sheet:has(> .jam-sheet) > h2` reaches the
+   title through this sheet's own body. A browser without `:has()` drops that one rule and shows the
+   plain heading it had before (reasoned, not tested).
 
 **Correction: the key line was never meant to go.** Chat's proposal for this change took the key line
 out of the footnote list, and the plan built on it measured that and recommended no legend at all. The
