@@ -44,11 +44,9 @@ export function renderShow(ctx, showId) {
   if (tour) append(screen, el('p.show-tour', { text: `Part of ${tour}` }));
   const rows = index.setlistByShow.get(Number(show.show_id)) || [];
 
-  // ONE condition for both jam-related things on this screen: the key inside
-  // the setlist card and the entries section below it. Hoisted above both so
-  // there is a single decision rather than two that can disagree -- a key
-  // explaining a colour that is not on screen, or green titles with nothing
-  // saying what they are, are both possible if these drift apart.
+  // The entries section's condition. The key and the Jam notes button read the
+  // rows' own flag in setlistParts, the flag jamByShow is built by filtering on,
+  // so the three cannot disagree about whether this show has entries.
   const jams = index.jamByShow.get(Number(show.show_id));
   const hasJams = Boolean(jams?.length);
 
@@ -58,12 +56,12 @@ export function renderShow(ctx, showId) {
   // matters more, not less -- it is where the reader goes to check.
   const sourceLink = () => el('div.link-row.setlist-source', null, [cartonLink(showPermalink(show))]);
 
-  // The jam key is NOT built here. setlistBlock renders it wherever a setlist
-  // has jam-charted songs, so it appears on the Home and Shows cards too --
-  // the key follows the colour. `hasJams` below gates only the entries section.
+  // The jam key and the Jam notes button are NOT built here. setlistParts builds
+  // them wherever a setlist has jam-charted songs, so they appear on the Home and
+  // Shows cards too. `hasJams` below gates only the entries section.
   //
-  // Show notes belong INSIDE the setlist card, last: setlist -> footnotes ->
-  // notes. They annotate this setlist, so a card of their own below put a
+  // Show notes belong INSIDE the setlist card, last: setlist -> Jam notes ->
+  // footnotes -> notes. They annotate this setlist, so a card of their own below put a
   // border between a note and the thing it is a note about.
   //
   // No separate guard needed for the no-setlist branch: `shownotes` is a field
@@ -113,7 +111,6 @@ export function renderShow(ctx, showId) {
   //
   // Absent rather than empty when a show has none, same rule as album
   // membership on song detail: jamByShow only holds shows that have entries.
-  // `hasJams` is computed once, above the setlist, and gates the key too.
   if (hasJams) {
     const jamSection = el('div.section');
     append(

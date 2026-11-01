@@ -465,7 +465,7 @@ export function openFootnote(text, index) {
 /**
  * One jam chart entry: its title, its set, and The Carton's note.
  *
- * Show detail's section and the key line's sheet both build through here, so
+ * Show detail's section and the Jam notes sheet both build through here, so
  * the note and "(Recommended)" cannot read differently between them. The title
  * opens the song, as the same title does in the setlist.
  */
@@ -485,15 +485,18 @@ export function jamEntryCard(entry, onSong) {
 }
 
 /**
- * One setlist's jam chart entries in played order, from its key line.
+ * One setlist's jam chart entries in played order, from its Jam notes button.
  *
  * The show line says which night this is, from any screen: the same two lines
  * as a Home or Shows card head. Every sheet gets it, show detail's too, because
- * setlistBlock builds this for every caller and none can leave it off.
+ * setlistParts builds this for every setlist and no caller can leave it off.
+ *
+ * `.jam-sheet` is how app.css reaches this sheet's title: openSheet owns the h2
+ * and takes no option for it, so the rule selects it through this body.
  */
 function openJamNotes(entries, show, onSong) {
   return openSheet('Jam chart entries', (close) =>
-    el('div', null, [
+    el('div.jam-sheet', null, [
       show
         ? el('div.sheet-show', null, [
             el('div.sheet-show-date', { text: formatShowDate(show.showdate) }),
@@ -506,7 +509,6 @@ function openJamNotes(entries, show, onSong) {
           onSong?.(id);
         }),
       ),
-      el('p.note', { style: { margin: 'var(--s-3) 0 0' }, text: 'Shown exactly as written on The Carton.' }),
       cartonLink(showPermalink(show)),
     ]),
   );
@@ -520,7 +522,7 @@ function openJamNotes(entries, show, onSong) {
  * inline clutter -- hover does not exist on a phone.
  */
 /**
- * THE JAM KEY IS BUILT HERE, not by callers.
+ * THE JAM KEY AND THE JAM NOTES BUTTON ARE BUILT HERE, not by callers.
  *
  * The rule is "the key follows the colour": anywhere a setlist renders with
  * jam-charted songs in it, the key naming that colour renders too. This
@@ -533,12 +535,15 @@ function openJamNotes(entries, show, onSong) {
  * disagree. It is also the same flag `index.jamByShow` is built by filtering
  * on, so the key and show detail's entries section stay in step.
  *
- * The key is also the way to the notes (0.1.86): its line is the button that
- * opens them, and no caller can leave that off. The sheet and each green title's
- * `title` read `index.jamByShow`, as show detail's cards do, so the three cannot
- * print different words for one entry.
+ * The button is the way to the notes (0.1.88, docs/plan.md, "The jam notes
+ * button"). It left the footnote list, where it read as a footnote; the key stays
+ * there as plain text, explaining the green. This function is private and its two
+ * callers, setlistBlock and setlistCard, each place all three parts, because a
+ * card's action row is setlistCard's and a flag here would be a way to leave the
+ * button off. The sheet and each green title's `title` read `index.jamByShow`, as
+ * show detail's cards do, so the three cannot print different words for one entry.
  */
-export function setlistBlock(rows, { onSong, index } = {}) {
+function setlistParts(rows, { onSong, index } = {}) {
   const hasJam = rows.some((r) => Number(r.isjamchart) === 1);
   const showId = Number(rows[0]?.show_id);
   const jams = hasJam ? index.jamByShow.get(showId) : [];
@@ -550,22 +555,24 @@ export function setlistBlock(rows, { onSong, index } = {}) {
   const keyRow = () =>
     el('li.jam-key', null, [
       el('span.jam-key-bullet', { 'aria-hidden': 'true', text: '●' }),
-      el(
-        'button.jam-key-open',
+      el('span', { text: 'jam chart entry' }),
+    ]);
+  const jamButton = hasJam
+    ? el(
+        'button.btn.btn-small.btn-jam',
         {
           type: 'button',
           'aria-haspopup': 'dialog',
+          'aria-label': `Jam notes, ${jams.length} ${jams.length === 1 ? 'entry' : 'entries'}`,
           onclick: () => openJamNotes(jams, index.showsById.get(showId), onSong),
         },
         [
-          el('span', { text: 'jam chart entry' }),
-          el('span', { 'aria-hidden': 'true', text: ' · ' }),
-          el('span', { text: 'notes' }),
-          el('span', { 'aria-hidden': 'true', text: ' ▾' }),
+          el('span.btn-jam-dot', { 'aria-hidden': 'true', text: '●' }),
+          el('span', { text: `Jam notes · ${jams.length}` }),
         ],
-      ),
-    ]);
-  const wrap = el('div');
+      )
+    : null;
+  const setNodes = [];
   const footnotes = [];
 
   // Group into sets, preserving the order the index already sorted them into.
@@ -592,7 +599,7 @@ export function setlistBlock(rows, { onSong, index } = {}) {
       const isJam = Number(r.isjamchart) === 1;
 
       // The note as a browser tooltip, for a mouse. It does nothing on a phone,
-      // which is what the key line's sheet is for. A screen reader may read it
+      // which is what the Jam notes sheet is for. A screen reader may read it
       // as the title's description, up to 500 characters per green title.
       const entry = isJam ? jams.find((j) => j.uniqueid === r.uniqueid) : null;
       const note = entry ? jamNoteText(entry.note, entry.isRecommended) : '';
@@ -654,24 +661,30 @@ export function setlistBlock(rows, { onSong, index } = {}) {
       }
     });
 
-    append(wrap, el('div.setlist-set', null, [el('div.setlist-label', { text: group.label }), flow]));
+    setNodes.push(el('div.setlist-set', null, [el('div.setlist-label', { text: group.label }), flow]));
   }
 
   // The list renders when there are footnotes OR a key to put in it. A setlist
   // with jam entries and no footnotes -- which happens, three shows in the
   // archive and any number of Home cards -- gets a one-item list holding just
   // the key. That is still the footnote column, so the key is still aligned.
+  let list = null;
   if (footnotes.length || hasJam) {
-    const list = el('ul.fn-list');
+    list = el('ul.fn-list');
     footnotes.forEach((n, i) => {
       append(list, el('li', null, [el('span.fn-marker', { text: String(i + 1) }), el('span', { text: n })]));
     });
     // Last item in the list, after the real footnotes.
     if (hasJam) append(list, keyRow());
-    append(wrap, list);
   }
 
-  return wrap;
+  return { sets: setNodes, footnotes: list, jamButton };
+}
+
+/** A setlist on its own: the sets, the Jam notes button, then the footnotes. */
+export function setlistBlock(rows, opts = {}) {
+  const { sets, footnotes, jamButton } = setlistParts(rows, opts);
+  return el('div', null, [sets, jamButton ? el('div.setlist-jam', null, jamButton) : null, footnotes]);
 }
 
 /**
@@ -713,8 +726,8 @@ export function setlistCard({
   style = null,
   foot = null,
 } = {}) {
-  // THE ACTION SET IS OWNED HERE, not passed in. A setlist card gets ONE
-  // button -- Show detail -- and this builds it. Callers each used to supply
+  // THE ACTION SET IS OWNED HERE, not passed in. A setlist card gets Show detail
+  // and, with green titles, Jam notes, and this builds both. Callers each used to supply
   // their own array, which made "what buttons does a setlist card have" a
   // question with four answers across two files; removing one from all of them
   // was four edits that could each be forgotten. It is now one.
@@ -726,6 +739,7 @@ export function setlistCard({
   //
   // `extraActions` is for things genuinely specific to one screen -- the Shows
   // tab's Carton link -- not for re-adding navigation removed on purpose.
+  const parts = rows.length ? setlistParts(rows, { index, onSong }) : null;
   const acts = [
     showId != null && navigate
       ? el(
@@ -734,6 +748,7 @@ export function setlistCard({
           'Show detail',
         )
       : null,
+    parts?.jamButton,
     ...extraActions,
   ].filter(Boolean);
 
@@ -745,7 +760,7 @@ export function setlistCard({
   // separate, quieter thing. .card-foot draws the rule that says so.
   return el('div.card', style ? { style } : null, [
     head,
-    rows.length ? el('div.setlist-card-body', null, setlistBlock(rows, { index, onSong })) : empty,
+    parts ? el('div.setlist-card-body', null, el('div', null, [parts.sets, parts.footnotes])) : empty,
     acts.length ? el('div.card-actions', null, acts) : null,
     foot,
   ]);

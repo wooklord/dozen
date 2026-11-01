@@ -706,6 +706,20 @@ button.gap-figure:active {
   height: var(--tap);
 }
 
+/* The Jam notes button (0.1.88). --jam on the label and the outline, the colour
+   of the titles it is about, and nothing on the fill. Doubled for the reason
+   .btn.btn-small is, .btn being later in this file. It sets no background, so
+   .btn:active still presses it. */
+.btn.btn-jam {
+  color: var(--jam);
+  border-color: var(--jam);
+  gap: var(--s-1);
+}
+.btn-jam-dot {
+  font-size: var(--t-xs);
+  font-weight: 700;
+}
+
 /* Trailing icon action on a row, alongside the row's own navigation. */
 .row-action {
   flex: none;
@@ -1432,10 +1446,26 @@ button.gap-figure:active {
   margin: 0 0 var(--s-3);
 }
 
+/* A jam notes sheet's title (0.1.88): at the sheet's own size it read as one block
+   with the date under it, so it is a small label over that line, the shape of
+   .chip-label in --jam. Through :has() because openSheet owns the h2 and takes no
+   option for it; .jam-sheet is this sheet's body, so no other sheet's title matches. */
+.sheet:has(> .jam-sheet) > h2 {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--jam);
+  margin: 0 0 var(--s-1);
+}
+
 /* The night a jam notes sheet belongs to: the date at a card head's weight, then
-   the venue line, which brings its own ink. It scrolls with the sheet. */
+   the venue line, which brings its own ink, then a hairline above the entries. It
+   scrolls with the sheet. */
 .sheet-show {
   margin: 0 0 var(--s-3);
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--line);
 }
 
 .sheet-show-date {
@@ -1665,6 +1695,9 @@ button.gap-figure:active {
  * The row overrides .fn-list's --ink-dim; it is the only item in that list
  * that is not quoting The Carton.
  *
+ * PLAIN TEXT, NOT A CONTROL. 0.1.86 made this line the button to the notes and in
+ * this list it read as a footnote, so 0.1.88 moved that out to .btn-jam.
+ *
  * `var(--jam)` and nothing else. The literal hex belongs in exactly one place
  * (tokens.css) -- a copy here would keep confidently naming a colour the
  * setlist has stopped using, and nothing on screen would look wrong. That
@@ -1672,38 +1705,12 @@ button.gap-figure:active {
  */
 .jam-key {
   color: var(--jam);
-  position: relative;
 }
 
-/* The line is the button that opens the notes (0.1.86), and the ROW is its
- * target. ::after is the same technique as .btn.btn-small: a full --tap hit
- * region, nothing added to the flow, so a card with a key is the height it always
- * was. It is positioned against the <li> rather than the button so the bullet
- * and the empty width of the row count too.
- *
- * ANCHORED TO THE ROW'S BOTTOM, NOT CENTRED. A card's Show detail button starts
- * --s-2 below this row and its own hit region overhangs it by --s-1, so that
- * region begins --s-1 below the row; centred, the two overlap and the button wins
- * the overlap. The rest of the height goes upward, where the setlist ends --s-4
- * above the row and any footnote rows between are plain text. Unlike .fn-marker
- * this can therefore meet the floor. The smoke test hit-tests all of it per card.
- *
- * Underlined on press, not border-bottom as on .jam-card-song: a 1px border here
- * would make the row a pixel taller than the footnote rows beside it. */
-.jam-key-open {
-  padding: 0;
-  text-align: left;
-}
-.jam-key-open::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(-1 * var(--s-1));
-  height: var(--tap);
-}
-.jam-key-open:active {
-  text-decoration: underline;
+/* Show detail's row for the Jam notes button, directly under the last set. Flex
+ * so the button is not an inline box on a line of the card's own line height. */
+.setlist-jam {
+  display: flex;
 }
 
 .jam-key-bullet {
@@ -1853,7 +1860,7 @@ button.gap-figure:active {
  *
  * The Carton carries these notes in a hover tooltip on the setlist link, which
  * on a phone takes a long press. So the note is real text here, on this section
- * and in the sheet the setlist's key line opens, which wears these same cards.
+ * and in the sheet the Jam notes button opens, which wears these same cards.
  * The green title's own `title` is the desktop courtesy on top of that.
  */
 /* The card itself. This class was emitted with NO RULE BEHIND IT while its

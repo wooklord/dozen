@@ -37,7 +37,7 @@ import { openChrome, CDP_TIMEOUT } from './cdp.mjs';
 // Three ways a scoped run could report health it never established, each closed:
 // a mistyped name fails here before Chrome starts, a run that executes no check
 // fails in endRun(), and its verdict line says it was scoped and how much ran.
-const SECTIONS = ['jam-notes', 'sheet', 'markup', 'stale-table'];
+const SECTIONS = ['jam-button', 'jam-notes', 'sheet', 'markup', 'stale-table'];
 const ONLY = parseOnly(process.argv.slice(2));
 
 function parseOnly(args) {
@@ -735,94 +735,13 @@ async function run() {
     else if (answer) pass(`the tab's Carton link answers 200 as ${JSON.stringify(answer.title.trim())}`);
   }
 
-  // --- The jam key ----------------------------------------------------------
-  //
-  // The key explains the green, so the check that matters is that its swatch
-  // is THE SAME COLOUR as the highlighted titles it describes -- compared
-  // against the rendered setlist, not against a hex written here. A literal
-  // expected value would keep passing after the token was retuned and the key
-  // had started explaining the wrong colour, which is the exact drift the CSS
-  // avoids by using var(--jam).
-  console.log('\njam key:');
-  await evaluate(`location.hash = '#/show/1779890028';`);
-  await sleep(1200);
-  const key = await evaluate(`(() => {
-    const card = document.querySelector('.section .card');
-    const k = card ? card.querySelector('.jam-key') : null;
-    const song = document.querySelector('.setlist-song[data-jam="true"]');
-    const fn = card ? card.querySelector('.fn-list') : null;
-    const notes = card ? card.querySelector('.setlist-shownotes') : null;
-    const after = (a, b) => !!(a && b && (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING));
-    return {
-      inCard: !!k,
-      keyColor: k ? getComputedStyle(k).color : null,
-      songColor: song ? getComputedStyle(song).color : null,
-      text: k ? k.textContent.replace(/\\s+/g, ' ').trim() : null,
-      hadFootnotes: !!fn,
-      afterFootnotes: after(fn, k),
-      beforeShowNotes: after(k, notes),
-    };
-  })()`);
-
-  if (!key.inCard) fail('jam key: not rendered inside the setlist card');
-  else pass('key renders inside the setlist card');
-
-  // ALIGNMENT, not existence. The key must be a member of the footnote list
-  // and its text must start in the same column as the footnote text -- the
-  // previous version existed and was still misaligned, so "it is on the card"
-  // proves nothing here.
-  const align = await evaluate(`(() => {
-    const list = document.querySelector('.card .fn-list');
-    const key = list ? list.querySelector('li.jam-key') : null;
-    if (!list || !key) return { inList: false };
-    const fnRow = [...list.querySelectorAll('li')].find(li => li.querySelector('.fn-marker'));
-    const x = (n) => n ? Math.round(n.getBoundingClientRect().x * 10) / 10 : null;
-    const keyText = key.querySelector('span:not(.jam-key-bullet)');
-    const fnText = fnRow ? fnRow.querySelector('span:not(.fn-marker)') : null;
-    const bullet = key.querySelector('.jam-key-bullet');
-    const marker = fnRow ? fnRow.querySelector('.fn-marker') : null;
-    const song = document.querySelector('.setlist-song[data-jam="true"]');
-    return {
-      inList: true,
-      isLast: list.lastElementChild === key,
-      textX: x(keyText), fnTextX: x(fnText),
-      bulletX: x(bullet), markerX: x(marker),
-      bulletColor: bullet ? getComputedStyle(bullet).color : null,
-      songColor: song ? getComputedStyle(song).color : null,
-      textColor: keyText ? getComputedStyle(keyText).color : null,
-      fnColor: fnText ? getComputedStyle(fnText).color : null,
-    };
-  })()`);
-
-  if (!align.inList) fail('jam key: not a member of the footnote list');
-  else {
-    if (!align.isLast) fail('jam key: not the last item in the footnote list');
-    else pass('key is the last item in the footnote list');
-    if (align.textX !== align.fnTextX) {
-      fail(`jam key: text starts at x=${align.textX}, footnote text at x=${align.fnTextX}`);
-    } else pass(`text column matches the footnote rows (x=${align.textX})`);
-    if (align.bulletX !== align.markerX) {
-      fail(`jam key: bullet at x=${align.bulletX}, footnote markers at x=${align.markerX}`);
-    } else pass(`bullet sits in the marker column (x=${align.bulletX})`);
-    if (align.bulletColor !== align.songColor) {
-      fail(`jam key: bullet ${align.bulletColor} != highlighted titles ${align.songColor}`);
-    } else pass(`bullet matches the highlighted titles (${align.bulletColor})`);
-    // The WORDS are green too, matching the rendered setlist -- not a hardcoded
-    // hex, and deliberately NOT the footnote grey. The key shows you the thing
-    // it names; green bullet beside grey words would explain the bullet.
-    if (align.textColor !== align.songColor) {
-      fail(`jam key: text ${align.textColor} != highlighted titles ${align.songColor}`);
-    } else pass(`text is the jam colour, matching the setlist (${align.textColor})`);
-    if (align.textColor === align.fnColor) {
-      fail('jam key: text is the same grey as the footnotes — it reverted');
-    } else pass(`text is distinct from the footnote grey (${align.fnColor})`);
-  }
-
   // --- Small buttons: smaller box, 44px tap target intact -------------------
   //
   // The floor is the thing under test. Measured from the rendered ::after hit
   // region, not from the button box and not assumed from the CSS.
   console.log('\nsmall button tap targets:');
+  await evaluate(`location.hash = '#/show/1779890028';`);
+  await sleep(1200);
   const taps = await evaluate(`(() => {
     const btns = [...document.querySelectorAll('.btn.btn-small')];
     if (!btns.length) return null;
@@ -839,152 +758,6 @@ async function run() {
   else if (taps.minHit < 44) fail(`buttons: smallest tap target is ${taps.minHit}px — under the 44px floor`);
   else if (taps.minBox >= 44) fail(`buttons: visual box is still ${taps.minBox}px — it did not shrink`);
   else pass(`${taps.count} small buttons: box ${taps.minBox}px, tap target ${taps.minHit}px`);
-
-  // Wording. The bullet is decorative and aria-hidden, so the words are read
-  // off the text span rather than the row's textContent.
-  const keyWords = await evaluate(
-    `(() => { const s = document.querySelector('li.jam-key span:not(.jam-key-bullet)'); return s ? s.textContent.trim() : null; })()`,
-  );
-  if (keyWords !== 'jam chart entry') fail(`jam key: reads ${JSON.stringify(keyWords)}, expected "jam chart entry"`);
-  else pass('reads "jam chart entry" and nothing else');
-
-  if (!key.hadFootnotes) fail('jam key: this show was chosen because it HAS footnotes — it rendered none');
-  else if (!key.afterFootnotes) fail('jam key: does not sit under the footnotes');
-  else pass('sits under the last footnote');
-
-  if (!key.beforeShowNotes) fail('jam key: does not sit above the show notes');
-  else pass('card order is setlist -> footnotes -> key -> show notes');
-
-  // THE NO-FOOTNOTES CASE. 2025-11-09 has 2 jam entries and zero footnotes --
-  // one of exactly three such shows in the archive. The key must still render,
-  // in the slot the footnote list would have occupied. This is the branch the
-  // implementation deliberately does not have, so it is the one worth checking.
-  await evaluate(`location.hash = '#/show/1753713777';`);
-  await sleep(1100);
-  const noFn = await evaluate(`(() => {
-    const card = document.querySelector('.section .card');
-    const k = card ? card.querySelector('.jam-key') : null;
-    const song = document.querySelector('.setlist-song[data-jam="true"]');
-    const sets = card ? [...card.querySelectorAll('.setlist-set')] : [];
-    const last = sets[sets.length - 1];
-    return {
-      footnotes: card ? card.querySelectorAll('.fn-list').length : -1,
-      songs: document.querySelectorAll('.setlist-song').length,
-      key: !!k,
-      text: k ? k.textContent.trim() : null,
-      color: k ? getComputedStyle(k).color : null,
-      songColor: song ? getComputedStyle(song).color : null,
-      afterLastSet: !!(k && last && (last.compareDocumentPosition(k) & Node.DOCUMENT_POSITION_FOLLOWING)),
-    };
-  })()`);
-
-  // With no real footnotes the list is created for the key alone, so it should
-  // be a ONE-ITEM list -- still the footnote column, still aligned, not a
-  // stray block. Asserting "exactly one item, and it is the key" is what
-  // distinguishes that from the list failing to render at all.
-  const noFnList = await evaluate(`(() => {
-    const list = document.querySelector('.card .fn-list');
-    if (!list) return { list: false };
-    const items = [...list.children];
-    const key = list.querySelector('li.jam-key');
-    const bullet = key ? key.querySelector('.jam-key-bullet') : null;
-    const song = document.querySelector('.setlist-song[data-jam="true"]');
-    return {
-      list: true,
-      items: items.length,
-      onlyItemIsKey: items.length === 1 && items[0] === key,
-      realFootnotes: list.querySelectorAll('.fn-marker').length,
-      bulletColor: bullet ? getComputedStyle(bullet).color : null,
-      songColor: song ? getComputedStyle(song).color : null,
-    };
-  })()`);
-
-  if (noFn.songs !== 9) fail(`jam key (no footnotes): show did not render (${noFn.songs} songs, expected 9)`);
-  else if (!noFnList.list) fail('jam key (no footnotes): no list rendered — the key has nowhere to live');
-  else if (noFnList.realFootnotes !== 0) fail(`jam key (no footnotes): expected no real footnotes, found ${noFnList.realFootnotes}`);
-  else if (!noFnList.onlyItemIsKey) fail(`jam key (no footnotes): list has ${noFnList.items} items, expected just the key`);
-  else if (noFnList.bulletColor !== noFnList.songColor) fail(`jam key (no footnotes): ${noFnList.bulletColor} vs ${noFnList.songColor}`);
-  else pass('a show with no footnotes renders the key as a one-item list, aligned the same way');
-
-  // ONE condition, shared with the entries section. Checked on a show with no
-  // entries: neither may appear. If these ever split, this is what catches it.
-  await evaluate(`location.hash = '#/show/1627919708';`);
-  await sleep(1100);
-  const noKey = await evaluate(`(() => ({
-    songs: document.querySelectorAll('.setlist-song').length,
-    key: document.querySelectorAll('.jam-key').length,
-    cards: document.querySelectorAll('.jam-card-song').length,
-  }))()`);
-  if (noKey.songs !== 28) fail(`jam key: the no-jam show did not render (${noKey.songs} songs, expected 28)`);
-  else if (noKey.key || noKey.cards) {
-    fail(`jam key: show with no entries rendered key=${noKey.key} entryCards=${noKey.cards} — the two conditions have split`);
-  } else pass('a show with no entries renders neither the key nor the section');
-
-  // --- The key follows the colour, on every screen that renders a setlist ---
-  //
-  // Asserted PER CARD, not per page. "A key exists somewhere on Home" would be
-  // satisfied by one card explaining another card's green, which is exactly the
-  // bug this fixes -- the key was on show detail only while Home and Shows
-  // showed unexplained green.
-  //
-  // The pairing is the assertion: a card with highlighted songs must have a
-  // key, and a card without must not. Colour is compared against that card's
-  // OWN highlighted title, never a hex.
-  await setShowsView('detail');
-  console.log('\njam key follows the colour:');
-  for (const [screen, hash] of [['Home', '#/home'], ['Shows', '#/shows'], ['show detail', '#/show/1779890028']]) {
-    await evaluate(`location.hash = ${JSON.stringify(hash)};`);
-    await sleep(1600);
-    const r = await evaluate(`(() => {
-      const cards = [...document.querySelectorAll('.card')].filter(c => c.querySelector('.setlist-song'));
-      return {
-        cards: cards.length,
-        rows: cards.map(c => {
-          const jamSong = c.querySelector('.setlist-song[data-jam="true"]');
-          const key = c.querySelector('li.jam-key');
-          const bullet = key ? key.querySelector('.jam-key-bullet') : null;
-          const words = key ? key.querySelector('span:not(.jam-key-bullet)') : null;
-          return {
-            hasJamSongs: !!jamSong,
-            hasKey: !!key,
-            inList: !!(key && key.parentElement && key.parentElement.classList.contains('fn-list')),
-            songColor: jamSong ? getComputedStyle(jamSong).color : null,
-            bulletColor: bullet ? getComputedStyle(bullet).color : null,
-            wordsColor: words ? getComputedStyle(words).color : null,
-            text: words ? words.textContent.trim() : null,
-            realFootnotes: c.querySelectorAll('.fn-marker').length,
-          };
-        }),
-      };
-    })()`);
-
-    if (!r.cards) { fail(`${screen}: no setlist cards rendered`); continue; }
-
-    const withJams = r.rows.filter((x) => x.hasJamSongs);
-    const without = r.rows.filter((x) => !x.hasJamSongs);
-    const missing = withJams.filter((x) => !x.hasKey).length;
-    const spurious = without.filter((x) => x.hasKey).length;
-
-    if (missing) fail(`${screen}: ${missing} of ${withJams.length} card(s) with jam songs have NO key`);
-    else if (spurious) fail(`${screen}: ${spurious} card(s) with no jam songs render a key anyway`);
-    else pass(`${screen}: ${withJams.length} card(s) with jam songs keyed, ${without.length} without correctly bare`);
-
-    // The colour, the wording and the placement, on every keyed card.
-    const badColour = withJams.filter((x) => x.bulletColor !== x.songColor || x.wordsColor !== x.songColor);
-    const badText = withJams.filter((x) => x.text !== 'jam chart entry');
-    const notInList = withJams.filter((x) => !x.inList);
-    if (withJams.length) {
-      if (badColour.length) fail(`${screen}: ${badColour.length} key(s) do not match their card's jam colour`);
-      else pass(`${screen}: every key matches its own card's jam colour (${withJams[0].songColor})`);
-      if (badText.length) fail(`${screen}: a key reads ${JSON.stringify(badText[0].text)}`);
-      if (notInList.length) fail(`${screen}: ${notInList.length} key(s) are not inside the footnote list`);
-      else pass(`${screen}: every key sits inside the footnote list`);
-
-      // The no-footnotes path, wherever it happens to occur on this screen.
-      const bare = withJams.filter((x) => x.realFootnotes === 0);
-      if (bare.length) pass(`${screen}: ${bare.length} keyed card(s) have no footnotes — key still in a list`);
-    }
-  }
 
   // --- Shows (0.1.82): When / Filter / View -----------------------------------
   //
@@ -5012,7 +4785,7 @@ async function run() {
             note: (c.querySelector('.jam-card-note') || { textContent: null }).textContent,
           })),
           link: (s.querySelector('.carton-link') || {}).href || null,
-          written: s.textContent.includes('Shown exactly as written on The Carton.'),
+          written: s.textContent.includes('as written on The Carton'),
         };
       })()`;
       const closeAnySheet = `(() => { for (const b of [...document.querySelectorAll('.sheet-backdrop')].reverse()) b.click(); })()`;
@@ -5025,14 +4798,14 @@ async function run() {
         await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
       };
 
-      // A real press at the far end of the row and below its box: only the row's
-      // hit region is there, so a key that is merely a button would not open.
-      const pressKey = async () => {
+      // A real press at the far end of the button and below its box: only its hit
+      // region is there, so a button with none would not open.
+      const pressNotes = async () => {
         const at = await evaluate(`(() => {
-          const li = document.querySelector('.screen li.jam-key');
-          if (!li) return null;
-          li.scrollIntoView({ block: 'center', behavior: 'instant' });
-          const r = li.getBoundingClientRect();
+          const b = document.querySelector('.screen .btn-jam');
+          if (!b) return null;
+          b.scrollIntoView({ block: 'center', behavior: 'instant' });
+          const r = b.getBoundingClientRect();
           return { x: r.right - 3, y: r.bottom + 2 };
         })()`);
         if (at) await pressAt(at.x, at.y);
@@ -5053,9 +4826,9 @@ async function run() {
         if (d) fail(`${tag}: show detail's cards, ${d}`);
         else pass(`${tag}: show detail's cards read The Carton's notes, in played order`);
 
-        if (!(await pressKey())) { fail(`${tag}: no key line to press`); return; }
+        if (!(await pressNotes())) { fail(`${tag}: no Jam notes button to press`); return; }
         const sheet = await evaluate(READ_SHEET);
-        if (!sheet) { fail(`${tag}: a press on the key row opened no sheet`); return; }
+        if (!sheet) { fail(`${tag}: a press on the Jam notes button opened no sheet`); return; }
         d = firstDiff(sheet.entries, want);
         if (sheet.heading !== 'Jam chart entries') fail(`${tag}: the sheet is headed ${JSON.stringify(sheet.heading)}`);
         else if (d) fail(`${tag}: the sheet, ${d}`);
@@ -5063,7 +4836,7 @@ async function run() {
         await checkHead(tag, rows[0], sheet.head);
         const wantLink = `https://thecarton.net/setlists/${rows[0].permalink}`;
         if (sheet.link !== wantLink) fail(`${tag}: the sheet links to ${sheet.link}, not ${wantLink}`);
-        if (!sheet.written) fail(`${tag}: the sheet does not say its notes are as written on The Carton`);
+        if (sheet.written) fail(`${tag}: the sheet says its notes are as written on The Carton, a line taken out in 0.1.88`);
 
         const last = rows[rows.length - 1];
         await evaluate(`[...document.querySelectorAll('.sheet .jam-card-song')].pop().click()`);
@@ -5088,6 +4861,439 @@ async function run() {
         }
         return false;
       };
+
+      // A card names no show, and two shows can share a date and a venue, so a card
+      // is found in the raw table by the titles it prints, every one, in order.
+      const nightRows = new Map();
+      for (const r of noteRows) {
+        const id = Number(r.show_id);
+        if (!nightRows.has(id)) nightRows.set(id, []);
+        nightRows.get(id).push(r);
+      }
+      const showsPrinting = new Map();
+      for (const [id, rows] of nightRows) {
+        rows.sort(played);
+        const key = rows.map((r) => squeeze(r.songname)).join('|');
+        showsPrinting.set(key, [...(showsPrinting.get(key) || []), id]);
+      }
+
+      // --- The jam key and the Jam notes button --------------------------------
+      //
+      // The key explains the green, so the check that matters is that its swatch
+      // is THE SAME COLOUR as the highlighted titles it describes -- compared
+      // against the rendered setlist, not against a hex written here. A literal
+      // expected value would keep passing after the token was retuned and the key
+      // had started explaining the wrong colour, which is the exact drift the CSS
+      // avoids by using var(--jam).
+      //
+      // The key is plain text and the button is the way to the notes (0.1.88,
+      // docs/plan.md, "The jam notes button"). So the key being a control at all is
+      // a fault, read three ways: off the markup, by hit test, and by a real press,
+      // because a handler on the row shows in neither of the first two.
+      if (want('jam-button')) {
+        const CONTROL = 'button, a, input, select, textarea, [role], [tabindex], [aria-haspopup]';
+
+        console.log('\njam key:');
+        await evaluate(`location.hash = '#/show/1779890028';`);
+        await sleep(1200);
+        const key = await evaluate(`(() => {
+          const card = document.querySelector('.section .card');
+          const k = card ? card.querySelector('.jam-key') : null;
+          const song = document.querySelector('.setlist-song[data-jam="true"]');
+          const fn = card ? card.querySelector('.fn-list') : null;
+          const notes = card ? card.querySelector('.setlist-shownotes') : null;
+          const after = (a, b) => !!(a && b && (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING));
+          return {
+            inCard: !!k,
+            keyColor: k ? getComputedStyle(k).color : null,
+            songColor: song ? getComputedStyle(song).color : null,
+            text: k ? k.textContent.replace(/\\s+/g, ' ').trim() : null,
+            hadFootnotes: !!fn,
+            afterFootnotes: after(fn, k),
+            beforeShowNotes: after(k, notes),
+          };
+        })()`);
+
+        if (!key.inCard) fail('jam key: not rendered inside the setlist card');
+        else pass('key renders inside the setlist card');
+
+        // ALIGNMENT, not existence. The key must be a member of the footnote list
+        // and its text must start in the same column as the footnote text -- the
+        // previous version existed and was still misaligned, so "it is on the card"
+        // proves nothing here.
+        const align = await evaluate(`(() => {
+          const list = document.querySelector('.card .fn-list');
+          const key = list ? list.querySelector('li.jam-key') : null;
+          if (!list || !key) return { inList: false };
+          const fnRow = [...list.querySelectorAll('li')].find(li => li.querySelector('.fn-marker'));
+          const x = (n) => n ? Math.round(n.getBoundingClientRect().x * 10) / 10 : null;
+          const keyText = key.querySelector('span:not(.jam-key-bullet)');
+          const fnText = fnRow ? fnRow.querySelector('span:not(.fn-marker)') : null;
+          const bullet = key.querySelector('.jam-key-bullet');
+          const marker = fnRow ? fnRow.querySelector('.fn-marker') : null;
+          const song = document.querySelector('.setlist-song[data-jam="true"]');
+          return {
+            inList: true,
+            isLast: list.lastElementChild === key,
+            textX: x(keyText), fnTextX: x(fnText),
+            bulletX: x(bullet), markerX: x(marker),
+            bulletColor: bullet ? getComputedStyle(bullet).color : null,
+            songColor: song ? getComputedStyle(song).color : null,
+            textColor: keyText ? getComputedStyle(keyText).color : null,
+            fnColor: fnText ? getComputedStyle(fnText).color : null,
+          };
+        })()`);
+
+        if (!align.inList) fail('jam key: not a member of the footnote list');
+        else {
+          if (!align.isLast) fail('jam key: not the last item in the footnote list');
+          else pass('key is the last item in the footnote list');
+          if (align.textX !== align.fnTextX) {
+            fail(`jam key: text starts at x=${align.textX}, footnote text at x=${align.fnTextX}`);
+          } else pass(`text column matches the footnote rows (x=${align.textX})`);
+          if (align.bulletX !== align.markerX) {
+            fail(`jam key: bullet at x=${align.bulletX}, footnote markers at x=${align.markerX}`);
+          } else pass(`bullet sits in the marker column (x=${align.bulletX})`);
+          if (align.bulletColor !== align.songColor) {
+            fail(`jam key: bullet ${align.bulletColor} != highlighted titles ${align.songColor}`);
+          } else pass(`bullet matches the highlighted titles (${align.bulletColor})`);
+          // The WORDS are green too, matching the rendered setlist -- not a hardcoded
+          // hex, and deliberately NOT the footnote grey. The key shows you the thing
+          // it names; green bullet beside grey words would explain the bullet.
+          if (align.textColor !== align.songColor) {
+            fail(`jam key: text ${align.textColor} != highlighted titles ${align.songColor}`);
+          } else pass(`text is the jam colour, matching the setlist (${align.textColor})`);
+          if (align.textColor === align.fnColor) {
+            fail('jam key: text is the same grey as the footnotes — it reverted');
+          } else pass(`text is distinct from the footnote grey (${align.fnColor})`);
+        }
+
+        // Wording. The bullet is decorative and aria-hidden, so the words are read
+        // off the text span rather than the row's textContent.
+        const keyWords = await evaluate(
+          `(() => { const s = document.querySelector('li.jam-key span:not(.jam-key-bullet)'); return s ? s.textContent.trim() : null; })()`,
+        );
+        if (keyWords !== 'jam chart entry') fail(`jam key: reads ${JSON.stringify(keyWords)}, expected "jam chart entry"`);
+        else pass('reads "jam chart entry" and nothing else');
+
+        if (!key.hadFootnotes) fail('jam key: this show was chosen because it HAS footnotes — it rendered none');
+        else if (!key.afterFootnotes) fail('jam key: does not sit under the footnotes');
+        else pass('sits under the last footnote');
+
+        if (!key.beforeShowNotes) fail('jam key: does not sit above the show notes');
+        else pass('card order is setlist -> footnotes -> key -> show notes');
+
+        // THE NO-FOOTNOTES CASE. 2025-11-09 has 2 jam entries and zero footnotes --
+        // one of exactly three such shows in the archive. The key must still render,
+        // in the slot the footnote list would have occupied. This is the branch the
+        // implementation deliberately does not have, so it is the one worth checking.
+        await evaluate(`location.hash = '#/show/1753713777';`);
+        await sleep(1100);
+        const noFn = await evaluate(`(() => {
+          const card = document.querySelector('.section .card');
+          const k = card ? card.querySelector('.jam-key') : null;
+          const song = document.querySelector('.setlist-song[data-jam="true"]');
+          const sets = card ? [...card.querySelectorAll('.setlist-set')] : [];
+          const last = sets[sets.length - 1];
+          return {
+            footnotes: card ? card.querySelectorAll('.fn-list').length : -1,
+            songs: document.querySelectorAll('.setlist-song').length,
+            key: !!k,
+            text: k ? k.textContent.trim() : null,
+            color: k ? getComputedStyle(k).color : null,
+            songColor: song ? getComputedStyle(song).color : null,
+            afterLastSet: !!(k && last && (last.compareDocumentPosition(k) & Node.DOCUMENT_POSITION_FOLLOWING)),
+          };
+        })()`);
+
+        // With no real footnotes the list is created for the key alone, so it should
+        // be a ONE-ITEM list -- still the footnote column, still aligned, not a
+        // stray block. Asserting "exactly one item, and it is the key" is what
+        // distinguishes that from the list failing to render at all.
+        const noFnList = await evaluate(`(() => {
+          const list = document.querySelector('.card .fn-list');
+          if (!list) return { list: false };
+          const items = [...list.children];
+          const key = list.querySelector('li.jam-key');
+          const bullet = key ? key.querySelector('.jam-key-bullet') : null;
+          const song = document.querySelector('.setlist-song[data-jam="true"]');
+          return {
+            list: true,
+            items: items.length,
+            onlyItemIsKey: items.length === 1 && items[0] === key,
+            realFootnotes: list.querySelectorAll('.fn-marker').length,
+            bulletColor: bullet ? getComputedStyle(bullet).color : null,
+            songColor: song ? getComputedStyle(song).color : null,
+          };
+        })()`);
+
+        if (noFn.songs !== 9) fail(`jam key (no footnotes): show did not render (${noFn.songs} songs, expected 9)`);
+        else if (!noFnList.list) fail('jam key (no footnotes): no list rendered — the key has nowhere to live');
+        else if (noFnList.realFootnotes !== 0) fail(`jam key (no footnotes): expected no real footnotes, found ${noFnList.realFootnotes}`);
+        else if (!noFnList.onlyItemIsKey) fail(`jam key (no footnotes): list has ${noFnList.items} items, expected just the key`);
+        else if (noFnList.bulletColor !== noFnList.songColor) fail(`jam key (no footnotes): ${noFnList.bulletColor} vs ${noFnList.songColor}`);
+        else pass('a show with no footnotes renders the key as a one-item list, aligned the same way');
+
+        // ONE condition, shared with the entries section. Checked on a show with no
+        // entries: none of the three may appear. If these ever split, this is what
+        // catches it.
+        await evaluate(`location.hash = '#/show/1627919708';`);
+        await sleep(1100);
+        const noKey = await evaluate(`(() => ({
+          songs: document.querySelectorAll('.setlist-song').length,
+          key: document.querySelectorAll('.jam-key').length,
+          button: document.querySelectorAll('.btn-jam').length,
+          cards: document.querySelectorAll('.jam-card-song').length,
+        }))()`);
+        if (noKey.songs !== 28) fail(`jam key: the no-jam show did not render (${noKey.songs} songs, expected 28)`);
+        else if (noKey.key || noKey.button || noKey.cards) {
+          fail(`jam key: show with no entries rendered key=${noKey.key} button=${noKey.button} entryCards=${noKey.cards} — the conditions have split`);
+        } else pass('a show with no entries renders no key, no button and no section');
+
+        // --- Both follow the colour, on every screen that renders a setlist -------
+        //
+        // Asserted PER CARD, not per page. "A key exists somewhere on Home" would be
+        // satisfied by one card explaining another card's green, which is exactly the
+        // bug this fixes -- the key was on show detail only while Home and Shows
+        // showed unexplained green.
+        //
+        // The pairing is the assertion: a card with highlighted songs must have a
+        // key and one button, and a card without must have neither. Colour is compared
+        // against that card's OWN highlighted title, never a hex. The count is held to
+        // the raw rows of the show the card prints, never to the app's index, and
+        // separately to the card's own green titles.
+        const READ_CARDS = `(() => {
+          const control = ${JSON.stringify(CONTROL)};
+          const colour = (n) => (n ? getComputedStyle(n).color : null);
+          return [...document.querySelectorAll('.screen .card')].filter((c) => c.querySelector('.setlist-song')).map((c) => {
+            const jamSong = c.querySelector('.setlist-song[data-jam="true"]');
+            const k = c.querySelector('li.jam-key');
+            const words = k ? k.querySelector('span:not(.jam-key-bullet)') : null;
+            const btns = [...c.querySelectorAll('.btn-jam')];
+            const b = btns[0] || null;
+            const row = b ? b.parentElement : null;
+            const sets = [...c.querySelectorAll('.setlist-set')];
+            const markers = [...c.querySelectorAll('button.fn-marker')].map((m) => Number(m.textContent));
+            const plain = c.querySelector('.card-actions .btn.btn-small:not(.btn-jam)') || document.querySelector('.screen .btn.btn-small:not(.btn-jam)');
+            return {
+              titles: [...c.querySelectorAll('.setlist-flow .setlist-song')].map((s) => s.textContent),
+              green: c.querySelectorAll('.setlist-song[data-jam="true"]').length,
+              songColor: colour(jamSong),
+              hasKey: !!k,
+              inList: !!(k && k.parentElement && k.parentElement.classList.contains('fn-list')),
+              keyControls: k ? (k.matches(control) ? 1 : 0) + k.querySelectorAll(control).length : 0,
+              bulletColor: k ? colour(k.querySelector('.jam-key-bullet')) : null,
+              wordsColor: colour(words),
+              text: words ? words.textContent.trim() : null,
+              realFootnotes: c.querySelectorAll('.fn-marker').length,
+              fnRows: c.querySelectorAll('.fn-list:not(.visit-list) li:not(.jam-key)').length,
+              fnWanted: markers.length ? Math.max(...markers) : 0,
+              buttons: btns.length,
+              label: b ? b.textContent : null,
+              name: b ? b.getAttribute('aria-label') : null,
+              real: !!b && b.tagName === 'BUTTON' && b.type === 'button',
+              popup: b ? b.getAttribute('aria-haspopup') : null,
+              inRow: !!row && row.classList.contains('card-actions') && row.parentElement === c,
+              afterDetail: !!b && !!b.previousElementSibling && b.previousElementSibling.textContent.trim() === 'Show detail',
+              underSets: !!row && row.classList.contains('setlist-jam') && sets[sets.length - 1].nextElementSibling === row,
+              aboveList: !!row && row.nextElementSibling === c.querySelector('.fn-list'),
+              colour: colour(b),
+              outline: b ? getComputedStyle(b).borderTopColor : null,
+              fill: b ? getComputedStyle(b).backgroundColor : null,
+              plainFill: plain ? getComputedStyle(plain).backgroundColor : null,
+            };
+          });
+        })()`;
+
+        const oneEntry = newestFirst.find(([, rows]) => rows.length === 1);
+        if (!twice) fail('jam button: no show charts a song twice with two notes, so a count by song went unchecked');
+        if (!oneEntry) fail('jam button: no show has one entry, so the singular went unchecked');
+        const pages = [
+          ['Home', '#/home'],
+          ['Shows', '#/shows'],
+          ['show detail', '#/show/1779890028'],
+          ['show detail, no footnotes', '#/show/1753713777'],
+          ...(twice ? [['show detail, a song charted twice', `#/show/${twice[0]}`]] : []),
+          ...(oneEntry ? [['show detail, one entry', `#/show/${oneEntry[0]}`]] : []),
+        ];
+
+        await setShowsView('detail');
+        console.log('\njam key and Jam notes button, per card:');
+        for (const [screen, hash] of pages) {
+          await evaluate(`location.hash = ${JSON.stringify(hash)};`);
+          await sleep(1600);
+          const r = await evaluate(READ_CARDS);
+          if (!r.length) { fail(`${screen}: no setlist cards rendered`); continue; }
+
+          const withJams = r.filter((x) => x.green);
+          const without = r.filter((x) => !x.green);
+          const missing = withJams.filter((x) => !x.hasKey).length;
+          const spurious = without.filter((x) => x.hasKey).length;
+          if (missing) fail(`${screen}: ${missing} of ${withJams.length} card(s) with jam songs have NO key`);
+          else if (spurious) fail(`${screen}: ${spurious} card(s) with no jam songs render a key anyway`);
+          else pass(`${screen}: ${withJams.length} card(s) with jam songs keyed, ${without.length} without correctly bare`);
+
+          const notOne = withJams.filter((x) => x.buttons !== 1);
+          const stray = without.filter((x) => x.buttons);
+          if (notOne.length) fail(`${screen}: ${notOne.length} of ${withJams.length} card(s) with jam songs have ${notOne[0].buttons} Jam notes button(s), not 1`);
+          else if (stray.length) fail(`${screen}: ${stray.length} card(s) with no jam songs have a button reading ${JSON.stringify(stray[0].label)}`);
+          else pass(`${screen}: one Jam notes button on each of the ${withJams.length}, none on the rest`);
+
+          // Every card, keyed or not: the list is built in the same function as the button.
+          const lost = r.filter((x) => x.fnRows !== x.fnWanted);
+          if (lost.length) fail(`${screen}: ${lost.length} card(s) list ${lost[0].fnRows} footnote(s) under markers up to ${lost[0].fnWanted}`);
+          else pass(`${screen}: every card lists as many footnotes as its markers number`);
+
+          if (!withJams.length) continue;
+
+          // The colour, the wording and the placement, on every keyed card.
+          const badColour = withJams.filter((x) => x.bulletColor !== x.songColor || x.wordsColor !== x.songColor);
+          const badText = withJams.filter((x) => x.text !== 'jam chart entry');
+          const notInList = withJams.filter((x) => !x.inList);
+          const notPlain = withJams.filter((x) => x.keyControls);
+          if (badColour.length) fail(`${screen}: ${badColour.length} key(s) do not match their card's jam colour`);
+          else pass(`${screen}: every key matches its own card's jam colour (${withJams[0].songColor})`);
+          if (badText.length) fail(`${screen}: a key reads ${JSON.stringify(badText[0].text)}`);
+          if (notInList.length) fail(`${screen}: ${notInList.length} key(s) are not inside the footnote list`);
+          else pass(`${screen}: every key sits inside the footnote list`);
+          if (notPlain.length) fail(`${screen}: ${notPlain.length} key(s) hold a control, not plain text`);
+          else pass(`${screen}: every key is plain text, with no control in it`);
+
+          // The no-footnotes path, wherever it happens to occur on this screen.
+          const bare = withJams.filter((x) => x.realFootnotes === 0);
+          if (bare.length) pass(`${screen}: ${bare.length} keyed card(s) have no footnotes — key still in a list`);
+
+          const wrong = { label: [], name: [], green: [] };
+          let counted = 0;
+          for (const c of withJams) {
+            const ids = showsPrinting.get(c.titles.join('|')) || [];
+            if (!ids.length) { fail(`${screen}: a card's ${c.titles.length} titles match no show in the raw table, so its count went unchecked`); continue; }
+            if (ids.length > 1) { skip(`${screen}: a card's titles match ${ids.length} shows (${ids.join(', ')}), so its count went unchecked`); continue; }
+            const raw = nightRows.get(ids[0]).filter((x) => Number(x.isjamchart) === 1).length;
+            counted += 1;
+            if (c.label !== `●Jam notes · ${raw}`) wrong.label.push(`${JSON.stringify(c.label)} on a show with ${raw} raw row(s)`);
+            if (c.name !== `Jam notes, ${raw} ${raw === 1 ? 'entry' : 'entries'}`) wrong.name.push(`${JSON.stringify(c.name)} on a show with ${raw} raw row(s)`);
+            if (c.green !== raw) wrong.green.push(`${c.green} green title(s) on a show with ${raw} raw row(s)`);
+          }
+          if (wrong.label.length) fail(`${screen}: ${wrong.label.length} of ${counted} button(s) read wrong, e.g. ${wrong.label[0]}`);
+          else if (counted) pass(`${screen}: ${counted} button(s) read "Jam notes · N", N the show's raw rows`);
+          if (wrong.name.length) fail(`${screen}: ${wrong.name.length} of ${counted} accessible name(s) wrong, e.g. ${wrong.name[0]}`);
+          else if (counted) pass(`${screen}: ${counted} accessible name(s) count the same entries, e.g. ${JSON.stringify(withJams[0].name)}`);
+          if (wrong.green.length) fail(`${screen}: ${wrong.green.length} of ${counted} card(s) disagree, e.g. ${wrong.green[0]}`);
+          else if (counted) pass(`${screen}: the green titles on ${counted} card(s) equal their raw rows`);
+
+          const notReal = withJams.filter((x) => x.buttons && (!x.real || x.popup !== 'dialog'));
+          if (notReal.length) fail(`${screen}: ${notReal.length} Jam notes button(s) are not a real button opening a dialog, aria-haspopup ${JSON.stringify(notReal[0].popup)}`);
+          else pass(`${screen}: each is a real button with aria-haspopup="dialog"`);
+
+          const onShowPage = hash.startsWith('#/show/');
+          const misplaced = withJams.filter((x) => x.buttons && (onShowPage ? !x.underSets || !x.aboveList : !x.inRow || !x.afterDetail));
+          if (misplaced.length) {
+            fail(`${screen}: ${misplaced.length} button(s) out of place, ${onShowPage ? `directly under the sets ${misplaced[0].underSets}, directly above the footnotes ${misplaced[0].aboveList}` : `in the card's action row ${misplaced[0].inRow}, right after Show detail ${misplaced[0].afterDetail}`}`);
+          } else pass(`${screen}: ${onShowPage ? 'directly under the sets, directly above the footnotes' : "in the card's action row, right after Show detail"}`);
+
+          // Both themes, read off the card's own title and a plain button beside it.
+          for (const theme of ['dark', 'light']) {
+            await evaluate(`document.documentElement.setAttribute('data-theme', ${JSON.stringify(theme)});`);
+            await sleep(200);
+            const painted = (await evaluate(READ_CARDS)).filter((x) => x.buttons);
+            const off = painted.filter((x) => x.colour !== x.songColor || x.outline !== x.songColor);
+            const filled = painted.filter((x) => !x.plainFill || x.fill !== x.plainFill);
+            if (!painted.length) fail(`${screen} (${theme}): no Jam notes button to read the colour of`);
+            else if (off.length) fail(`${screen} (${theme}): ${off.length} button(s) off the card's green, label ${off[0].colour}, outline ${off[0].outline}, title ${off[0].songColor}`);
+            else if (filled.length) fail(`${screen} (${theme}): ${filled.length} button(s) filled ${filled[0].fill}, a plain button's fill is ${filled[0].plainFill}`);
+            else pass(`${screen} (${theme}): label and outline are the title's ${painted[0].songColor}, the fill a plain button's ${painted[0].fill}`);
+          }
+          await evaluate(`document.documentElement.removeAttribute('data-theme');`);
+        }
+
+        // The target, by hit test: a column walked pixel by pixel at the button's two
+        // ends and its middle, not the pseudo-element's declared height. Two pixels
+        // in, because ::after sits inside the 1px border: the outermost column reads
+        // only the 36px box, on every small button in the app. And what it must not
+        // take: each neighbour keeps its own columns, and a button its own overhang.
+        console.log("\nJam notes button: its target, and the key's:");
+        for (const w of [360, 390]) {
+          await send('Emulation.setDeviceMetricsOverride', { width: w, height: 844, deviceScaleFactor: 2, mobile: true });
+          for (const [where, hash] of [['Home', '#/home'], ['Shows', '#/shows'], ['show detail', '#/show/1779890028']]) {
+            await evaluate(`location.hash = ${JSON.stringify(hash)};`);
+            await sleep(1300);
+            const t = await evaluate(`(() => {
+              const out = [];
+              for (const btn of document.querySelectorAll('.screen .btn-jam')) {
+                btn.scrollIntoView({ block: 'center', behavior: 'instant' });
+                const box = btn.getBoundingClientRect();
+                const isIt = (x, y) => { const n = document.elementFromPoint(x, y); return !!(n && n.closest('button, a') === btn); };
+                const reach = (x) => { let px = 0; for (let y = Math.floor(box.top) - 40; y <= box.bottom + 40; y += 1) if (isIt(x, y)) px += 1; return px; };
+                const columns = [box.left + 2, box.left + box.width / 2, box.right - 2].map(reach);
+                const stolen = [];
+                for (const n of btn.closest('.card').querySelectorAll('.setlist-song, button.fn-marker, .card-actions .btn, .card-actions a')) {
+                  if (n === btn) continue;
+                  for (const r of n.getClientRects()) {
+                    if (r.bottom < box.top - 60 || r.top > box.bottom + 60) continue;
+                    const xs = n.matches('.card-actions *') ? [r.left + 2, r.left + r.width / 2, r.right - 2] : [r.left + r.width / 2];
+                    const ys = n.matches('.btn') ? [r.top + r.height / 2, r.top - 3] : [r.top + r.height / 2];
+                    for (const x of xs) for (const y of ys) if (isIt(x, y)) stolen.push(n.textContent.trim());
+                  }
+                }
+                out.push({ box: box.height, declared: parseFloat(getComputedStyle(btn, '::after').height) || 0, columns, stolen });
+              }
+              return out;
+            })()`);
+            const tag = `${where} at ${w}`;
+            // This show is chosen for having entries, so a button missing here is a
+            // fault. Home and Shows hold whatever played last and may have none.
+            if (!t.length) {
+              if (where === 'show detail') fail(`${tag}: no Jam notes button, so its target went unmeasured`);
+              else skip(`${tag}: no Jam notes button on screen, so its target went unmeasured`);
+              continue;
+            }
+            // Both: the walk samples whole pixels and can read one over, and a declared
+            // height means nothing if something on top of it wins the taps.
+            const short = t.filter((x) => Math.min(...x.columns) < 44 || x.declared < 44);
+            const stolen = t.filter((x) => x.stolen.length);
+            if (short.length) fail(`${tag}: ${short.length} of ${t.length} button(s) under the 44px floor, declared ${short[0].declared}px, columns ${short[0].columns.join(' / ')}px`);
+            else if (stolen.length) fail(`${tag}: the button's target takes taps meant for "${stolen[0].stolen[0]}"`);
+            else pass(`${tag}: ${t.length} button(s), a ${t[0].box}px box, target ${t[0].declared}px declared and ${Math.min(...t[0].columns)} sampled, no neighbour's taps taken`);
+
+            const onControl = await evaluate(`(() => {
+              const control = ${JSON.stringify(CONTROL)};
+              const bad = [];
+              for (const li of document.querySelectorAll('.screen li.jam-key')) {
+                li.scrollIntoView({ block: 'center', behavior: 'instant' });
+                for (const s of li.children) {
+                  const r = s.getBoundingClientRect();
+                  const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+                  const c = hit ? hit.closest(control) : null;
+                  if (!hit || !li.contains(hit) || (c && li.contains(c))) bad.push(hit ? hit.tagName + '.' + hit.className : 'nothing');
+                }
+              }
+              return bad;
+            })()`);
+            if (onControl.length) fail(`${tag}: a tap on the key lands on a control, ${onControl[0]}`);
+            else pass(`${tag}: a tap on any key's words or bullet lands on the key, on no control`);
+
+            const at = await evaluate(`(() => {
+              const s = document.querySelector('.screen li.jam-key span:not(.jam-key-bullet)');
+              if (!s) return null;
+              s.scrollIntoView({ block: 'center', behavior: 'instant' });
+              const r = s.getBoundingClientRect();
+              return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+            })()`);
+            if (!at) fail(`${tag}: no key to press`);
+            else {
+              await pressAt(at.x, at.y);
+              await sleep(150);
+              const sheets = await evaluate(`document.querySelectorAll('.sheet').length`);
+              if (sheets) fail(`${tag}: a real press on the key opened a sheet`);
+              else pass(`${tag}: a real press on the key opens nothing`);
+              await evaluate(closeAnySheet);
+              await sleep(150);
+            }
+          }
+        }
+        await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+      }
 
       if (want('jam-notes')) {
         console.log('\njam chart notes:');
@@ -5164,28 +5370,13 @@ async function run() {
           if (!found) { skip(`jam notes: no charted show has ${what} today, so that show line went unchecked`); continue; }
           await evaluate(`location.hash = '#/show/${found[0]}';`);
           await sleep(1100);
-          if (!(await pressKey())) { fail(`${what}: no key line to press`); continue; }
+          if (!(await pressNotes())) { fail(`${what}: no Jam notes button to press`); continue; }
           await checkHead(`${what}, show ${found[0]}`, found[1], await evaluate(READ_HEAD));
           await evaluate(closeAnySheet);
           await sleep(150);
         }
 
-        // A card names no show, and two shows can share a date and a venue, so a card
-        // is found in the raw table by the titles it prints, every one, in order.
-        const nightRows = new Map();
-        for (const r of noteRows) {
-          const id = Number(r.show_id);
-          if (!nightRows.has(id)) nightRows.set(id, []);
-          nightRows.get(id).push(r);
-        }
-        const showsPrinting = new Map();
-        for (const [id, rows] of nightRows) {
-          rows.sort(played);
-          const key = rows.map((r) => squeeze(r.songname)).join('|');
-          showsPrinting.set(key, [...(showsPrinting.get(key) || []), id]);
-        }
-
-        // Each card's key opens THAT card's entries, under THAT card's show. A sheet
+        // Each card's button opens THAT card's entries, under THAT card's show. A sheet
         // built from the first card, or from any one show, fails on the second card.
         await setShowsView('detail');
         for (const [where, hash] of [['Home', '#/home'], ['Shows', '#/shows']]) {
@@ -5193,10 +5384,10 @@ async function run() {
           await sleep(1600);
           const cards = await evaluate(`(() => {
             const out = [];
-            for (const c of [...document.querySelectorAll('.screen .card')].filter((x) => x.querySelector('li.jam-key')).slice(0, 8)) {
+            for (const c of [...document.querySelectorAll('.screen .card')].filter((x) => x.querySelector('.btn-jam')).slice(0, 8)) {
               const green = [...c.querySelectorAll('.setlist-song[data-jam="true"]')].map((s) => [s.textContent, s.getAttribute('title')]);
               const titles = [...c.querySelectorAll('.setlist-flow .setlist-song')].map((s) => s.textContent);
-              c.querySelector('li.jam-key button').click();
+              c.querySelector('.btn-jam').click();
               const got = [...document.querySelectorAll('.sheet .jam-card')].map((x) => [x.querySelector('.jam-card-song').textContent, (x.querySelector('.jam-card-note') || { textContent: null }).textContent]);
               const head = ${READ_HEAD};
               for (const b of document.querySelectorAll('.sheet-backdrop')) b.click();
@@ -5204,12 +5395,12 @@ async function run() {
             }
             return out;
           })()`);
-          if (!cards) fail(`${where}: reading the keyed cards threw`);
-          else if (!cards.length) skip(`${where}: no setlist card with a key on screen today, so its sheet went unchecked`);
+          if (!cards) fail(`${where}: reading the cards with a button threw`);
+          else if (!cards.length) skip(`${where}: no setlist card with a Jam notes button on screen today, so its sheet went unchecked`);
           else {
             const bad = cards.filter((c) => JSON.stringify(c.green) !== JSON.stringify(c.got));
             if (bad.length) fail(`${where}: ${bad.length} of ${cards.length} card(s) open entries that are not their own, e.g. ${firstDiff(bad[0].got, bad[0].green)}`);
-            else pass(`${where}: ${cards.length} keyed card(s) each open their own entries`);
+            else pass(`${where}: ${cards.length} card(s) each open their own entries`);
             for (const [i, c] of cards.entries()) {
               const tag = `${where}, card ${i + 1}`;
               const ids = showsPrinting.get(c.titles.join('|')) || [];
@@ -5220,75 +5411,101 @@ async function run() {
           }
         }
 
-        // The target, by hit test: a column walked pixel by pixel at the row's two
-        // ends and its middle, not the pseudo-element's declared height. And what it
-        // must not take: every other control nearby keeps its own centre, and a
-        // card's button keeps the top of its own overhang.
+        // A show page has each entry twice, so the sheet's card can be held to its
+        // twin: the show line above the cards adds a block and changes none of them.
         for (const w of [360, 390]) {
           await send('Emulation.setDeviceMetricsOverride', { width: w, height: 844, deviceScaleFactor: 2, mobile: true });
-          for (const [where, hash] of [['Home', '#/home'], ['show detail', `#/show/${mixed ? mixed[0] : ''}`]]) {
-            await evaluate(`location.hash = ${JSON.stringify(hash)};`);
-            await sleep(1300);
-            const t = await evaluate(`(() => {
-              const out = [];
-              for (const li of document.querySelectorAll('.screen li.jam-key')) {
-                li.scrollIntoView({ block: 'center', behavior: 'instant' });
-                const box = li.getBoundingClientRect();
-                const btn = li.querySelector('button');
-                const isKey = (x, y) => { const n = document.elementFromPoint(x, y); return !!(n && n.closest('button') === btn); };
-                const reach = (x) => { let px = 0; for (let y = Math.floor(box.top) - 40; y <= box.bottom + 40; y += 1) if (isKey(x, y)) px += 1; return px; };
-                const columns = [box.left + 1, box.left + box.width / 2, box.right - 1].map(reach);
-                const stolen = [];
-                const card = li.closest('.card');
-                for (const n of card.querySelectorAll('.setlist-song, button.fn-marker, .card-actions .btn')) {
-                  for (const r of n.getClientRects()) {
-                    if (r.bottom < box.top - 60 || r.top > box.bottom + 60) continue;
-                    const points = [[r.left + r.width / 2, r.top + r.height / 2]];
-                    if (n.matches('.btn')) points.push([r.left + r.width / 2, r.top - 3]);
-                    for (const [x, y] of points) {
-                      const hit = document.elementFromPoint(x, y);
-                      if (hit && hit.closest('button') === btn) stolen.push(n.textContent.trim());
-                    }
-                  }
-                }
-                out.push({ rowHeight: box.height, declared: btn ? parseFloat(getComputedStyle(btn, '::after').height) || 0 : 0, columns, stolen, isButton: !!btn && btn.tagName === 'BUTTON' && btn.type === 'button', popup: btn ? btn.getAttribute('aria-haspopup') : null });
-              }
-              return out;
-            })()`);
-            if (!t || !t.length) { skip(`${where} at ${w}: no key line on screen, so its target went unmeasured`); continue; }
-            const tag = `${where} at ${w}`;
-            // Both: the walk samples whole pixels and can read one over, and a declared
-            // height means nothing if something on top of it wins the taps.
-            const short = t.filter((x) => Math.min(...x.columns) < 44 || x.declared < 44);
-            const stolen = t.filter((x) => x.stolen.length);
-            const tall = t.filter((x) => x.rowHeight >= 44);
-            if (t.some((x) => !x.isButton || x.popup !== 'dialog')) fail(`${tag}: the key line is not a real button opening a dialog`);
-            if (short.length) fail(`${tag}: ${short.length} of ${t.length} key(s) under the 44px floor, declared ${short[0].declared}px, columns ${short[0].columns.join(' / ')}px`);
-            else if (stolen.length) fail(`${tag}: the key's target takes taps meant for "${stolen[0].stolen[0]}"`);
-            else if (tall.length) fail(`${tag}: the key row itself is ${tall[0].rowHeight}px, in the flow rather than an overlay`);
-            else pass(`${tag}: ${t.length} key(s), target ${t[0].declared}px declared and ${Math.min(...t[0].columns)} sampled across the row, the row itself ${t[0].rowHeight}px, no neighbour's taps taken`);
-
-            // A show page has each entry twice, so the sheet's card can be held to its
-            // twin: the show line above the cards adds a block and changes none of them.
-            if (where === 'show detail') {
-              const twins = await evaluate(`(() => {
-                const sizes = (sel) => [...document.querySelectorAll(sel)].map((c) => {
-                  const r = c.getBoundingClientRect();
-                  return { w: Math.round(r.width * 100) / 100, h: Math.round(r.height * 100) / 100 };
-                });
-                document.querySelector('.screen li.jam-key button').click();
-                const out = { sheet: sizes('.sheet .jam-card'), page: sizes('.screen .jam-card') };
-                for (const b of document.querySelectorAll('.sheet-backdrop')) b.click();
-                return out;
-              })()`);
-              const d = firstDiff(twins.sheet, twins.page);
-              if (!twins.page.length) fail(`${tag}: the page has no jam cards, so the sheet's had nothing to match`);
-              else if (d) fail(`${tag}: a sheet card is not the size of its twin on the page, ${d}`);
-              else pass(`${tag}: ${twins.page.length} sheet card(s) the size of their twins on the page`);
-            }
-          }
+          await evaluate(`location.hash = '#/show/${mixed ? mixed[0] : ''}';`);
+          await sleep(1300);
+          const tag = `show detail at ${w}`;
+          const twins = await evaluate(`(() => {
+            const sizes = (sel) => [...document.querySelectorAll(sel)].map((c) => {
+              const r = c.getBoundingClientRect();
+              return { w: Math.round(r.width * 100) / 100, h: Math.round(r.height * 100) / 100 };
+            });
+            document.querySelector('.screen .btn-jam').click();
+            const out = { sheet: sizes('.sheet .jam-card'), page: sizes('.screen .jam-card') };
+            for (const b of document.querySelectorAll('.sheet-backdrop')) b.click();
+            return out;
+          })()`);
+          const d = firstDiff(twins.sheet, twins.page);
+          if (!twins.page.length) fail(`${tag}: the page has no jam cards, so the sheet's had nothing to match`);
+          else if (d) fail(`${tag}: a sheet card is not the size of its twin on the page, ${d}`);
+          else pass(`${tag}: ${twins.page.length} sheet card(s) the size of their twins on the page`);
         }
         await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+
+        // The title and the show line must not read as one block (0.1.88): a small
+        // label in --jam over the date, a hairline, then the entries. Size, colour,
+        // case and the hairline each report on their own line, in both themes, on the
+        // real sheet, against the tokens as that theme resolves them. And only this
+        // sheet: a footnote's title stays the plain heading it was.
+        await evaluate(`location.hash = '#/show/1779890028';`);
+        await sleep(1300);
+        const READ_TITLE = `(() => {
+          const s = document.querySelector('.sheet');
+          const h2 = s && s.querySelector('h2');
+          const head = s && s.querySelector('.sheet-show');
+          const probe = document.createElement('div');
+          probe.style.cssText = 'color: var(--jam); border-top: 1px solid var(--line); font-size: var(--t-md)';
+          document.body.append(probe);
+          const p = getComputedStyle(probe);
+          const token = { jam: p.color, line: p.borderTopColor, md: parseFloat(p.fontSize) };
+          probe.remove();
+          const read = (n) => {
+            if (!n) return null;
+            const c = getComputedStyle(n);
+            return { text: n.textContent, size: parseFloat(c.fontSize), colour: c.color, transform: c.textTransform, spacing: c.letterSpacing };
+          };
+          let rule = null;
+          if (head) {
+            const c = getComputedStyle(head);
+            const next = head.nextElementSibling;
+            const edge = head.getBoundingClientRect().bottom;
+            rule = {
+              width: parseFloat(c.borderBottomWidth), style: c.borderBottomStyle, colour: c.borderBottomColor,
+              nextIsCard: !!next && next.matches('.jam-card'),
+              above: edge - head.querySelector('.venue-line').getBoundingClientRect().bottom,
+              below: next ? next.getBoundingClientRect().top - edge : null,
+            };
+          }
+          return { token, h2: read(h2), date: read(head && head.querySelector('.sheet-show-date')), rule };
+        })()`;
+        for (const theme of ['dark', 'light']) {
+          await evaluate(`document.documentElement.setAttribute('data-theme', ${JSON.stringify(theme)});`);
+          await sleep(200);
+          await evaluate(`document.querySelector('.screen .btn-jam').click()`);
+          await sleep(150);
+          const t = await evaluate(READ_TITLE);
+          await evaluate(closeAnySheet);
+          await sleep(150);
+          const tag = `the sheet's title (${theme})`;
+          if (!t.h2 || !t.date) fail(`${tag}: no title or no date to compare, ${JSON.stringify(t)}`);
+          else {
+            if (!(t.h2.size < t.date.size)) fail(`${tag}: ${t.h2.size}px against the date's ${t.date.size}px, not smaller`);
+            else pass(`${tag}: ${t.h2.size}px under the date's ${t.date.size}px`);
+            if (t.h2.colour !== t.token.jam || t.h2.colour === t.date.colour) fail(`${tag}: ${t.h2.colour}, where --jam is ${t.token.jam} and the date ${t.date.colour}`);
+            else pass(`${tag}: ${t.h2.colour}, --jam, the date ${t.date.colour}`);
+            if (t.h2.transform !== 'uppercase' || t.h2.spacing === 'normal' || t.date.transform === 'uppercase') fail(`${tag}: case ${t.h2.transform} and spacing ${t.h2.spacing}, the date's case ${t.date.transform}`);
+            else pass(`${tag}: uppercase and spaced ${t.h2.spacing}, the date ${t.date.transform}`);
+          }
+          const r = t.rule;
+          if (!r) fail(`the sheet's hairline (${theme}): no show line to carry it`);
+          else if (r.style !== 'solid' || !(r.width >= 1)) fail(`the sheet's hairline (${theme}): none under the show line, ${r.width}px ${r.style}`);
+          else if (r.colour !== t.token.line) fail(`the sheet's hairline (${theme}): ${r.colour}, where --line is ${t.token.line}`);
+          else if (!r.nextIsCard || !(r.above > r.width) || !(r.below > 0)) fail(`the sheet's hairline (${theme}): not between the show line and the first card, ${JSON.stringify(r)}`);
+          else pass(`the sheet's hairline (${theme}): ${r.width}px of --line, ${r.above}px under the venue and ${r.below}px above the first card`);
+
+          await evaluate(`document.querySelector('.screen button.fn-marker').click()`);
+          await sleep(150);
+          const other = await evaluate(READ_TITLE);
+          await evaluate(closeAnySheet);
+          await sleep(150);
+          if (!other.h2 || other.h2.text !== 'Footnote') fail(`a footnote's sheet (${theme}): titled ${JSON.stringify(other.h2)}`);
+          else if (other.h2.size !== other.token.md || other.h2.colour === other.token.jam || other.h2.transform !== 'none') fail(`a footnote's title (${theme}) took the label: ${other.h2.size}px, ${other.h2.colour}, ${other.h2.transform}`);
+          else pass(`a footnote's title (${theme}) stays the plain heading, ${other.h2.size}px`);
+        }
+        await evaluate(`document.documentElement.removeAttribute('data-theme');`);
       }
 
       // --- The sheet itself, across a footnote's and the notes' --------------------
@@ -5310,7 +5527,7 @@ async function run() {
           })()`;
           for (const [tag, opener, heading] of [
             ['a footnote', footnoteOpener, 'Footnote'],
-            ['the notes', `document.querySelector('.screen li.jam-key button')`, 'Jam chart entries'],
+            ['the notes', `document.querySelector('.screen .btn-jam')`, 'Jam chart entries'],
           ]) {
             const open = () => evaluate(`(() => {
               const o = ${opener};
@@ -5466,7 +5683,7 @@ async function run() {
             const shown = await evaluate(READ_SHOW);
             const titles = shown.green.slice(0, 4).map((g) => g.title);
             const notes = shown.cards.slice(0, 4).map((c) => c.note);
-            await evaluate(`document.querySelector('.screen li.jam-key button').click()`);
+            await evaluate(`document.querySelector('.screen .btn-jam').click()`);
             await sleep(100);
             const sheet = await evaluate(READ_SHEET);
             const sheetNotes = sheet ? sheet.entries.slice(0, 4).map((e) => e.note) : null;

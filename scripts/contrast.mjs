@@ -282,8 +282,8 @@ export const PAIRS = [
   // detail. The border and the edge are graphics, held here to text's 4.5
   // rather than 1.4.11's 3, because they share the token with the text.
   { fg: 'jam', bg: 'shell', min: 4.5, where: 'jam key on the page ground; show detail\'s jam entry count badge' },
-  { fg: 'jam', bg: 'surface', min: 4.5, where: 'jam-charted song titles, jam key; the jam badge\'s text and border and the jam row edge on song detail' },
-  { fg: 'jam', bg: 'surface-up', min: 4.5, where: 'jam titles on a pressed card; the jam badge on a pressed or flashing row' },
+  { fg: 'jam', bg: 'surface', min: 4.5, where: 'jam-charted song titles, jam key, the Jam notes button\'s label and outline, the jam notes sheet\'s title; the jam badge\'s text and border and the jam row edge on song detail' },
+  { fg: 'jam', bg: 'surface-up', min: 4.5, where: 'jam titles on a pressed card; the Jam notes button\'s label when pressed; the jam badge on a pressed or flashing row' },
 
   // Tertiary. .carton-link renders at 10px, which is normal text under WCAG,
   // so it gets 4.5 and not 3 -- this pair is why the colour cannot go dimmer.
