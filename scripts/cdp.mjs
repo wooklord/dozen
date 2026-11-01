@@ -16,6 +16,13 @@
 //    the browser's own endpoint, then confirms the DevTools port has stopped
 //    answering, and says so when it has not.
 //
+//    Browser.close is not always enough (2026-11-01). A scoped smoke run of 12s
+//    closed clean and runs of 48s to 222s did not: Chrome replied, dropped every
+//    target, and stayed up with its port open. Why time decides that was not
+//    established. So close() reads the real pids first, the browser's and its
+//    helpers', and kills them if the port is still answering after Browser.close.
+//    The helpers too, because they outlast the browser and hold the profile.
+//
 // 2. EVERY CALL TIMES OUT, LOUDLY. A lost reply used to leave its promise
 //    pending forever, and the smoke test once sat mid-check for three hours
 //    with no result and no failure. A call now rejects after CDP_TIMEOUT,
@@ -79,16 +86,33 @@ export async function openChrome({ chrome, port, profile, width = 390, onEvent =
   // connection: it has to work when the page connection is the thing that
   // failed. Chrome may drop the socket before replying; either ends the wait,
   // and what counts is the port check after it.
+  let chromePids = [];
   const closeBrowser = async () => {
     const version = await (await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(5000) })).json();
     const b = new WebSocket(version.webSocketDebuggerUrl);
     await new Promise((resolve, reject) => { b.onopen = resolve; b.onerror = () => reject(new Error('no browser connection')); });
+    const info = await new Promise((resolve) => {
+      b.onmessage = (e) => resolve(JSON.parse(e.data));
+      b.onclose = () => resolve(null);
+      b.send(JSON.stringify({ id: 1, method: 'SystemInfo.getProcessInfo' }));
+    });
+    chromePids = (info?.result?.processInfo || []).map((p) => p.id);
     await new Promise((resolve) => {
       b.onmessage = resolve;
       b.onclose = resolve;
-      b.send(JSON.stringify({ id: 1, method: 'Browser.close' }));
+      b.send(JSON.stringify({ id: 2, method: 'Browser.close' }));
     });
     try { b.close(); } catch {}
+  };
+
+  const stoppedAnswering = async (tries) => {
+    for (let i = 0; i < tries; i++) {
+      try {
+        await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(1000) });
+        await sleep(250);
+      } catch { return true; }
+    }
+    return false;
   };
 
   let closed = false;
@@ -98,19 +122,23 @@ export async function openChrome({ chrome, port, profile, width = 390, onEvent =
     await Promise.race([closeBrowser().catch(() => {}), sleep(5000)]);
     try { ws?.close(); } catch {}
     try { proc.kill(); } catch {}
-    let gone = false;
-    for (let i = 0; i < 40 && !gone; i++) {
-      try {
-        await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(1000) });
-        await sleep(250);
-      } catch { gone = true; }
+    let gone = await stoppedAnswering(12);
+    if (!gone && chromePids.length) {
+      for (const pid of chromePids) { try { process.kill(pid); } catch {} }
+      gone = await stoppedAnswering(20);
     }
     if (!gone) console.log(`  WARN  headless Chrome on port ${port} still answers after Browser.close -- it is left running`);
     // Chrome's helper processes can hold the profile for a moment after the
     // browser exits; a cleanup failure must never mask a result, but it must
-    // not be silent either, or the profiles pile up again.
-    try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
-    catch (err) { console.log(`  WARN  the throwaway profile was not removed (${err.code || err.message})`); }
+    // not be silent either, or the profiles pile up again. Retried here as well as
+    // in rmSync, whose own retries gave up with EPERM on a profile free moments later.
+    let failed = null;
+    for (let i = 0; i < 40; i++) {
+      failed = null;
+      try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); break; }
+      catch (err) { failed = err; await sleep(500); }
+    }
+    if (failed) console.log(`  WARN  the throwaway profile was not removed (${failed.code || failed.message})`);
   };
 
   try {
