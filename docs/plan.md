@@ -1149,6 +1149,12 @@ items; each names what it supersedes.
    **Supersedes the 0.1.64 note in `docs/design.md`** that three entry points to the gap chart remain;
    the chart's one way in is the show it belongs to.
 
+**Confirmed on the phone, 2026-11-01, on the live 0.1.90.** The dev kept both open calls as built:
+the chart-first order, the chart between the setlist and the entries, where entries first was
+considered and declined; and the compact pinned chip, the short date and the venue name, where
+dropping it and reducing it to the date alone were each considered and declined. Not to be reopened
+without a new reason.
+
 ## Out of scope — parked
 
 Anything crossing the scope rule goes to [`phase3_ideas.md`](phase3_ideas.md), not into the app.
