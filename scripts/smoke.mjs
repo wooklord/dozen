@@ -470,7 +470,7 @@ async function run() {
         buttonSets: cards.map(c => [...c.querySelectorAll('.card-actions .btn-small')].map(b => b.textContent.trim())),
         wanted: cards.map(c => {
           const green = c.querySelectorAll('.setlist-song[data-jam="true"]').length;
-          return green ? ['Show detail', '●Jam notes · ' + green] : ['Show detail'];
+          return green ? ['Show detail', 'Jam notes'] : ['Show detail'];
         }),
         anyGapChart: cards.some(c => [...c.querySelectorAll('.btn-small')].some(b => b.textContent.trim() === 'Gap chart')),
       };
@@ -5065,9 +5065,9 @@ async function run() {
         //
         // The pairing is the assertion: a card with highlighted songs must have a
         // key and one button, and a card without must have neither. Colour is compared
-        // against that card's OWN highlighted title, never a hex. The count is held to
-        // the raw rows of the show the card prints, never to the app's index, and
-        // separately to the card's own green titles.
+        // against that card's OWN highlighted title, never a hex. The green titles are
+        // held to the raw rows of the show the card prints, never to the app's index.
+        // The button's count was held to the same rows until 0.1.89 took it off.
         const READ_CARDS = `(() => {
           const control = ${JSON.stringify(CONTROL)};
           const colour = (n) => (n ? getComputedStyle(n).color : null);
@@ -5169,23 +5169,27 @@ async function run() {
           const bare = withJams.filter((x) => x.realFootnotes === 0);
           if (bare.length) pass(`${screen}: ${bare.length} keyed card(s) have no footnotes — key still in a list`);
 
-          const wrong = { label: [], name: [], green: [] };
+          // The label is exact, and it is the name: no aria-label since 0.1.89, when
+          // the count came off, so the two cannot disagree.
+          const present = withJams.filter((x) => x.buttons);
+          const badLabel = present.filter((x) => x.label !== 'Jam notes');
+          const named = present.filter((x) => x.name !== null);
+          if (badLabel.length) fail(`${screen}: ${badLabel.length} of ${present.length} button(s) read ${JSON.stringify(badLabel[0].label)}, not exactly "Jam notes"`);
+          else if (present.length) pass(`${screen}: every button reads exactly "Jam notes"`);
+          if (named.length) fail(`${screen}: ${named.length} button(s) carry an aria-label, ${JSON.stringify(named[0].name)}, over a visible label that names them`);
+          else if (present.length) pass(`${screen}: no aria-label, the visible text is the name`);
+
+          const wrong = [];
           let counted = 0;
           for (const c of withJams) {
             const ids = showsPrinting.get(c.titles.join('|')) || [];
-            if (!ids.length) { fail(`${screen}: a card's ${c.titles.length} titles match no show in the raw table, so its count went unchecked`); continue; }
-            if (ids.length > 1) { skip(`${screen}: a card's titles match ${ids.length} shows (${ids.join(', ')}), so its count went unchecked`); continue; }
+            if (!ids.length) { fail(`${screen}: a card's ${c.titles.length} titles match no show in the raw table, so its green went unchecked`); continue; }
+            if (ids.length > 1) { skip(`${screen}: a card's titles match ${ids.length} shows (${ids.join(', ')}), so its green went unchecked`); continue; }
             const raw = nightRows.get(ids[0]).filter((x) => Number(x.isjamchart) === 1).length;
             counted += 1;
-            if (c.label !== `●Jam notes · ${raw}`) wrong.label.push(`${JSON.stringify(c.label)} on a show with ${raw} raw row(s)`);
-            if (c.name !== `Jam notes, ${raw} ${raw === 1 ? 'entry' : 'entries'}`) wrong.name.push(`${JSON.stringify(c.name)} on a show with ${raw} raw row(s)`);
-            if (c.green !== raw) wrong.green.push(`${c.green} green title(s) on a show with ${raw} raw row(s)`);
+            if (c.green !== raw) wrong.push(`${c.green} green title(s) on a show with ${raw} raw row(s)`);
           }
-          if (wrong.label.length) fail(`${screen}: ${wrong.label.length} of ${counted} button(s) read wrong, e.g. ${wrong.label[0]}`);
-          else if (counted) pass(`${screen}: ${counted} button(s) read "Jam notes · N", N the show's raw rows`);
-          if (wrong.name.length) fail(`${screen}: ${wrong.name.length} of ${counted} accessible name(s) wrong, e.g. ${wrong.name[0]}`);
-          else if (counted) pass(`${screen}: ${counted} accessible name(s) count the same entries, e.g. ${JSON.stringify(withJams[0].name)}`);
-          if (wrong.green.length) fail(`${screen}: ${wrong.green.length} of ${counted} card(s) disagree, e.g. ${wrong.green[0]}`);
+          if (wrong.length) fail(`${screen}: ${wrong.length} of ${counted} card(s) disagree, e.g. ${wrong[0]}`);
           else if (counted) pass(`${screen}: the green titles on ${counted} card(s) equal their raw rows`);
 
           const notReal = withJams.filter((x) => x.buttons && (!x.real || x.popup !== 'dialog'));

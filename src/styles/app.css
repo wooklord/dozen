@@ -706,18 +706,14 @@ button.gap-figure:active {
   height: var(--tap);
 }
 
-/* The Jam notes button (0.1.88). --jam on the label and the outline, the colour
-   of the titles it is about, and nothing on the fill. Doubled for the reason
-   .btn.btn-small is, .btn being later in this file. It sets no background, so
-   .btn:active still presses it. */
+/* The Jam notes button (0.1.88; its bullet and count came off in 0.1.89, so the
+   label is one word pair and nothing here spaces parts). --jam on the label and
+   the outline, the colour of the titles it is about, and nothing on the fill.
+   Doubled for the reason .btn.btn-small is, .btn being later in this file. It
+   sets no background, so .btn:active still presses it. */
 .btn.btn-jam {
   color: var(--jam);
   border-color: var(--jam);
-  gap: var(--s-1);
-}
-.btn-jam-dot {
-  font-size: var(--t-xs);
-  font-weight: 700;
 }
 
 /* Trailing icon action on a row, alongside the row's own navigation. */

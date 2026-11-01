@@ -557,20 +557,16 @@ function setlistParts(rows, { onSong, index } = {}) {
       el('span.jam-key-bullet', { 'aria-hidden': 'true', text: '●' }),
       el('span', { text: 'jam chart entry' }),
     ]);
+  // "Jam notes", and no more: 0.1.89 took the bullet and the entry count off it,
+  // the dev's call after the 0.1.88 phone check. The visible text is the
+  // accessible name, so there is no aria-label to fall out of step with it.
   const jamButton = hasJam
-    ? el(
-        'button.btn.btn-small.btn-jam',
-        {
-          type: 'button',
-          'aria-haspopup': 'dialog',
-          'aria-label': `Jam notes, ${jams.length} ${jams.length === 1 ? 'entry' : 'entries'}`,
-          onclick: () => openJamNotes(jams, index.showsById.get(showId), onSong),
-        },
-        [
-          el('span.btn-jam-dot', { 'aria-hidden': 'true', text: '●' }),
-          el('span', { text: `Jam notes · ${jams.length}` }),
-        ],
-      )
+    ? el('button.btn.btn-small.btn-jam', {
+        type: 'button',
+        'aria-haspopup': 'dialog',
+        text: 'Jam notes',
+        onclick: () => openJamNotes(jams, index.showsById.get(showId), onSong),
+      })
     : null;
   const setNodes = [];
   const footnotes = [];
