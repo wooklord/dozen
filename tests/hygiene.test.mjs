@@ -60,6 +60,26 @@ test('innerHTML appears only where the content is a literal in this repo', () =>
   assert.deepEqual(hits, [], 'innerHTML outside src/ui/dom.js — every string on screen is third-party data');
 });
 
+test('children go through replace() in dom.js, never to Element.replaceChildren(...)', () => {
+  // The When sheet on Shows rendered "nullnull" under its year grid from
+  // 0.1.82 to 0.1.90: two `year ? el(...) : null` children handed to
+  // replaceChildren(), which prints a null as the text "null" where el() and
+  // append() drop it. One null-safe door, replace(), and this guard so the
+  // next re-render does not reach for the DOM method beside it. An empty
+  // replaceChildren() is a clear and is allowed. The smoke test's literal
+  // watch is the net under this: it reads the text, this reads the source.
+  const hits = [];
+  for (const f of srcFiles()) {
+    if (!f.endsWith('.js')) continue;
+    const rel = path.relative(ROOT, f).replace(/\\/g, '/');
+    read(rel).split('\n').forEach((line, i) => {
+      const code = line.replace(/\/\/.*$/, '');
+      if (/\.replaceChildren\(\s*[^)\s]/.test(code) || /\.replaceChildren\(\s*$/.test(code)) hits.push(`${rel}:${i + 1}`);
+    });
+  }
+  assert.deepEqual(hits, [], 'replaceChildren(...) with children — use replace() from src/ui/dom.js, which drops a null instead of printing it');
+});
+
 // --- routes ------------------------------------------------------------------
 
 test('ROUTES covers the screen that has broken in production, and the retired chart route redirects', () => {

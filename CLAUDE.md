@@ -450,6 +450,8 @@ then passes for the wrong reason, and reports health it never established.
 | `scrollWidth > clientWidth` on the gap-history strip (2026-10-26, 0.1.83) | that **the strip's bars fit inside it** | **the overflowing strip itself**. A flex strip's bars carry `min-width: 0`, and given more bars than pixels they shrank past the edge: in a scratch page with the app's CSS, 300 bars at 360 with a fixed 1px gap ran the last bar to 332 against the strip's 327, and `scrollWidth` reported no overflow. The check compares the **last bar's right edge** with the strip's now, and a synthetic 300-bar strip in the real card reads `runs to 332, past its edge at 327` with the gap fixed |
 | "The bright strip bar is the tallest" (2026-10-26, 0.1.83) | that **the strip's heights follow the gaps** | **every bar at the same 2px**. The bars' `--h` went through `el()`'s `style` prop, which is `Object.assign` and drops custom properties without an error, so every bar sat at the floor -- and when every bar is 2px, each one is the tallest. Green on its first run; caught by the same run printing a 0px bar gap. Each bar is now held to its own row's figure, and the spacing to the fluid gap's formula. The same `el()` path kept every `.gap-bar`'s `--heat` off the page from 0.1.16 until `el()` was fixed in 0.1.84 (`docs/design.md`, under "Color") |
 | "0 Chromes left" after a run, with a kill added to `close()` (2026-11-01, after 0.1.88) | that **the kill fixed the leak** | **the leak having stopped by itself**. It was called fixed on that count. Removing the kill to prove it left the run clean, and so was the old `close()`, 2 of 2. The cause was never established. The bullet on `close()` below has the account |
+| Open the When sheet and read its year grid, month grid, option rows and group titles (0.1.82 to 0.1.90, caught 2026-11-01) | that **the sheet renders right** | **the parts it named**, each right, with the text "nullnull" sitting under them in a text node no selector reached -- two `null` children handed to `replaceChildren`, which prints them. And it opened the sheet only from Aug 2019, the one state whose null branches are not taken. Nine builds, every run green. The smoke test watches the whole document's text now, in every state it walks, and must see its own control first |
+| `setShowsWhen(2019)` returning `'year'` (0.1.82 to 0.1.90, caught 2026-11-01) | that **a year is reachable the way a thumb reaches it** | **the driver dismissing the sheet through its backdrop** after the year -- the exit no user finds -- and then reporting the year reached. The driver had encoded the workaround as the procedure, so every check downstream walked a state by a path the UI did not offer, and "a year is a step toward a month" shipped as designed. The driver reports a pick that leaves the sheet open now, and the `nav-states` section fails on it; with the old driver put back under that fault the section is green, which is the measure of what it was worth |
 
 The shape is always a **proxy**: the check tests a side effect rather than the
 thing itself, and the side effect has more than one cause. The row that polls for
@@ -869,10 +871,10 @@ checks were verified this way:
   notes block became one function and the verdict another, so a full run executes
   the same code in the same order, and `git diff -w` shows only the wrappers, the
   gates, and two helpers moved above them. **Only `jam-button` (since 0.1.88),
-  `jam-notes`, `sheet`, `markup` and `stale-table` can be scoped.** About fifty names
-  cross the sections before them, so wrapping those would change the full run to save
-  time on it; a section joins when a proof needs it and it can stand alone (`show-detail`
-  joined in 0.1.90). Green, against 380s for a full run: `stale-table` 12s, `markup` 11s,
+  `jam-notes`, `sheet`, `markup`, `stale-table` and `nav-states` can be scoped.** About
+  fifty names cross the sections before them, so wrapping those would change the full
+  run to save time on it; a section joins when a proof needs it and it can stand alone
+  (`show-detail` joined in 0.1.90, `nav-states` in 0.1.91). Green, against 380s for a full run: `stale-table` 12s, `markup` 11s,
   `sheet` 18s, `jam-notes` 34s.
   The three ways a scoped run could report health it never established:
   - an unknown name: `--only nope`, a bare `--only`, `--only ""`, `--onyl
@@ -1145,6 +1147,86 @@ checks were verified this way:
   exactly their 135 performance rows and Shadow's 141 shows, each row's venue line 42px
   and 30px wider at the same place, the icon's width given back; 6 identical; the chart's
   old route reported `REMOVED`, as it should be (`docs/design.md`, 0.1.90).
+
+- The 0.1.91 checks (the Shows nav, 2026-11-01: the literal watch, the `nav-states`
+  section, the When pill and "All shows"), under the ruling below. Each scoped proof is
+  `--only nav-states`, staged from a scratch Node script by exact string, the staged hash
+  confirmed different from the byte copy and the new text read back before the run, the
+  file restored from the copy by hash with `git status --short` held to the tree as it
+  stood before that fault. Green first: 17 checks in 48s; 266 unit tests passing.
+
+  The literal watch and the null:
+  - the old When sheet put back, `body.replaceChildren(...)` with two `null` children:
+    1 unit failure, the new hygiene guard naming `src/views/shows.js:` and its line; smoke
+    1, `literal "null" in the text at #/shows, in the sheet "When", div.sheet > div, not
+    rendered when the watch looked (end of the task that added it), gone by the time it
+    was read`. The sheet checks of 0.1.82 to 0.1.90 passed over that text nine builds
+    running.
+  - the watch's pattern changed to one that matches nothing: smoke 1, `the literal watch's
+    control did not fire ([]), so the watch proves nothing`. Without the control, both
+    drains read clean on a page where nothing could ever be recorded.
+
+  The states, reachable:
+  - a year applying but leaving the sheet open, the 0.1.82 behaviour: smoke 6, `year: not
+    reached through the sheet -- the year 2019 left the sheet open`, and every state built
+    on a year after it.
+  - **the same fault with the OLD driver put back,** dismissing the sheet through its
+    backdrop and returning `'year'`: **smoke GREEN, 17 checks.** That is the run 0.1.82 to
+    0.1.90 had. The driver encoded the workaround, so a user's dead end read as a reached
+    state. Recorded because a check that is green on the fault is the measure of what it
+    was worth.
+  - the month grid gated on a picked month instead of the year: smoke 3, `year: reopened on
+    2019 the sheet reads titles ["Year","Month in 2019"], 0 month(s)`, and the month state
+    unreachable after it.
+  - a fourth state appended to `WHEN_STATES`: 2 unit failures, and smoke 1, `WHEN_STATES
+    lists [all, decade, month, year] and this section drives [all, month, year] -- a state
+    without a driver is a state nothing walks`, the section stopping at 3 checks.
+
+  The states, escapable:
+  - "All shows" left out of the pill row: smoke 12, led by `year: no "All shows" button on
+    screen (null) -- a state with no way out`, the same on month and on the two compound
+    states that reach it; the rest is the cascade a missing exit leaves, the section unable
+    to get back to the landing between states, ending `the section did not end on the
+    landing`.
+  - the When pill left out: smoke 13, `year: pills [], expected one When pill reading
+    "2019"`, and the same cascade.
+  - "All shows" clearing When and Filter but not the search: smoke 4, `the search alone:
+    "All shows" did not return to the landing: When "All", Filter "Off", search "Spirit",
+    ... 5 rows, count "5 shows · matching “Spirit” · newest first"`. The lead read All; the
+    rows did not.
+  - the Sets pill clearing When instead of its own group: smoke 1, `one pill at a time:
+    after the Sets pill, When "All", Filter "1 on", ... pills ["1 set"] ... expected When
+    2019 kept, Filter Off`. Every other line passed: each state was still escapable, by
+    the wrong pill.
+
+  The paint, a full run because chip paint is not scoped (526s): "All shows" given the
+  selected fill by a staged rule: smoke 2, `chip paint (dark): "All shows" is in the
+  selected fill rgb(61, 44, 18) -- it is the way out, not a selection`, and light,
+  `rgb(249, 225, 186)`.
+
+  The unit tests on `src/util/when.js`: `whenKind` reading a year and a month as the year
+  state, 3 failures; `whenLabel` printing the month's number, 1 failure. And one the suite
+  found in the build before any proof was staged: the first build emitted `.all-shows`
+  with no rule behind it, and `tests/deadcss.test.mjs` failed `EVERY EMITTED CLASS MATCHES
+  A RULE` naming it. The chip is a plain `.chip` with `data-pill="all"` now.
+
+  **Dropped, each with its reason:**
+  - "All shows" clearing When and the search but not the filters: the same `atLanding`
+    comparison as the search fault, a different field left true. The search one ran
+    because clearing it is the least obvious of the three.
+  - the When pill reading the wrong text: the same exact text comparison the no-pill fault
+    shows firing.
+  - "All shows" absent in the query-only state alone: the no-"All shows" fault's cascade
+    reaches every state, that one included.
+  - `replace()` regressing to `replaceChildren`: one line over `clear()` and `append()`,
+    both older than this change, with the literal watch as the net under it.
+
+  Restored, by hash the same files: 266 passing, smoke 368 ok with 0 skips and no `WARN`,
+  against 347 on 0.1.90. `layout-diff` against 0.1.90 (`7db8bc4`), 390 dark and 390 light:
+  9 routes identical, 1600 boxes on `#/shows`, stylesheets 244 rules both sides, the CSS
+  change being comment-only. **A pill row renders only in a narrowed state and a sheet
+  only while open, so that says the routes at rest did not move and nothing about either;**
+  the pill row's figures are in `docs/design.md`, 0.1.91.
 
 Do this for every new check. It is the only thing that separates a real check
 from a comforting one.
@@ -1590,8 +1672,8 @@ landed". The second is the worse of the two because it passes.
 | Command | Speed | Network | Run it |
 |---|---|---|---|
 | `node --test` | instant | none | always, before anything else |
-| `node scripts/smoke.mjs` | ~8 min (490s at 0.1.90, 404s at 0.1.89, 407s at 0.1.88, 386s at 0.1.87, 380s at 0.1.86, 356s at 0.1.85, so this row's old "~1 min" had gone stale well before 0.1.86) | Carton (cold pull) | **before every push** |
-| `node scripts/smoke.mjs --only <section>` | 11–120s (`show-detail` 69–118s, `jam-button` ~80s and `jam-notes` ~70s at 0.1.90, with the boot; `jam-notes` reaches each sheet through the Shows tab now) | Carton (cold pull) | for a red proof, re-running only the section the check lives in. **Never the gate for a push:** the full run is. An unknown name or a run of zero checks fails, and the verdict says it was scoped |
+| `node scripts/smoke.mjs` | ~9 min (526s at 0.1.91, 490s at 0.1.90, 404s at 0.1.89, 407s at 0.1.88, 386s at 0.1.87, 380s at 0.1.86, 356s at 0.1.85, so this row's old "~1 min" had gone stale well before 0.1.86) | Carton (cold pull) | **before every push** |
+| `node scripts/smoke.mjs --only <section>` | 11–120s (`nav-states` 29–54s at 0.1.91; `show-detail` 69–118s, `jam-button` ~80s and `jam-notes` ~70s at 0.1.90, with the boot; `jam-notes` reaches each sheet through the Shows tab now) | Carton (cold pull) | for a red proof, re-running only the section the check lives in. **Never the gate for a push:** the full run is. An unknown name or a run of zero checks fails, and the verdict says it was scoped |
 | `node scripts/gap-oracle.mjs` | ~1 min | Carton (cold pull + 20 song pages) | after any change to gap arithmetic, to the show universe in `buildIndex`, or to `gapHistory()`; it compares every Show Gap cell on 20 Carton song pages against the app's own `gapAtShow()`, and the gap history's one-entry-per-show fold (0.1.83) against the same pages grouped by show, and **SKIPs, never passes,** when Carton is unreachable. The smoke test carries a one-song spot check of the same parity |
 | `node scripts/contrast.mjs` | instant | none | when eyeballing a colour; the assertions already run in `node --test` |
 | `node scripts/deadcss.mjs` | instant | none | when a CSS rule looks inert; lists every declaration the cascade can never let win. The assertions already run in `node --test` (`tests/deadcss.test.mjs`) |

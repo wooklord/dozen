@@ -1,7 +1,7 @@
 // The Dozen — app shell, boot sequence and router.
 
 import { BUILD_LABEL } from './version.js';
-import { el, append, clear, icon, ICONS, openSheet } from './ui/dom.js';
+import { el, append, clear, replace, icon, ICONS, openSheet } from './ui/dom.js';
 import { fetchFullArchive, fetchCurrentYear, DataSourceError, COLD_PULL_STEPS } from './data/source.js';
 import { readArchive, writeArchive, isStale, cacheAge, mergeYear } from './data/cache.js';
 import { buildIndex } from './data/index.js';
@@ -255,7 +255,7 @@ function themeControl() {
   function paint() {
     const current = getTheme();
     const resolved = resolvedTheme(current);
-    wrap.replaceChildren(
+    replace(wrap, [
       el('div.section-title', { style: { marginBottom: '6px' }, text: 'Appearance' }),
       el(
         'div.segmented',
@@ -282,7 +282,7 @@ function themeControl() {
             ? `Following your device, which is ${resolved} right now.`
             : `Always ${resolved}, whatever your device does.`,
       }),
-    );
+    ]);
   }
 
   paint();

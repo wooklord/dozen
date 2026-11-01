@@ -28,6 +28,7 @@ import os from 'node:os';
 import { ROUTES, REDIRECTS } from './routes.mjs';
 import { parseSongPage } from './gap-oracle.mjs';
 import { openChrome, CDP_TIMEOUT } from './cdp.mjs';
+import { WHEN_STATES } from '../src/util/when.js';
 
 // A SCOPED RUN, AND WHAT STOPS IT READING AS A CLEAN ONE.
 //
@@ -39,7 +40,7 @@ import { openChrome, CDP_TIMEOUT } from './cdp.mjs';
 // Three ways a scoped run could report health it never established, each closed:
 // a mistyped name fails here before Chrome starts, a run that executes no check
 // fails in endRun(), and its verdict line says it was scoped and how much ran.
-const SECTIONS = ['show-detail', 'jam-button', 'jam-notes', 'sheet', 'markup', 'stale-table'];
+const SECTIONS = ['nav-states', 'show-detail', 'jam-button', 'jam-notes', 'sheet', 'markup', 'stale-table'];
 const ONLY = parseOnly(process.argv.slice(2));
 
 function parseOnly(args) {
@@ -174,6 +175,93 @@ async function run() {
   const evaluateAsync = async (expression) =>
     (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }))?.result?.value;
 
+  // --- Literal "null" / "undefined" on screen (0.1.91) -------------------------
+  //
+  // The When sheet on Shows read "nullnull" under its year grid from 0.1.82 to
+  // 0.1.90: two `year ? ... : null` children handed to Element.replaceChildren,
+  // which prints a null as text where el() drops one. The sheet checks read the
+  // year grid, the month grid, the option rows and the group titles by selector,
+  // and the stray text was in none of them; and they opened the sheet only with
+  // a year picked, the one state whose null branches are not taken. A check that
+  // reads named parts cannot see text outside all of them.
+  //
+  // So this reads the WHOLE document, in every state the run puts it in: a
+  // MutationObserver installed on every new document before the page's own
+  // scripts run, recording each text node and each label attribute (aria-label,
+  // title, placeholder, alt) that carries a bare "null", "undefined", "NaN" or
+  // "[object Object]" -- what a value that fell through String() leaves -- with
+  // the route, the sheet or screen it was in, where, and whether it was visible
+  // when it landed. Script, style and template text is skipped. The records
+  // survive a reload in sessionStorage. The run drains them after the route walk
+  // and at its end, and a record from any point between is a failure whether or
+  // not the text is still on screen by then: the sheet that printed it has
+  // usually closed.
+  //
+  // A watch that never fires reads clean on every run, so right after boot the
+  // run appends a span reading "undefined" and must see it recorded, or fails.
+  const LITERAL_WATCH = `(() => {
+    if (window.__dozenLiterals) return;
+    const RE = /\\b(null|undefined|NaN)\\b|\\[object Object\\]/;
+    const ATTRS = ['aria-label', 'title', 'placeholder', 'alt'];
+    const SKIP = 'script,style,template,noscript';
+    const KEY = 'dozen.smoke.literals';
+    let earlier = [];
+    try { earlier = JSON.parse(sessionStorage.getItem(KEY) || '[]'); } catch {}
+    const log = [];
+    let seen = 0;
+    const path = (e) => { const parts = []; for (let n = e, i = 0; n && n.nodeType === 1 && i < 5; n = n.parentElement, i++) parts.unshift(n.tagName.toLowerCase() + (typeof n.className === 'string' && n.className.trim() ? '.' + n.className.trim().split(/\\s+/).join('.') : '')); return parts.join(' > '); };
+    const context = (e) => { const sheet = e.closest('.sheet'); const h = sheet ? sheet.querySelector('h2') : document.querySelector('#main .screen h1'); return (sheet ? 'the sheet ' : 'the screen ') + JSON.stringify(((h && h.textContent) || '?').trim()); };
+    const strip = ({ node, ...r }) => r;
+    const persist = () => { try { sessionStorage.setItem(KEY, JSON.stringify([...earlier, ...log.map(strip)])); } catch {} };
+    const record = (node, kind, value) => {
+      const e = node.nodeType === 1 ? node : node.parentElement;
+      if (!e || e.closest(SKIP)) return;
+      log.push({ hash: location.hash, kind, value: String(value).trim().slice(0, 80), where: path(e), context: context(e),
+        visibleWhenAdded: e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden', node: e });
+      persist();
+    };
+    const attrs = (e) => { for (const a of ATTRS) if (e.hasAttribute(a) && RE.test(e.getAttribute(a))) record(e, a, e.getAttribute(a)); };
+    const text = (t) => { seen++; if (RE.test(t.nodeValue)) record(t, 'text', t.nodeValue); };
+    const tree = (n) => {
+      if (n.nodeType === 3) { text(n); return; }
+      if (n.nodeType !== 1 || n.matches(SKIP)) return;
+      seen++; attrs(n);
+      const w = document.createTreeWalker(n, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+      let c; while ((c = w.nextNode())) { if (c.nodeType === 3) text(c); else if (!c.matches(SKIP)) { seen++; attrs(c); } }
+    };
+    new MutationObserver((muts) => {
+      for (const m of muts) {
+        if (m.type === 'childList') m.addedNodes.forEach(tree);
+        else if (m.type === 'characterData') text(m.target);
+        else if (m.type === 'attributes') { seen++; const v = m.target.getAttribute(m.attributeName); if (v !== null && RE.test(v)) record(m.target, m.attributeName, v); }
+      }
+    }).observe(document, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+    window.__dozenLiterals = {
+      drain() {
+        const out = [
+          ...earlier.map((r) => ({ ...r, earlierDocument: true })),
+          ...log.map((r) => ({ ...strip(r), stillOnScreen: r.node.isConnected && r.node.getClientRects().length > 0 })),
+        ];
+        earlier = []; log.length = 0;
+        try { sessionStorage.removeItem(KEY); } catch {}
+        return { records: out, seen };
+      },
+    };
+  })()`;
+  const reportLiterals = (label, drained) => {
+    if (!drained) { fail(`the literal watch is not installed ${label} -- window.__dozenLiterals is missing`); return; }
+    const keys = new Set();
+    const rows = drained.records.filter((r) => { const k = [r.hash, r.context, r.where, r.kind, r.value].join('|'); if (keys.has(k)) return false; keys.add(k); return true; });
+    for (const r of rows) {
+      // The watch looks at the end of the task that made the change, so a sheet
+      // opened and closed in one script (as the drivers do) reads "not rendered"
+      // -- a thumb would have seen it. Presence is the failure; this is context.
+      fail(`literal ${JSON.stringify(r.value)} in ${r.kind === 'text' ? 'the text' : `a ${r.kind}`} at ${r.hash}, in ${r.context}, ${r.where}${r.visibleWhenAdded ? ', rendered when the watch looked' : ', not rendered when the watch looked (end of the task that added it)'}${r.stillOnScreen ? ', still on screen' : r.earlierDocument ? ', from an earlier document' : ', gone by the time it was read'}`);
+    }
+    if (!rows.length) pass(`no literal null / undefined / NaN / [object Object] in any text or label ${label} (${drained.seen} nodes and attributes watched in this document)`);
+  };
+  const drainLiterals = async (label) => reportLiterals(label, await evaluate('window.__dozenLiterals ? window.__dozenLiterals.drain() : null'));
+
   // --- Shows controls (0.1.82): page-side helpers and drivers -----------------
   //
   // The Shows tab is driven the way a thumb drives it: the lead chip, then the
@@ -214,22 +302,33 @@ async function run() {
     if (now !== want) fail(`Shows view: asked for ${want}, the View lead reads ${JSON.stringify(now)} (${r})`);
     return now === want;
   };
-  // When: null for All shows, a year, or a year and a three-letter month. Picking
-  // a year keeps the sheet open (its months appear), so the year-only path
-  // closes it by the backdrop; a month or All shows closes it itself.
+  // When: null for All shows, a year, or a year and a three-letter month. Every
+  // row in the sheet applies and closes it (0.1.91), so a month is a second
+  // visit: the year, then the sheet reopened on that year's months. A pick that
+  // leaves the sheet open is REPORTED, never dismissed: until 0.1.90 this driver
+  // closed the sheet through its backdrop after a year -- the one exit no thumb
+  // finds -- and so walked the year-only state by a path a user cannot, which is
+  // how a year came to ship as a step toward a month rather than a filter.
   const setShowsWhen = async (year = null, month = null) => {
     await atShows();
     const r = await evaluate(`(() => {${SHOWS_JS}
+      const open = () => !!document.querySelector('.sheet');
       const lead = leadBy('when'); if (!lead) return 'no lead'; lead.click();
+      if (!open()) return 'the When lead opened no sheet';
       const y = ${JSON.stringify(year)}, m = ${JSON.stringify(month)};
-      if (y === null) { const o = sheetOption('All shows'); if (!o) { closeSheet(); return 'no All shows'; } o.click(); return 'all'; }
+      if (y === null) { const o = sheetOption('All shows'); if (!o) { closeSheet(); return 'no All shows'; } o.click(); if (open()) { closeSheet(); return 'All shows left the sheet open'; } return 'all'; }
       const yc = [...document.querySelectorAll('.sheet .chip-grid .chip')].find((c) => c.textContent.trim() === String(y));
       if (!yc) { closeSheet(); return 'no year ' + y; }
       yc.click();
-      if (m === null) { closeSheet(); return 'year'; }
+      if (open()) { closeSheet(); return 'the year ' + y + ' left the sheet open'; }
+      if (m === null) return 'year';
+      lead.click();
+      if (!open()) return 'the When lead did not reopen on ' + y;
       const mc = [...document.querySelectorAll('.sheet .month-grid .chip')].find((c) => c.textContent.trim() === m);
-      if (!mc) { closeSheet(); return 'no month ' + m; }
-      mc.click(); return 'month'; })()`);
+      if (!mc) { closeSheet(); return 'no month ' + m + ' on the sheet reopened on ' + y; }
+      mc.click();
+      if (open()) { closeSheet(); return 'the month ' + m + ' left the sheet open'; }
+      return 'month'; })()`);
     await sleep(1200);
     return r;
   };
@@ -278,6 +377,11 @@ async function run() {
   };
 
   await send('Runtime.enable');
+  await send('Page.enable');
+  // On every new document, before the page's own modules run: a reload or a
+  // navigation gets a fresh watch, and the records of the old one wait in
+  // sessionStorage for the next drain.
+  await send('Page.addScriptToEvaluateOnNewDocument', { source: LITERAL_WATCH });
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
   await send('Page.navigate', { url: `http://localhost:${PORT}/` });
 
@@ -290,6 +394,26 @@ async function run() {
   }
   console.log('');
   if (!booted) { fail('app never finished booting'); await finish(); return; }
+
+  // The literal watch's positive control: a span reading "undefined" must be
+  // seen, or the watch proves nothing about the run. Whatever the boot itself
+  // put on screen is reported with it.
+  console.log('\nliteral text, the watch:');
+  const control = await evaluateAsync(`(async () => {
+    if (!window.__dozenLiterals) return null;
+    const s = document.createElement('span'); s.className = 'smoke-literal-control'; s.textContent = 'undefined';
+    document.body.appendChild(s);
+    await new Promise((r) => setTimeout(r, 50));
+    s.remove();
+    return window.__dozenLiterals.drain();
+  })()`);
+  if (!control) fail('the literal watch is not installed after boot -- window.__dozenLiterals is missing');
+  else {
+    const fired = control.records.filter((r) => r.where.endsWith('span.smoke-literal-control'));
+    if (fired.length !== 1 || fired[0].value !== 'undefined' || fired[0].kind !== 'text') fail(`the literal watch's control did not fire (${JSON.stringify(fired)}), so the watch proves nothing`);
+    else pass(`the literal watch is live: its control span reading "undefined" was recorded on ${fired[0].hash}, in ${fired[0].context}`);
+    reportLiterals('at boot', { records: control.records.filter((r) => !fired.includes(r)), seen: control.seen });
+  }
 
   const screenText = `(document.getElementById('main').innerText || '')`;
   const errorBanner = `!!(document.querySelector('.banner strong') &&
@@ -416,8 +540,146 @@ async function run() {
     return p;
   };
 
+  // --- Shows nav: every When state reachable, every narrowed state escapable
+  // (0.1.91) -------------------------------------------------------------------
+  //
+  // The states are WHEN_STATES from src/util/when.js, the list the view labels
+  // by, so a state added there without a driver here fails the run and a driver
+  // here for a state not there fails it too. For each state but 'all': reach it
+  // from the landing through the sheet, the way a thumb does, and read the lead,
+  // the rows and the pill row; then leave it by each on-screen exit, its own
+  // pill and "All shows", and read the landing back. The compound states -- a
+  // When state with a filter, with the search, a filter alone, the search alone
+  // -- go through "All shows" too, since "from any narrowed state" is the
+  // claim, and year + a filter also loses one pill at a time. Until 0.1.90 the
+  // year-only state was reached by dismissing the sheet through its backdrop
+  // and left only through the sheet's first row; nothing asked what the screen
+  // itself offered, and no list said which states there were.
+  async function navStates() {
+    console.log('\nShows nav states (0.1.91):');
+    const DRIVERS = {
+      all: { reach: () => setShowsWhen(null), ok: 'all', lead: 'All' },
+      year: { reach: () => setShowsWhen(2019), ok: 'year', lead: '2019' },
+      month: { reach: () => setShowsWhen(2019, 'Aug'), ok: 'month', lead: 'Aug 2019' },
+    };
+    const listed = [...WHEN_STATES].sort().join(', ');
+    const driven = Object.keys(DRIVERS).sort().join(', ');
+    if (listed !== driven) { fail(`Shows nav: WHEN_STATES lists [${listed}] and this section drives [${driven}] -- a state without a driver is a state nothing walks`); return; }
+    pass(`WHEN_STATES = [${WHEN_STATES.join(', ')}], one driver each`);
+
+    await evaluate(`location.hash = '#/home';`); await sleep(600);
+    await evaluate(`location.hash = '#/shows';`); await sleep(1500);
+    if (!(await setShowsView('compact'))) { fail('Shows nav: the compact view did not take'); return; }
+    const NAV_JS = `${SHOWS_JS}
+      const pillsRead = () => [...document.querySelectorAll('.screen .filter-pills .filter-pill')].map((p) => ({ name: p.dataset.pill, text: p.textContent.replace('✕', '').trim(), visible: p.getClientRects().length > 0 }));
+      const resetRead = () => { const r = document.querySelector('.screen .filter-pills [data-pill="all"]'); return r ? { text: r.textContent.trim(), visible: r.getClientRects().length > 0, label: r.getAttribute('aria-label'), tag: r.tagName } : null; };
+      const navShot = () => ({ when: leadVal('when'), filter: leadVal('filter'), view: leadVal('view'), count: countLine(), rows: showRows().map((x) => x.title + '|' + x.venue), badges: showRows().map((x) => x.badge), pills: pillsRead(), reset: resetRead(), search: (document.querySelector('.search') || {}).value || '', sheet: !!document.querySelector('.sheet') });`;
+    const shot = () => evaluate(`(() => {${NAV_JS} return navShot(); })()`);
+    const tap = async (selector) => {
+      const r = await evaluate(`(() => { const b = document.querySelector(${JSON.stringify(selector)}); if (!b || !b.getClientRects().length) return false; b.click(); return true; })()`);
+      await sleep(1000);
+      return r;
+    };
+    const tapPill = (name) => tap(`.screen .filter-pills .filter-pill[data-pill="${name}"]`);
+    const tapReset = () => tap('.screen .filter-pills [data-pill="all"]');
+    const sameRows = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+    const pillWords = (s) => s.pills.map((p) => `${p.name}:${p.text}`).join('|');
+    const describe = (s) => `When ${JSON.stringify(s.when)}, Filter ${JSON.stringify(s.filter)}, search ${JSON.stringify(s.search)}, pills ${JSON.stringify(s.pills.map((p) => p.text))}, "All shows" ${s.reset ? (s.reset.visible ? 'shown' : 'present but not rendered') : 'absent'}, ${s.rows.length} rows, count ${JSON.stringify(s.count)}${s.sheet ? ', a sheet open' : ''}`;
+
+    const landing = await shot();
+    const atLanding = (s) => s.when === 'All' && s.filter === 'Off' && s.search === '' && !s.pills.length && !s.reset && !s.sheet && s.count === landing.count && sameRows(s.rows, landing.rows);
+    if (!atLanding(landing) || !landing.rows.length) { fail(`Shows nav: the landing is not the unfiltered list: ${describe(landing)}`); return; }
+    pass(`the landing: ${landing.rows.length} rows, When All, Filter Off, no pills and no "All shows" chip -- nothing to leave`);
+
+    // The When states, each reached through the sheet and left two ways.
+    for (const state of WHEN_STATES) {
+      if (state === 'all') continue;
+      const d = DRIVERS[state];
+      const r = await d.reach();
+      const s = await shot();
+      if (r !== d.ok) { fail(`Shows nav, ${state}: not reached through the sheet -- ${r}`); await tapReset(); continue; }
+      if (s.when !== d.lead || s.sheet) fail(`Shows nav, ${state}: the lead reads ${JSON.stringify(s.when)}${s.sheet ? ' with a sheet still open' : ''}, expected ${JSON.stringify(d.lead)} and no sheet`);
+      else if (!s.rows.length || s.rows.length >= landing.rows.length) fail(`Shows nav, ${state}: ${s.rows.length} rows against ${landing.rows.length} on the landing -- the state narrowed nothing`);
+      else if (pillWords(s) !== `when:${d.lead}` || !s.pills[0].visible) fail(`Shows nav, ${state}: pills ${JSON.stringify(s.pills)}, expected one When pill reading ${JSON.stringify(d.lead)}`);
+      else if (!s.reset || !s.reset.visible || s.reset.text !== 'All shows' || s.reset.tag !== 'BUTTON') fail(`Shows nav, ${state}: no "All shows" button on screen (${JSON.stringify(s.reset)}) -- a state with no way out`);
+      else pass(`${state}: reached through the sheet, which closed on the pick -- lead ${JSON.stringify(s.when)}, ${s.rows.length} rows, pill ${JSON.stringify(s.pills[0].text)}, "All shows" on screen (${JSON.stringify(s.reset.label)})`);
+
+      if (state === 'year') {
+        // From the year, a month is one visit away: the sheet reopens with the
+        // year's months under the grid.
+        const months = await evaluate(`(() => {${SHOWS_JS} const lead = leadBy('when'); if (!lead) return null; lead.click();
+          const out = { titles: [...document.querySelectorAll('.sheet .sheet-group-title')].map((n) => n.textContent.trim()), months: [...document.querySelectorAll('.sheet .month-grid .chip')].map((c) => c.textContent.trim()), pressed: [...document.querySelectorAll('.sheet .chip-grid .chip')].filter((c) => c.getAttribute('aria-pressed') === 'true').map((c) => c.textContent.trim()) };
+          closeSheet(); return out; })()`);
+        await sleep(400);
+        if (!months) fail('Shows nav, year: no When lead to reopen');
+        else if (months.titles.join('|') !== `Year|Month in ${d.lead}` || months.months.length < 2 || months.pressed.join() !== d.lead) fail(`Shows nav, year: reopened on ${d.lead} the sheet reads titles ${JSON.stringify(months.titles)}, ${months.months.length} month(s), pressed ${JSON.stringify(months.pressed)}`);
+        else pass(`year: the sheet reopens on ${d.lead} with its ${months.months.length} months and ${d.lead} pressed, so a month is one more pick`);
+      }
+
+      // Exit 1: the state's own pill.
+      if (!(await tapPill('when'))) fail(`Shows nav, ${state}: no When pill to tap`);
+      else { const a = await shot(); if (!atLanding(a)) fail(`Shows nav, ${state}: the When pill did not return to the landing: ${describe(a)}`); else pass(`${state}: its pill returns to the landing, ${a.rows.length} rows`); }
+      // Exit 2: "All shows".
+      if ((await d.reach()) !== d.ok) { fail(`Shows nav, ${state}: not reached a second time`); continue; }
+      if (!(await tapReset())) fail(`Shows nav, ${state}: no "All shows" to tap`);
+      else { const a = await shot(); if (!atLanding(a)) fail(`Shows nav, ${state}: "All shows" did not return to the landing: ${describe(a)}`); else pass(`${state}: "All shows" returns to the landing, ${a.rows.length} rows`); }
+    }
+
+    // Compound states. The Sets filter is read off a row IN the state, so it
+    // keeps at least one row; the search word comes from a venue in the state.
+    const setsOf = (badges) => { for (const b of badges) { const m = b.match(/^(\d) sets?\b/); if (m) return Number(m[1]) >= 3 ? '3+' : m[1]; } return null; };
+    const setsWord = (k) => (k === '1' ? '1 set' : `${k} sets`);
+    const wordOf = (rows) => { for (const r of rows) { const w = (r.split('|')[1] || '').split(' · ')[0].split(/\s+/).find((t) => /^[A-Za-z]{4,}$/.test(t)); if (w) return w; } return null; };
+    const compounds = [
+      { name: 'year + a Sets filter', set: async () => { if ((await setShowsWhen(2019)) !== 'year') return 'year not reached'; const k = setsOf((await shot()).badges); if (!k) return 'no set count on any 2019 row'; return (await setShowsFilter({ sets: k })) ? ['when:2019', `sets:${setsWord(k)}`] : 'the filter did not apply'; } },
+      { name: 'month + a Sets filter', set: async () => { if ((await setShowsWhen(2019, 'Aug')) !== 'month') return 'month not reached'; const k = setsOf((await shot()).badges); if (!k) return 'no set count on any Aug 2019 row'; return (await setShowsFilter({ sets: k })) ? ['when:Aug 2019', `sets:${setsWord(k)}`] : 'the filter did not apply'; } },
+      { name: 'a Sets filter alone', set: async () => ((await setShowsFilter({ sets: '2' })) ? ['sets:2 sets'] : 'the filter did not apply') },
+      { name: 'year + the search', set: async () => { if ((await setShowsWhen(2019)) !== 'year') return 'year not reached'; const w = wordOf((await shot()).rows); if (!w) return 'no venue word in 2019'; await setShowsQuery(w); return ['when:2019']; } },
+      { name: 'the search alone', set: async () => { const w = wordOf(landing.rows); if (!w) return 'no venue word on the landing'; await setShowsQuery(w); return []; } },
+    ];
+    for (const c of compounds) {
+      const want = await c.set();
+      const s = await shot();
+      if (typeof want === 'string') { fail(`Shows nav, ${c.name}: not reached -- ${want}`); await tapReset(); continue; }
+      if (!s.rows.length || s.rows.length >= landing.rows.length) fail(`Shows nav, ${c.name}: ${s.rows.length} rows against ${landing.rows.length} -- the state narrowed nothing`);
+      else if (pillWords(s) !== want.join('|')) fail(`Shows nav, ${c.name}: pills ${JSON.stringify(s.pills.map((p) => p.name + ':' + p.text))}, expected ${JSON.stringify(want)}`);
+      else if (!s.reset || !s.reset.visible) fail(`Shows nav, ${c.name}: no "All shows" on screen -- a narrowed list with no way out (${describe(s)})`);
+      else if (!(await tapReset())) fail(`Shows nav, ${c.name}: "All shows" could not be tapped`);
+      else {
+        const a = await shot();
+        if (!atLanding(a)) fail(`Shows nav, ${c.name}: "All shows" did not return to the landing: ${describe(a)}`);
+        else pass(`${c.name}: ${s.rows.length} rows, pills ${JSON.stringify(s.pills.map((p) => p.text))}${s.search ? `, search ${JSON.stringify(s.search)}` : ''}; "All shows" returns to the landing${s.search ? ', the search cleared' : ''}`);
+      }
+    }
+
+    // One pill at a time: under year + Sets, the Sets pill leaves the year, and
+    // the When pill leaves the filter. The two exits are independent.
+    if ((await setShowsWhen(2019)) !== 'year') fail('Shows nav, one pill at a time: year not reached');
+    else {
+      const k = setsOf((await shot()).badges);
+      if (!k || !(await setShowsFilter({ sets: k }))) fail('Shows nav, one pill at a time: the Sets filter did not apply');
+      else {
+        const both = await shot();
+        if (!(await tapPill('sets'))) fail('Shows nav, one pill at a time: no Sets pill');
+        const afterSets = await shot();
+        if (afterSets.when !== '2019' || afterSets.filter !== 'Off' || pillWords(afterSets) !== 'when:2019' || !afterSets.reset) fail(`Shows nav, one pill at a time: after the Sets pill, ${describe(afterSets)} -- expected When 2019 kept, Filter Off, the When pill and "All shows" left`);
+        else if (afterSets.rows.length <= both.rows.length) fail(`Shows nav, one pill at a time: removing the Sets pill left ${afterSets.rows.length} rows, ${both.rows.length} with it`);
+        else if (!(await setShowsFilter({ sets: k })) || !(await tapPill('when'))) fail('Shows nav, one pill at a time: could not re-apply the filter or tap the When pill');
+        else {
+          const afterWhen = await shot();
+          if (afterWhen.when !== 'All' || afterWhen.filter !== '1 on' || pillWords(afterWhen) !== `sets:${setsWord(k)}` || !afterWhen.reset) fail(`Shows nav, one pill at a time: after the When pill, ${describe(afterWhen)} -- expected When All, Filter "1 on", the Sets pill and "All shows" left`);
+          else pass(`one pill at a time: year + Sets = ${k} (${both.rows.length} rows); the Sets pill leaves 2019 (${afterSets.rows.length} rows), the When pill leaves Sets = ${k} (${afterWhen.rows.length} rows)`);
+        }
+      }
+    }
+    await tapReset();
+    const end = await shot();
+    if (!atLanding(end)) fail(`Shows nav: the section did not end on the landing: ${describe(end)}`);
+  }
+
   if (ONLY) {
     console.log(`SCOPED RUN: ${ONLY.join(', ')}`);
+    if (want('nav-states')) await navStates();
     await noteSections();
     await endRun();
     return;
@@ -497,6 +759,9 @@ async function run() {
     if (landed !== r.to) fail(`${r.from} -> ${landed}, expected ${r.to}`);
     else pass(`${r.from} -> ${r.to}`);
   }
+
+  console.log('\nliteral text on the walk:');
+  await drainLiterals('on every route and redirect');
 
 
   console.log('\ngap chart, on the show reached from a Shows row:');
@@ -1198,6 +1463,8 @@ async function run() {
     else pass(`the When sheet: All shows (described) + ${sheetYears.length} years = the rows' years, 2019 and Aug pressed, ${whenSheet.months.length} months; "All shows" returns ${afterAll.rows} rows`);
   }
 
+  await navStates();
+
   // --- View: Detail is the card list, the choice sticks, re-entry resets the rest
   console.log('\nShows: View, and what re-entry resets:');
   await setShowsWhen(2019);
@@ -1364,6 +1631,14 @@ async function run() {
     document.body.appendChild(probe);
     const selFill = getComputedStyle(probe).color;
     probe.remove();
+    // A plain chip's fill, read off a chip with no other class: what "All
+    // shows" in the pill row must wear (0.1.91), the unpressed option beside
+    // the pressed ones.
+    const plain = document.createElement('button');
+    plain.className = 'chip';
+    document.body.appendChild(plain);
+    const plainFill = getComputedStyle(plain).backgroundColor;
+    plain.remove();
     // A lead chip's STATE is its .chip-value (0.1.81): the chip also carries a
     // label and a caret, and textContent would run them together as
     // "SortA–Z▾". A plain chip has no value span and reads whole. The
@@ -1380,6 +1655,8 @@ async function run() {
         };
       }),
       pills: [...document.querySelectorAll('.screen .filter-pill')].map(read),
+      reset: (() => { const r = document.querySelector('.screen .filter-pills [data-pill="all"]'); return r ? read(r) : null; })(),
+      plainFill,
     };
   })()`;
 
@@ -1414,9 +1691,9 @@ async function run() {
       fail(`chip paint (${theme}): the Shows leads read ${JSON.stringify(leadsText(snap, 0))}, expected All / Off / Compact`);
     } else if (!leadsAllPainted(snap, 0)) {
       fail(`chip paint (${theme}): a Shows lead is not in the selected fill ${snap.selFill}: ${JSON.stringify(snap.bars[0].leads)}`);
-    } else if (chipLabels(snap, 0).length || snap.pills.length) {
-      fail(`chip paint (${theme}): Shows at rest has plain chips ${JSON.stringify(chipLabels(snap, 0))} / pills ${JSON.stringify(snap.pills)}`);
-    } else pass(`${theme}: Shows at rest — All / Off / Compact, all three in the selected fill (${snap.selFill})`);
+    } else if (chipLabels(snap, 0).length || snap.pills.length || snap.reset) {
+      fail(`chip paint (${theme}): Shows at rest has plain chips ${JSON.stringify(chipLabels(snap, 0))} / pills ${JSON.stringify(snap.pills)} / "All shows" ${!!snap.reset}`);
+    } else pass(`${theme}: Shows at rest — All / Off / Compact, all three in the selected fill (${snap.selFill}), no pills, no "All shows"`);
 
     // 2. A year through the When sheet: the When lead carries it and stays
     //    painted. It is the only thing on screen saying which year you are
@@ -1429,20 +1706,30 @@ async function run() {
     else if (!leadsAllPainted(snap, 0)) fail(`chip paint (${theme}): inside ${Y1} a lead lost the selected fill: ${JSON.stringify(snap.bars[0].leads)}`);
     else pass(`${theme}: ${Y1} carried by the When lead, selected`);
 
-    // 3. A filter: the lead reads "1 on" and a pill wearing the selected fill
-    //    names the group's choice. Then the pill clears it: "Off", no pills.
+    // 3. A filter under the year: the lead reads "1 on", and the pill row is the
+    //    When pill "2019" then "2 sets", both in the selected fill, with "All
+    //    shows" beside them in the PLAIN fill (0.1.91) -- the unpressed option
+    //    beside the pressed ones, in both themes. Then the Sets pill clears its
+    //    filter alone, the When pill staying; then "All shows" clears the rest.
     if (!(await setShowsFilter({ sets: '2' }))) { fail(`chip paint (${theme}): could not apply Sets = 2`); continue; }
     snap = await evaluate(CHIP_PROBE);
     if (leadsText(snap, 0)[1] !== '1 on') fail(`chip paint (${theme}): the Filter lead reads ${JSON.stringify(leadsText(snap, 0)[1])}, expected "1 on"`);
-    else if (snap.pills.map((p) => p.text).join('|') !== '2 sets') fail(`chip paint (${theme}): pills read ${JSON.stringify(snap.pills.map((p) => p.text))}, expected ["2 sets"]`);
-    else if (snap.pills.some((p) => p.bg !== snap.selFill)) fail(`chip paint (${theme}): a pill is ${snap.pills[0].bg}, not the selected fill ${snap.selFill}`);
-    else pass(`${theme}: Sets = 2 — lead "1 on", pill "2 sets" in the selected fill`);
-    await evaluate(`(() => { const p = document.querySelector('.screen .filter-pill'); if (p) p.click(); })()`);
+    else if (snap.pills.map((p) => p.text).join('|') !== `${Y1}|2 sets`) fail(`chip paint (${theme}): pills read ${JSON.stringify(snap.pills.map((p) => p.text))}, expected ["${Y1}", "2 sets"]`);
+    else if (snap.pills.some((p) => p.bg !== snap.selFill)) fail(`chip paint (${theme}): a pill is ${snap.pills.find((p) => p.bg !== snap.selFill).bg}, not the selected fill ${snap.selFill}`);
+    else if (!snap.reset || snap.reset.text !== 'All shows') fail(`chip paint (${theme}): no "All shows" chip beside the pills (${JSON.stringify(snap.reset)})`);
+    else if (snap.reset.bg === snap.selFill) fail(`chip paint (${theme}): "All shows" is in the selected fill ${snap.selFill} -- it is the way out, not a selection`);
+    else if (snap.reset.bg !== snap.plainFill) fail(`chip paint (${theme}): "All shows" is ${snap.reset.bg}, a plain chip's fill is ${snap.plainFill}`);
+    else pass(`${theme}: Sets = 2 under ${Y1} — lead "1 on", pills "${Y1}" and "2 sets" in the selected fill ${snap.selFill}, "All shows" in the plain fill ${snap.plainFill}`);
+    await evaluate(`(() => { const p = document.querySelector('.screen .filter-pill[data-pill="sets"]'); if (p) p.click(); })()`);
     await sleep(900);
     snap = await evaluate(CHIP_PROBE);
-    if (leadsText(snap, 0)[1] !== 'Off' || snap.pills.length) fail(`chip paint (${theme}): after removing the pill the lead reads ${JSON.stringify(leadsText(snap, 0)[1])} with ${snap.pills.length} pill(s)`);
-    else pass(`${theme}: the pill clears its filter — lead "Off", no pills`);
-    await setShowsWhen(null);
+    if (leadsText(snap, 0)[1] !== 'Off' || snap.pills.map((p) => p.text).join('|') !== String(Y1) || !snap.reset) fail(`chip paint (${theme}): after removing the Sets pill the lead reads ${JSON.stringify(leadsText(snap, 0)[1])}, pills ${JSON.stringify(snap.pills.map((p) => p.text))}, "All shows" ${!!snap.reset} -- expected "Off", ["${Y1}"], true`);
+    else pass(`${theme}: the Sets pill clears its filter alone — lead "Off", the When pill "${Y1}" and "All shows" stay`);
+    await evaluate(`(() => { const r = document.querySelector('.screen .filter-pills [data-pill="all"]'); if (r) r.click(); })()`);
+    await sleep(900);
+    snap = await evaluate(CHIP_PROBE);
+    if (leadsText(snap, 0).join('|') !== 'All|Off|Compact' || snap.pills.length || snap.reset) fail(`chip paint (${theme}): after "All shows" the leads read ${JSON.stringify(leadsText(snap, 0))} with ${snap.pills.length} pill(s) and "All shows" ${!!snap.reset}`);
+    else pass(`${theme}: "All shows" returns the bar to All / Off / Compact, no pills, no "All shows"`);
 
     // 6. The same property swept across every OTHER chip bar in the app.
     //    Songs carries two (sort + filter) and Jams one, and each has a
@@ -6141,6 +6428,12 @@ async function run() {
     // is not a check, so a section Carton's absence skipped entirely reads zero.
     const ran = checks;
     if (ONLY && !ran) fail(`--only ${ONLY.join(',')} executed zero checks, so this run proved nothing`);
+
+    // Every state the run put on screen, sheets included: taken after `ran`,
+    // like the runtime-error line, so a scoped run of zero checks still fails.
+    console.log('\nliteral text, the whole run:');
+    try { await drainLiterals('by the end of the run'); }
+    catch (err) { fail(`the literal watch could not be read at the end: ${err.message}`); }
 
     console.log('\nruntime errors:');
     if (runtimeErrors.length) {

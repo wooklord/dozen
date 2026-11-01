@@ -9,7 +9,7 @@
 // trend line. A reference line across a gap chart reads as "due" whatever it
 // is labelled, so there is none.
 
-import { el, append, icon, ICONS, openSheet } from '../ui/dom.js';
+import { el, append, replace, icon, ICONS, openSheet } from '../ui/dom.js';
 import {
   attribution,
   cartonLink,
@@ -244,7 +244,7 @@ export function renderGapHistory(ctx, songId) {
       rowsByOrder.set(item.order, shell);
       append(list, el('li', null, [shell]));
     }
-    listWrap.replaceChildren(list);
+    replace(listWrap, list);
   }
 
   // Instant, not smooth: a smooth programmatic scroll never advanced in

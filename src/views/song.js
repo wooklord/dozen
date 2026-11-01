@@ -5,7 +5,7 @@
 // landed. Never a percentage -- a percentage of past placements reads as a
 // forecast of the next show.
 
-import { el, append, icon, ICONS } from '../ui/dom.js';
+import { el, append, replace, icon, ICONS } from '../ui/dom.js';
 import {
   attribution,
   sectionHead,
@@ -72,10 +72,7 @@ export function renderSong(ctx, songId) {
         togglePick(song);
         const now = isPicked(song.song_id);
         pickBtn.className = `btn btn-block${now ? ' btn-accent' : ''}`;
-        pickBtn.replaceChildren(
-          icon(now ? ICONS.check : ICONS.plus, 18),
-          document.createTextNode(now ? 'In your picks' : 'Add to picks'),
-        );
+        replace(pickBtn, [icon(now ? ICONS.check : ICONS.plus, 18), now ? 'In your picks' : 'Add to picks']);
         window.dispatchEvent(new CustomEvent('dozen:picks-changed'));
       },
     },

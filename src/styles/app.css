@@ -1352,10 +1352,15 @@ button.gap-figure:active {
   border-color: var(--chip-sel-line);
   background: var(--chip-sel-fill);
 }
-/* Active Shows filters as removable pills under the lead bar (0.1.82). They
- * are selected state made visible, so they wear the selected tokens; tapping
- * one clears its group. Row gap is --s-3 for the same reason .chip-grid's is:
- * .chip's 44px hit region overhangs a 34px box by 5px each way. */
+/* Every Shows narrowing as a removable pill under the lead bar (0.1.82; the
+ * When pill since 0.1.91). They are selected state made visible, so they wear
+ * the selected tokens; tapping one clears its narrowing. "All shows" sits last
+ * in the same row whenever anything narrows the list, in the plain .chip
+ * paint: the unpressed option beside the pressed ones, and the way back. It
+ * is a plain .chip with data-pill="all" and no rule of its own, on purpose --
+ * a class with no rule is what tests/deadcss.test.mjs exists to refuse. Row
+ * gap is --s-3 for the same reason .chip-grid's is: .chip's 44px hit region
+ * overhangs a 34px box by 5px each way. */
 .filter-pills {
   display: flex;
   flex-wrap: wrap;

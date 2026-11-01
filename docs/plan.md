@@ -1155,6 +1155,70 @@ considered and declined; and the compact pinned chip, the short date and the ven
 dropping it and reducing it to the date alone were each considered and declined. Not to be reopened
 without a new reason.
 
+### Shows nav: a year is a filter, and the way out is on the screen (2026-11-01, the dev's report, for BUILD 0.1.91)
+
+Three defects reported on the Shows tab's When control, each reproduced in headless Chrome at 390
+before any cause was read (`docs/design.md`, 0.1.91, has what was seen), and for each the defect and
+what let it ship.
+
+1. **"nullnull" under the year grid.** With When on All, the When sheet ended in the visible text
+   "nullnull", under 2013. Not a template literal: `openWhenSheet()` re-rendered its body with
+   `body.replaceChildren(...)` and handed it two `year ? el(...) : null` children, and the DOM prints
+   a null as the text "null" where `el()` and `append()` drop one. Picking a year re-rendered without
+   the nulls, so the text was there only in the state the sheet opens in.
+   **What let it ship:** the sheet check read the year grid, the month grid, the option rows and the
+   group titles by selector, and the stray text was in none of them; and it opened the sheet only from
+   Aug 2019, the one state whose null branches are not taken. **The fix:** the sheet is built once,
+   through `el()`, and every other `replaceChildren(...)` with children in the app goes through a
+   null-safe `replace()` in `src/ui/dom.js`, with a hygiene test refusing the DOM method. **The
+   check:** the smoke test watches the whole document in every state it puts it in, through a
+   MutationObserver installed on every new document, and fails on a bare "null", "undefined", "NaN"
+   or "[object Object]" in any text node or label attribute, naming the route, the sheet or screen,
+   and the element; a control span reading "undefined" has to be seen first, or the watch proves
+   nothing.
+2. **A year was a step toward a month.** Picking a year narrowed the list and kept the sheet open,
+   re-rendered with the months, over 64% of the viewport (300 to 844 at 390×844); nothing in the sheet
+   closed it. The exits were the backdrop and Escape, neither named anywhere, and Back leaves the
+   screen. **Ruled: every row in the When sheet applies and closes it.** A year is a complete filter;
+   the sheet reopens with that year's months under the grid for the second visit that picks one.
+   **Supersedes 0.1.82 (c)'s "the month row, which activates once a year is picked"** as a description
+   of one visit: it activates on the next. **What let it ship:** the smoke test's own driver dismissed
+   the sheet through the backdrop after a year, so every check walked the year-only state by a path a
+   user cannot find. The driver now reports a pick that leaves the sheet open, and the new section
+   fails on it.
+3. **No way back to all shows from the screen.** In the year and month states the screen offered the
+   three lead chips and the rows; the way back was the sheet's first row, two taps in with nothing
+   naming it, or leaving the tab, which resets When. **Ruled: every narrowing is a removable pill
+   under the bar, When's first ("2019", "Aug 2019") then each Filter group's, and "All shows" sits
+   beside the pills whenever anything narrows the list, the search included, and clears all three.**
+   It wears the plain chip paint beside the selected-fill pills: the unpressed option beside the
+   pressed ones, the 0.1.58 year bar's grammar. It clears the search too, because a list that still
+   reads "matching 'garcia'" after a tap on "All shows" is not all shows.
+   **When it broke, and what removed it: 0.1.82, commit `81cae66`, 2026-10-25.** The 0.1.58 year bar
+   showed an "All shows" chip whenever a year was active; 0.1.75 replaced the bar with a `‹ 2026` back
+   chip fixed outside the month scroller, under a stated principle: the way out sits on screen,
+   outside the control, and cannot be conditional on there being anything to browse. 0.1.82 moved the
+   drill-down into the When sheet, deleted the back chip and the spanning "All shows" chip ("deleted,
+   not left dormant", `docs/design.md`, 0.1.82), and put "All shows" at the top of the sheet
+   (0.1.82 (c)). **So the relocation was a decision, recorded in (c) and in the design doc; the loss
+   of the on-screen exit was not.** Neither record mentions the 0.1.75 principle, withdraws it, or
+   weighs a way out that lives only inside the sheet. It was a consequence nobody looked at, not a
+   choice. The principle is reinstated here and is the thing the new check holds.
+
+**The states, enumerated where a check can read them.** `src/util/when.js` exports `WHEN_STATES`,
+`['all', 'year', 'month']`, with `whenKind()` mapping a When value onto them and `whenLabel()`
+printing the lead's and the pill's text; the view labels by it, `tests/when.test.mjs` holds the
+mapping, and the smoke test's `nav-states` section walks the list: a state listed without a driver
+fails the run, and a driver for a state not listed fails it too. The tab's full state is When ×
+Filter (none, one, two or three groups) × the search; the view is a preference, not a narrowing. For
+each When state but 'all' the section reaches it through the sheet, which must close on the pick,
+reads the lead, the rows and the pill row, and leaves by each exit on the screen, the state's own
+pill and "All shows", reading the landing back; from the year it reopens the sheet and must find the
+months. The compound states (year + a Sets filter, month + a Sets filter, a filter alone, year + the
+search, the search alone) are reached and left through "All shows", and year + a filter also loses
+one pill at a time, each exit leaving the other narrowing in place. Unfiltered is the landing: every
+other state must reach it in one tap, and it has nothing to leave.
+
 ## Out of scope — parked
 
 Anything crossing the scope rule goes to [`phase3_ideas.md`](phase3_ideas.md), not into the app.

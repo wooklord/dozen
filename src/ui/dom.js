@@ -69,6 +69,21 @@ export function clear(node) {
   return node;
 }
 
+/**
+ * Replace a node's children, through append(), so a null or false child is
+ * dropped the way el() drops one. Element.replaceChildren() is not the same
+ * door: handed a null it appends the TEXT "null". That is what the When sheet
+ * on Shows rendered under its year grid from 0.1.82 to 0.1.90 -- "nullnull",
+ * from two `year ? el(...) : null` children -- while every check read the
+ * sheet's named parts and none read its text. tests/hygiene.test.mjs keeps
+ * replaceChildren(...) with arguments out of the views; an empty
+ * replaceChildren() is a clear and is fine.
+ */
+export function replace(node, children) {
+  clear(node);
+  return append(node, children);
+}
+
 /** Inline SVG icon. Paths are ours, so innerHTML is safe here. */
 export function icon(paths, size = 21) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');

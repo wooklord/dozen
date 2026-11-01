@@ -1310,6 +1310,15 @@ to that — When 2019 and typing "2019" are compared as row lists, as are Aug 20
 (`.chip-back`), the month scroller (`.sortbar-scroll`) and the spanning "All shows" chip
 (`.year-all`) are deleted, not left dormant.
 
+> **Superseded in 0.1.91, on two counts.** A year no longer keeps the sheet open: every row applies
+> and closes, and the months appear on the next visit, under the grid of the year then pressed. And
+> the way out is back on the screen: When's pill under the bar, and "All shows" beside the pills
+> whenever anything narrows the list. The paragraph above records that the back chip was deleted
+> and that "All shows" went to the top of the sheet; it does not record that the 0.1.75 principle
+> two sections up, the way out sits on screen and outside the control, went with the chip. Nobody
+> weighed that; it was a consequence, not a choice (`docs/plan.md`, "Shows nav", and the 0.1.91
+> entry below).
+
 **Filter is three groups that AND, with a draft and an apply button.** Sets (Any / 1 / 2 / 3+),
 Encore (Any / With / Without) and State, each with the description locked in `plan.md`. The
 choices are a draft until "Show N shows" applies them — pluralised, and reading "No shows match",
@@ -1908,6 +1917,58 @@ off show detail; they carry their own class now.
 
 **Not measured:** a real phone, and a fold with any browser chrome beyond the app's own header and
 tab bar.
+
+### Shows nav: a year is a filter, and the way out is on the screen (0.1.91)
+
+The ruling is in `docs/plan.md`, "Shows nav". Reproduced in headless Chrome at 390×844 on the built
+0.1.90, dark, before any cause was read:
+
+- **The null.** With When on All, the sheet read `nullnull` after its year grid, in a bare text node
+  under 2013, rendered. Picking a year re-rendered the sheet without it. Every other route, and every
+  attribute read for a label, was clean.
+- **The year.** Tapping 2019 narrowed the list to 63 shows behind the sheet, and the sheet
+  re-rendered with "Month in 2019" and grew to 300–844px, 64% of the viewport, over the list; nothing
+  in it closed it. Escape closed it with the year kept, and so did the backdrop; neither is named on
+  screen, and Back leaves the tab.
+- **The way back.** In the year state the screen held the three lead chips and the rows, nothing
+  else; "All shows" existed only as the sheet's first row.
+
+**Built, measured at 390 in both themes.** The themes read the same on every figure but the fills.
+
+| State | Pill row | Chips | Moves the list down |
+|---|---|---|---|
+| at rest | hidden | — | 0 |
+| a year | 34px, one line | "2019 ✕" 67.9px, "All shows" 81.5px | 42px (34 + the 8px margin) |
+| a month | 34px | "Aug 2019 ✕" 95.6px, "All shows" | 42px |
+| year + Sets 2 | 34px | three chips, 254 of 358px | 42px |
+| three filters | 80px, two lines | "2 sets ✕" 72.6, "without encore ✕" 128.1, "in MA ✕" 74.3, then "All shows" alone on the second line | 88px |
+| year + three filters | 80px, two lines | five chips, "in MA ✕" and "All shows" on the second line | 88px |
+
+The row's gap is 12px between lines and 8px between chips, as `.chip-grid`'s, for the 44px hit
+region's 5px overhang; nothing overflows horizontally in any state measured. Pills wear the selected
+fill, `rgb(61, 44, 18)` under `rgb(245, 166, 35)` dark and `rgb(249, 225, 186)` under
+`rgb(30, 25, 19)` light; "All shows" wears the plain chip's, `rgb(28, 24, 21)` under
+`rgb(188, 178, 163)` dark and white under `rgb(92, 82, 70)` light, the pair every chip at rest
+already measures. The When sheet at rest is 385.6px tall, 458 to 844, and ends on 2013.
+
+**The sheet's two visits.** A year closes the sheet; reopened on 2019 it shows the twelve months
+under the grid with 2019 pressed, and a month closes it. Against 0.1.82's one visit that is one more
+tap on the lead for a month and one dismissal fewer for a year, where the dismissal was the part
+nobody could find.
+
+**What moved.** `layout-diff` against 0.1.90 (`7db8bc4`), 390 dark and 390 light: 9 routes
+identical, `#/shows` 1600 boxes, stylesheets 244 rules both sides, the CSS change being comment-only.
+A pill row renders only in a narrowed state and a sheet only while open, so that says the routes at
+rest did not move and nothing about either; the table above is the record of the row.
+
+**The checks** are in `CLAUDE.md` under the proofs: the literal watch over the whole document in
+every state the run walks, with its control; the `nav-states` section walking `WHEN_STATES` and the
+compound states, each reached and left by each exit on the screen; the chip paint section holding
+"All shows" to the plain fill in both themes; and the driver reporting a pick that leaves the sheet
+open instead of dismissing it.
+
+**Not measured:** a real phone, and the pill row at 360. Three filters already take two lines at
+390, so 360 wraps the same or sooner, which the row's `flex-wrap` allows; the widths are not read.
 
 ## Attribution
 

@@ -1,18 +1,29 @@
 // SHOWS — every show played, newest first, under three controls (0.1.82).
 //
 // WHEN, FILTER and VIEW are three lead chips on one row, the Songs-tab pattern
-// (docs/plan.md, "0.1.82 design"). When is all shows, a year, or a month -- the
-// 0.1.75 year-then-month drill-down, relocated into one sheet. Filter is three
-// groups that AND: how many sets, whether there was an encore, and the venue's
-// state. View is Compact (one row per show) or Detail (the full setlist card),
-// and the view sticks in localStorage; When and Filter are session state, like
-// Songs' sort. The search box narrows whatever When has picked.
+// (docs/plan.md, "0.1.82 design"). When is one of the three states in
+// src/util/when.js -- all shows, a year, or a month of a year -- picked in one
+// sheet where every row applies and closes (0.1.91: a year is a complete
+// filter, not a step toward a month). Filter is three groups that AND: how
+// many sets, whether there was an encore, and the venue's state. View is
+// Compact (one row per show) or Detail (the full setlist card), and the view
+// sticks in localStorage; When and Filter are session state, like Songs' sort.
+// The search box narrows whatever When has picked.
+//
+// THE WAY OUT IS ON THE SCREEN (0.1.91). Every narrowing -- When, each Filter
+// group -- is a removable pill under the bar, and "All shows" sits beside the
+// pills whenever anything narrows the list, the search included, and clears
+// it all. From 0.1.82 to 0.1.90 the only way back from a year or a month was
+// the sheet's first row, two taps in with nothing on screen naming it: the
+// 0.1.75 bar's "‹ 2026" back chip was deleted when the drill-down moved into
+// the sheet, and the principle it carried -- the way out sits on screen,
+// outside the control -- was not carried with it (docs/plan.md, "Shows nav").
 //
 // Everything here is filtering, grouping, counting and ordering. Set count,
 // encore presence and state are Carton fields or counts over Carton rows;
 // nothing is inferred, and no row is labelled with what will happen next.
 
-import { el, append, debounce, openSheet } from '../ui/dom.js';
+import { el, append, replace, debounce, openSheet } from '../ui/dom.js';
 import {
   setlistCard,
   cartonLink,
@@ -33,6 +44,7 @@ import {
   ENCORE_OPTIONS,
 } from '../data/index.js';
 import { formatShowDate } from '../util/dates.js';
+import { whenKind, whenLabel, MONTH_SHORT } from '../util/when.js';
 import { parseDateQuery, matchShowsByDate, matchVenues, matchReasonLabel } from '../util/search.js';
 
 // Detail view pages its cards; compact rows render all at once -- a row is a
@@ -66,12 +78,6 @@ function writeView(view) {
     /* a view that does not stick is still a view */
   }
 }
-
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
-const MONTH_SHORT = MONTH_NAMES.map((m) => m.slice(0, 3));
 
 // The Filter sheet's words, used in three places that must agree: the group
 // chips, the pills under the bar, and the count line (docs/plan.md, (g)).
@@ -162,8 +168,6 @@ export function renderShows(ctx) {
   const filterLead = leadChip('filter', 'Filter', () => openFilterSheet());
   const viewLead = leadChip('view', 'View', () => openViewSheet());
 
-  const whenLabel = () =>
-    !state.when ? 'All' : state.when.month ? `${MONTH_SHORT[state.when.month - 1]} ${state.when.year}` : String(state.when.year);
   const activeFilters = () => Object.entries(state.filters).filter(([, v]) => v !== null);
   const filterLabel = () => {
     const n = activeFilters().length;
@@ -173,8 +177,8 @@ export function renderShows(ctx) {
   // The accessible name starts with the visible text so a voice user can say
   // what they see, then says what a tap does.
   function paintLeads() {
-    whenLead.value.textContent = whenLabel();
-    whenLead.chip.setAttribute('aria-label', `When ${whenLabel()}. Change when`);
+    whenLead.value.textContent = whenLabel(state.when);
+    whenLead.chip.setAttribute('aria-label', `When ${whenLabel(state.when)}. Change when`);
     filterLead.value.textContent = filterLabel();
     filterLead.chip.setAttribute('aria-label', `Filter ${filterLabel().replace(' ', ' ')}. Change filter`);
     viewLead.value.textContent = VIEWS[state.view].label;
@@ -187,8 +191,8 @@ export function renderShows(ctx) {
     el('div.sortbar.sortbar-lead.sortbar-leads.sortbar-leads-3', null, [whenLead.chip, filterLead.chip, viewLead.chip]),
   );
 
-  // Active filters as removable pills under the bar. Each pill is one group's
-  // choice in the group's own words, and tapping it clears that group only.
+  // Every narrowing as a removable pill under the bar, with the way back
+  // beside them: see paintPills().
   const pills = el('div.filter-pills');
   append(screen, pills);
 
@@ -317,26 +321,72 @@ export function renderShows(ctx) {
     return `in ${value}`;
   }
 
+  /**
+   * The pill row: every narrowing as a removable pill, then the way back.
+   *
+   * When's pill comes first, in the lead's own words ("2019", "Aug 2019"),
+   * then one pill per Filter group in the group's words, in group order;
+   * tapping a pill clears that narrowing only. `data-pill` names each one for
+   * what it removes, so a check can take the Sets pill and not the first pill.
+   *
+   * "ALL SHOWS" SITS LAST WHENEVER ANYTHING NARROWS THE LIST -- When, a
+   * filter, or the search -- and clears all three. It wears plain chip paint
+   * beside the selected-fill pills: the unpressed option beside the pressed
+   * ones, which is the 0.1.58 year bar's grammar, where "All shows" stood
+   * beside the pressed year. It clears the search too, because a list that
+   * still reads "matching 'garcia'" after a tap on "All shows" is not all
+   * shows. This is the on-screen way out that 0.1.82 left inside the When
+   * sheet (docs/plan.md, "Shows nav", 2026-11-01).
+   */
+  function resetAll() {
+    state.when = null;
+    state.filters = EMPTY_FILTERS();
+    state.query = '';
+    search.value = '';
+    state.limit = PAGE;
+    paintLeads();
+    paint();
+  }
   function paintPills() {
     pills.replaceChildren();
+    const pill = (name, words, remove) =>
+      el(
+        'button.chip.filter-pill',
+        {
+          type: 'button',
+          'data-pill': name,
+          'aria-label': `Remove the filter ${words}`,
+          onclick: () => {
+            remove();
+            state.limit = PAGE; // a changed narrowing starts Detail from the top, as apply does
+            paintLeads();
+            paint();
+          },
+        },
+        [el('span', { text: words }), el('span.pill-remove', { text: '✕', 'aria-hidden': 'true' })],
+      );
+    if (whenKind(state.when) !== 'all') {
+      append(pills, pill('when', whenLabel(state.when), () => { state.when = null; }));
+    }
     for (const entry of activeFilters()) {
       const [key] = entry;
-      const words = filterWords(entry);
+      append(pills, pill(key, filterWords(entry), () => { state.filters[key] = null; }));
+    }
+    if (pills.childElementCount || state.query.trim()) {
       append(
         pills,
+        // A plain .chip and data-pill="all", no class of its own: a class
+        // with no rule is what tests/deadcss.test.mjs refuses, and the plain
+        // paint IS the design.
         el(
-          'button.chip.filter-pill',
+          'button.chip',
           {
             type: 'button',
-            'aria-label': `Remove the filter ${words}`,
-            onclick: () => {
-              state.filters[key] = null;
-              state.limit = PAGE; // a changed filter starts Detail from the top, as apply does
-              paintLeads();
-              paint();
-            },
+            'data-pill': 'all',
+            'aria-label': 'All shows. Clear When, Filter and the search',
+            onclick: resetAll,
           },
-          [el('span', { text: words }), el('span.pill-remove', { text: '✕', 'aria-hidden': 'true' })],
+          'All shows',
         ),
       );
     }
@@ -459,65 +509,66 @@ export function renderShows(ctx) {
   /**
    * WHEN: "All shows" on top, then every year at once in a grid (the 0.1.75
    * sheet, which replaced a scroller that showed five of fifteen), then the
-   * months of the picked year. Picking a year keeps the sheet open and shows
-   * its months, with the list behind already narrowed; picking a month, or
-   * "All shows", closes. The sheet re-renders its own body in place so the
-   * month row appears the moment a year is pressed.
+   * months of the picked year. EVERY ROW APPLIES AND CLOSES (0.1.91): a year
+   * is a complete filter, and the sheet reopens with that year's months under
+   * the grid for the second visit that picks one.
+   *
+   * From 0.1.82 to 0.1.90 a year kept the sheet open and re-rendered it with
+   * the months, so the year-only list sat under a sheet that nothing in the
+   * sheet could close -- the backdrop and Escape were the exits, and neither
+   * is named anywhere. The smoke test's own driver dismissed it through the
+   * backdrop, which is how that shipped. The re-render also handed two
+   * `year ? ... : null` children to Element.replaceChildren(), which prints a
+   * null as the text "null": the sheet read "nullnull" under its year grid
+   * until a year was picked (docs/plan.md, "Shows nav", 2026-11-01). The body
+   * is built once now, through el(), which drops a null child.
    */
   function openWhenSheet() {
     openSheet('When', (close) => {
-      const body = el('div');
-      const choose = (when, andClose) => {
+      const year = state.when ? state.when.year : null;
+      const month = state.when ? state.when.month || null : null;
+      const choose = (when) => {
         state.when = when;
         state.limit = PAGE;
         paintLeads();
         paint();
-        if (andClose) close();
-        else render();
+        close();
       };
-      const render = () => {
-        const year = state.when ? state.when.year : null;
-        const month = state.when ? state.when.month || null : null;
-        body.replaceChildren(
-          el('div.sheet-options', { role: 'group', 'aria-label': 'When options' }, [
-            optionRow('All shows', 'Every show played, newest first.', !state.when, () => choose(null, true)),
-          ]),
-          el('h3.sheet-group-title', { text: 'Year' }),
-          el(
-            'div.chip-grid',
-            { role: 'group', 'aria-label': 'Year' },
-            archiveYears().map((y) =>
-              el(
-                'button.chip',
-                { type: 'button', 'aria-pressed': String(year === y), onclick: () => choose({ year: y }, false) },
-                String(y),
-              ),
+      return el('div', null, [
+        el('div.sheet-options', { role: 'group', 'aria-label': 'When options' }, [
+          optionRow('All shows', 'Every show played, newest first.', !state.when, () => choose(null)),
+        ]),
+        el('h3.sheet-group-title', { text: 'Year' }),
+        el(
+          'div.chip-grid',
+          { role: 'group', 'aria-label': 'Year' },
+          archiveYears().map((y) =>
+            el(
+              'button.chip',
+              { type: 'button', 'aria-pressed': String(year === y), onclick: () => choose({ year: y }) },
+              String(y),
             ),
           ),
-          year
-            ? el('h3.sheet-group-title', { text: `Month in ${year}` })
-            : null,
-          year
-            ? el(
-                'div.chip-grid.month-grid',
-                { role: 'group', 'aria-label': `Month in ${year}` },
-                monthsOf(year).map((m) =>
-                  el(
-                    'button.chip',
-                    {
-                      type: 'button',
-                      'aria-pressed': String(month === m),
-                      onclick: () => choose({ year, month: m }, true),
-                    },
-                    MONTH_SHORT[m - 1],
-                  ),
+        ),
+        year ? el('h3.sheet-group-title', { text: `Month in ${year}` }) : null,
+        year
+          ? el(
+              'div.chip-grid.month-grid',
+              { role: 'group', 'aria-label': `Month in ${year}` },
+              monthsOf(year).map((m) =>
+                el(
+                  'button.chip',
+                  {
+                    type: 'button',
+                    'aria-pressed': String(month === m),
+                    onclick: () => choose({ year, month: m }),
+                  },
+                  MONTH_SHORT[m - 1],
                 ),
-              )
-            : null,
-        );
-      };
-      render();
-      return body;
+              ),
+            )
+          : null,
+      ]);
     });
   }
 
@@ -559,7 +610,7 @@ export function renderShows(ctx) {
 
       const render = () => {
         const count = visible(draft).shows.length;
-        body.replaceChildren(
+        replace(body, [
           group(
             'Sets',
             'Sets counted from the setlist, encore not included. Shows with no setlist recorded are left out when this is set.',
@@ -596,7 +647,7 @@ export function renderShows(ctx) {
               'Clear all',
             ),
           ]),
-        );
+        ]);
         paintApply(count);
       };
       // "Show N shows" pluralises, and at zero the button reads "No shows match"
