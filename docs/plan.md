@@ -1079,6 +1079,74 @@ count, since the visible text now names the control. In the smoke test the exact
 removed, its target gone; the green titles stay held to the raw rows, and each button still opens its
 own show's sheet.
 
+### Show detail layout (LOCKED 2026-11-01, the dev's picks, for BUILD 0.1.90)
+
+Decided after reviewing mockups in chat and a measurement by injection on the built 0.1.89 pages, all
+216 charted shows at 360 and 390 in both themes (`docs/design.md`, 0.1.90, has the figures). Five
+items; each names what it supersedes.
+
+1. **Show detail loses the Jam notes button. The always-open "Jam chart entries" section stays.** On a
+   list of shows the button earns its place; on the show's own page it was an extra tap to reach
+   entries already on the page. Home and Shows cards are unchanged. **The new invariant: every setlist
+   with jam entries offers the notes on the same screen, the button where the setlist is a card in a
+   list, the open entries section on show detail, never both.** Built by composition, not a flag: the
+   private `setlistParts()` grows a fourth part, the entries section, built from the same entry list
+   the button's sheet and the green titles' tooltips read; `setlistCard` places the button and never
+   the section; `setlistBlock` returns the section and never builds the button. Which form a setlist
+   gets is fixed by which of the two composers renders it, and neither takes a parameter. The one
+   hole left is a caller of the block that discards the section, and the smoke test holds every
+   screen that renders a setlist with green titles to exactly one of the two.
+   **Supersedes item 4 of "The jam notes button"** (the block building the button for every caller
+   with no opt-out) and the comment on `setlistParts()` that said so. The general rule in `CLAUDE.md`,
+   that a shared helper with an opt-out flag is a hole, stands: this is a second composer, not a flag.
+2. **The per-show gap chart moves inline onto show detail,** as a section between the Setlist section
+   and the entries section, grouped by set as the route was, every row unchanged in content and
+   controls: the row opens that song's gap history, the figure still opens the explainer. "How gap is
+   counted" sits in the heading's right slot and the route's intro sentence stays as the note under
+   the heading. Carton's gap chart for the night is linked under the rows. **The page-length cost is
+   accepted with the figures known:** a median 752px added at both widths, 295 to 1413, and the
+   entries section below the fold on every charted show at every screen measured, where it was below
+   it on most phones already (7 of 216 at 360×640 had its heading in view). **Supersedes item 2 of
+   "The jam notes button"** for show detail: "directly under the setlist, above the footnotes" now
+   describes nothing on that screen, and the 0.1.89 amendment's "its placement" is the cards' action
+   row. The 0.1.72 rule that controls go below the content stands; the chart is content.
+   **Correction: chat's mockup drew the chart as thin single-line bars.** The real rows are two lines
+   at about 56px each, 55.3 to 57.4px on all 216 shows, which is why the measured cost is about 750px
+   and not the mockup's. The decision was made with the measured cost, not the drawn one.
+3. **The gap history's back link learns a second way in.** `openGapHistory()` stamps the history entry
+   with the show it was opened from, the chip reads "Back to {show date}" and steps back; opened from
+   the song it reads the song's name and steps back as before; a deep link still replaces itself with
+   the song. **Finding, recorded as found:** before this, the in-page back link could not return to a
+   show. A history reached from a show by hash carried no state, so the chip read "Back to {song}" and
+   replaced the screen with the song; only the browser's Back returned to the show. Measured on
+   0.1.89 on show 1728657865. **Amends "How it is reached" under "Gap history (2026-10-26)":** the
+   tile on song detail and now a row of a show's gap chart.
+4. **The show header is pinned as the song pages pin theirs:** a chip in a 0px sticky bar laid over
+   the content, hidden and inert until the title has scrolled away. The chip is the compact one-line
+   form from the start, the short date and the venue name, "Oct 11, 2025 · Venue", wrapping and never
+   truncating on long names. The observer watches the venue line, the last line of the block, so the
+   chip appears once the whole title has gone under the header; focus is still handed to the date
+   heading. **The full two-line block is rejected for its cost at 360×640:** 65.1px of bar, 85.3px
+   where the venue wraps inside the chip, 12.3 to 16.1% of a 530px content viewport, against the
+   compact chip's 50px and 9.4%, wrapping to 63.7px on 12 of 216 shows at 360 and 4 at 390. The tour
+   line is left out of the chip, as it was left out of the sheet's show line in 0.1.87, item 3.
+   **Supersedes item 2 of "The show line in the sheet" (0.1.87):** show detail opens no jam notes
+   sheet any more, so "show detail's sheet gets the header too" has nothing left to apply to. The
+   sheet is opened only from Home and Shows cards, where its show line is the reason it exists, and
+   `openJamNotes()` still builds the line with no opt-out. Its three figures, 204, 173 and 47 of 216
+   with the page's date above the sheet, are history. Stacking, read from the stylesheet: the bar is
+   sticky at z-index 30, under the header and the tab bar at 40 and under the sheet's scrim at 50 and
+   the sheet at 51; the app has no toasts, and no sort row renders on show detail, so no two sticky
+   bars stack there.
+5. **The old gap chart route is retired, with a hash redirect to the show page** in the redirects list
+   the smoke test walks: an unknown hash falls through to Home, so a retired route with no redirect
+   would send every bookmark and the installed shell's cached links there in silence. **The three row
+   actions that opened it are removed,** on song detail's Every performance rows, the gap history's
+   rows and a venue's show rows, under the 0.1.64 rule that a row is one control: those rows already
+   open the show, where the chart now is, so the icon had become a second control to the same screen.
+   **Supersedes the 0.1.64 note in `docs/design.md`** that three entry points to the gap chart remain;
+   the chart's one way in is the show it belongs to.
+
 ## Out of scope — parked
 
 Anything crossing the scope rule goes to [`phase3_ideas.md`](phase3_ideas.md), not into the app.
