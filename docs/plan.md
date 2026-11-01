@@ -982,6 +982,8 @@ other screens that show green titles, on a phone, where The Carton's own tooltip
    alternative: `.fn-marker` measures 9.6×24px and cannot grow, and 471 of the 852 jam rows already
    carry a footnote marker there, so two tiny targets would sit side by side. The cost accepted: to
    read one song's note you scan a list, and in dark mode a title in the flow stays colour alone.
+   **The key-line button is SUPERSEDED, 2026-10-31, by "The jam notes button" below.** The line is
+   plain text again. The sheet and `title` on green titles stand.
 2. **" (Recommended)" is appended as Carton's literal word, at the end of the note.** That is how The
    Carton's own page exposes it: the word is not in the API text, its page adds it to the tooltip.
    **No badge, no sort, no filter, no count.** In a game about picking songs, a "Recommended" label
@@ -1014,13 +1016,47 @@ From a Home or Shows card, the sheet gave no way to tell which night you were re
    the key in view, the page's date is above the sheet on 204 of 216 shows at 390×844, 173 at 360×800
    and 47 at 360×640, dimmed by the scrim when it is there. Skipping it would take a flag through
    `setlistBlock` or a look at the hash, and a helper a caller can opt out of is the hole `CLAUDE.md`
-   names. The cost accepted is a visible repeat on tall phones.
+   names. The cost accepted is a visible repeat on tall phones. Those three figures were measured at
+   the key's position on 0.1.87 and were not re-taken when the way in moved up the page in 0.1.88.
 3. **Tour and set structure are left out.** 54 of 216 charted shows have a tour, so a tour line would
    change the header's height from show to show, and every entry card has its own set badge.
 4. **The header scrolls with the sheet.** Pinned, it would take 42–62px of a 512–675px sheet for good.
 5. **The 2025-04-04 same-night pair is accepted.** Two charted shows share that date and venue, so
    their headers read the same. Their entries and Carton links differ, and one pair is not worth a
    new field.
+
+#### The jam notes button (LOCKED 2026-10-31, the dev's picks, for BUILD 0.1.88)
+
+**This SUPERSEDES the key-line button in item 1 of "Jam chart notes" above.** On the 0.1.87 phone check
+the trigger was too easy to miss: it sat in the footnote list and read as a footnote. So the trigger
+is separated from the footnotes as a real button, and the key line returns to a plain legend. The
+sheet, its show line and `title` on green titles stand, and the 0.1.86 section of `docs/design.md`
+stays as history.
+
+1. **The button reads "● Jam notes · N"**, outlined in `--jam` with no green fill, where N is that
+   setlist's entry count. It opens the same sheet, with `aria-haspopup="dialog"` and the accessible
+   name "Jam notes, N entries" ("Jam notes, 1 entry" on a one-entry show). "Jam chart · N" was the
+   recommendation, as the term the app and The Carton already use; the dev picked "Jam notes" because
+   the legend now carries "jam chart". The cost accepted: N counts entries, and nothing here may
+   assume an entry has a note, though all 852 do today (measured 2026-10-31).
+2. **Placement.** On Home and Shows cards it sits in the action row, after Show detail, with the
+   `.btn.btn-small` target. On show detail it sits directly under the setlist, above the footnotes,
+   which puts the way in above the tab bar on first load on 164 of 216 charted shows at 360×640
+   against the key's 71, and on all 216 at 360×800 against 154. The costs accepted on show detail: the
+   button comes between the setlist and its footnotes, and the sheet repeats the entries section lower
+   on the same page. Gap history, Every performance and the Jams tab render no setlist and are unchanged.
+3. **The legend stays in the footnote list as plain, non-interactive text, "● jam chart entry",** as
+   it was before 0.1.86. It explains the green next to the setlist. Only the button moves out.
+4. **No opt-out.** A private `setlistParts()` builds the sets, the footnote list with its legend, and
+   the button. `setlistBlock` and `setlistCard`, its only two callers, each place all three, and neither
+   takes a flag. `setlistBlock` has never owned a card's action row, so `setlistCard` places the button
+   there itself. An option on `setlistBlock` was rejected as the hole `CLAUDE.md` names, and CSS `order`
+   because focus order would then disagree with the screen.
+
+**Correction: the key line was never meant to go.** Chat's proposal for this change took the key line
+out of the footnote list, and the plan built on it measured that and recommended no legend at all. The
+dev kept it. Chat's removal was a scope addition the dev had not asked for: the ask was to separate
+the trigger from the footnotes, and it said nothing against the legend.
 
 ## Out of scope — parked
 
