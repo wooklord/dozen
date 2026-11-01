@@ -16,12 +16,14 @@
 //    the browser's own endpoint, then confirms the DevTools port has stopped
 //    answering, and says so when it has not.
 //
-//    Browser.close is not always enough (2026-11-01). A scoped smoke run of 12s
-//    closed clean and runs of 48s to 222s did not: Chrome replied, dropped every
-//    target, and stayed up with its port open. Why time decides that was not
-//    established. So close() reads the real pids first, the browser's and its
-//    helpers', and kills them if the port is still answering after Browser.close.
-//    The helpers too, because they outlast the browser and hold the profile.
+//    Browser.close is not always enough (2026-11-01). For about half an hour that
+//    night every scoped smoke run past about 45s left Chrome up after it replied
+//    to Browser.close, with every target gone and its port open, while a 12s run
+//    closed clean. Half an hour later the same code closed clean at 52s, so the
+//    cause was not established. close() reads the real pids first, the browser's
+//    and its helpers', and if the port still answers it kills them and says so,
+//    so the next time this happens it is on the record. The helpers too, because
+//    they outlast the browser and hold the profile.
 //
 // 2. EVERY CALL TIMES OUT, LOUDLY. A lost reply used to leave its promise
 //    pending forever, and the smoke test once sat mid-check for three hours
@@ -126,6 +128,7 @@ export async function openChrome({ chrome, port, profile, width = 390, onEvent =
     if (!gone && chromePids.length) {
       for (const pid of chromePids) { try { process.kill(pid); } catch {} }
       gone = await stoppedAnswering(20);
+      if (gone) console.log(`  WARN  headless Chrome on port ${port} stayed up after Browser.close -- its processes were killed`);
     }
     if (!gone) console.log(`  WARN  headless Chrome on port ${port} still answers after Browser.close -- it is left running`);
     // Chrome's helper processes can hold the profile for a moment after the
