@@ -1034,6 +1034,31 @@ checks were verified this way:
   Browser.close -- its processes were killed`, 0 Chromes, the profile removed. Without:
   `still answers`, `EPERM`, 8 Chrome processes on that profile. Commit `9f3baf3`'s
   message predates this; the comment in `scripts/cdp.mjs` carries the correction.
+- The 0.1.89 checks (the button reads "Jam notes", 2026-11-01), two proofs under the
+  ruling, each `--only jam-button` from a scratch script by exact string, the staged
+  hash confirmed different and the line read back, the file restored by hash:
+  - the old "● Jam notes · N" label put back, the one the dev asked for: smoke 6, one
+    per screen, `Home: 2 of 2 button(s) read "● Jam notes · 3", not exactly "Jam
+    notes"`, 104 ok, 38s.
+  - the old `aria-label` put back beside the new label: smoke 6, `2 button(s) carry an
+    aria-label, "Jam notes, 3 entries", over a visible label that names them`, and
+    nothing else, 104 ok, 38s. The second proof is beyond the dev's one, because the
+    no-`aria-label` line is a comparison of its own and had to be seen red.
+
+  **Removed:** the comparison of the button's label and accessible name against each
+  show's raw jam rows (0.1.88's `read "Jam notes · N", N the show's raw rows` and
+  `accessible name(s) count the same entries`). Its target, the count on the button, is
+  gone. The third comparison in that block, the green titles against the raw rows,
+  stays, because its target did not go; it is the only per-card check of the green on
+  Home and Shows (the older highlight check reads one fixed show). The pre-section
+  `cards carry Show detail` line now wants `Jam notes` beside it and was not proved
+  again: its comparison is the one the 0.1.88 full-run proof showed firing.
+
+  Green: 261 passing, smoke 367 ok with 0 skips and no `WARN` in 404s. `layout-diff`
+  against 0.1.88 (`fbe9d77`), 390 dark, 390 light and 360: `#/home` 3 of 80 boxes and
+  the charted show 1 of 52, every one the button or the link beside it, 8 identical
+  (`docs/design.md`, 0.1.89). Against 0.1.87 the three runs read what 0.1.88's did,
+  which is why the first set was re-run: "only the width" is a claim against 0.1.88.
 
 Do this for every new check. It is the only thing that separates a real check
 from a comforting one.

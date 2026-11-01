@@ -1808,6 +1808,31 @@ nothing about Shows' cards. The figures above do. A closed sheet is on no route.
 against moved nodes and were not re-read on the build: the row wraps at 112% text at 360 and 128% at
 390, and on a wrap Carton drops to a second line, 48px more.
 
+### Jam chart notes: the button reads "Jam notes" (0.1.89)
+
+The dev's call after the 0.1.88 phone check, recorded in `docs/plan.md` under "Amendment: the button
+reads "Jam notes"". The bullet and the entry count come off the button; its `--jam` outline, its place
+and `aria-haspopup="dialog"` stay, and the legend keeps its dot. The `aria-label` went with the count:
+the visible text is the accessible name, so the two cannot disagree.
+
+**What it measures.** The button is 85.4px wide at 360 and 390, read by `layout-diff` on Home's two
+keyed cards, against 113.5px and 113.8px on 0.1.88, where the digit decided the last 0.3px; it is 36px
+tall as before. The Carton link beside it on Home moves 28.1px left and nothing moves down. That is
+the whole of what moved: `layout-diff` against 0.1.88 (`fbe9d77`), 390 dark, 390 light and 360 dark,
+reads the same three times, `#/home` 3 of 80 boxes, the two buttons and that link, and the charted
+show 1 of 52, its button 113.6px to 85.4px at the same place; 8 routes identical, on 243 rules against
+244, the `.btn-jam-dot` rule gone. Against 0.1.87 the three runs read what 0.1.88's did, 2 routes
+changed and 8 identical, on 243 against 243.
+
+**The count is gone from the card, not from the app.** The sheet still lists the entries, and show
+detail's entries section still counts them in its badge. Nothing on a card counts them now.
+
+**The smoke test** holds the label to exactly "Jam notes" and asserts no `aria-label`. The comparison of
+the label and the name against each show's raw jam rows is removed, its target gone; the green titles
+stay held to the raw rows, since theirs did not. `CLAUDE.md` has the proofs.
+
+**Not measured:** a real phone.
+
 ## Attribution
 
 Not a footer afterthought. Every show, song and venue view carries a visible link home to the
