@@ -1127,8 +1127,19 @@ checks were verified this way:
   title-chip routine moved above the scoped branch and takes the node whose bottom is its
   edge.
 
-  Green: 261 passing, smoke 347 ok with 0 skips and no `WARN` in 490s, against 367 on
-  0.1.89, the lines that read show detail's button gone with it. `layout-diff` against
+  Green: 261 passing, smoke 347 ok with 0 skips and no `WARN` in 490s, against 367 in 404s
+  on 0.1.89. **Line by line against the 0.1.89 run: 52 lines lost and 32 gained, 17 of each
+  the same check reworded** (the Back lines name the screen they leave, the heat, bars and
+  parity tags name the show, the show-page twins and target lines, Home's and Shows' button
+  lines, the action row's reference control, "4 small buttons" now 2). **35 lines are gone:**
+  the chart route's three (its walk, its marker's uniqueness, its header sweep), the three
+  entry points, "Show detail precedes Gap chart", and 28 that read show detail's button, 7
+  on each of 4 show pages. **15 are new:** the redirect, the chart on the show reached from a
+  Shows row, three one-control row lists, four "no Jam notes button, the entries open on the
+  page" lines, and the section's six. **The 86s added** are the `show-detail` section, 59 to
+  108s by its scoped runs less the boot, and the sheet checks reaching each sheet through
+  the Shows tab, When, the view and the card at about 3s an opening against one press on the
+  show page; the walk and the 28 button lines that went gave back less. `layout-diff` against
   0.1.89 (`36b2eb8`), 390 dark, 390 light and 360, reads the same three times: the charted
   show 39 of 64 boxes; `#/song/49` 135 of 312 and `#/song/54/gaps` 141 of 298, which are
   exactly their 135 performance rows and Shadow's 141 shows, each row's venue line 42px
