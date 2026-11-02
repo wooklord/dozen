@@ -2098,7 +2098,10 @@ The plan said the run-only branch could not be staged. It could not on today's d
 reaches it, and the four proofs that needed these screens ran under it (`CLAUDE.md`, the 0.1.93
 checks). The smoke test does not carry the clock, so a full
 run reaches those branches only when the calendar does. Its Home hierarchy check wants one hero and
-would go red between tours on a correct app; that predates this build.
+would go red between tours on a correct app; that predates this build. **Measured for 0.1.94, that
+undersold it: 15 checks in 8 blocks went red, not one.** The between-tours branch is walked on every
+run since then, from a stage on the cached archive and not from a clock (`CLAUDE.md`, "The between-tours
+checks"). The two run branches still wait for the calendar.
 
 **Found while proving this, and not fixed: a real show prints "null" on its gap chart.** Show
 1770761863, the one `artist_id` 2 show (Dani Battat, 2026-02-10), renders "null" and "null shows

@@ -489,6 +489,8 @@ then passes for the wrong reason, and reports health it never established.
 | Open the When sheet and read its year grid, month grid, option rows and group titles (0.1.82 to 0.1.90, caught 2026-11-01) | that **the sheet renders right** | **the parts it named**, each right, with the text "nullnull" sitting under them in a text node no selector reached -- two `null` children handed to `replaceChildren`, which prints them. And it opened the sheet only from Aug 2019, the one state whose null branches are not taken. Nine builds, every run green. The smoke test watches the whole document's text now, in every state it walks, and must see its own control first |
 | `setShowsWhen(2019)` returning `'year'` (0.1.82 to 0.1.90, caught 2026-11-01) | that **a year is reachable the way a thumb reaches it** | **the driver dismissing the sheet through its backdrop** after the year -- the exit no user finds -- and then reporting the year reached. The driver had encoded the workaround as the procedure, so every check downstream walked a state by a path the UI did not offer, and "a year is a step toward a month" shipped as designed. The driver reports a pick that leaves the sheet open now, and the `nav-states` section fails on it; with the old driver put back under that fault the section is green, which is the measure of what it was worth |
 | `--only` failing a run of "zero checks" (0.1.91 to 0.1.92, caught 2026-11-02) | that **a scoped run executed its section** | **the boot's two literal-watch lines**, added in 0.1.91 and counted among the checks, so the guard read 2 whatever ran. And Carton's rate limit answers with a well-formed envelope and no rows, so the gate above every section closed without a throw and without a line. A proof with a fault staged read `SMOKE PASSED — SCOPED, not a full run: home, 2 checks`, exit 0. It was caught by the run taking 8s, not by its verdict, and a runner reading only the exit code would have recorded the fault as uncaught. The guard counts from the sections' start now, and the gate prints a SKIP |
+| A plain `.chip` in the border sweep, answered by the first one the sweep met (0.1.46 to 0.1.93, caught 2026-11-02) | that **every plain chip carries the button's edge** | **Home's "Change" chip**, for as long as Home had one. Between tours the first `.chip` is the Sort chip on Songs, whose amber edge is on purpose: red on a correct app, because the check had only ever been shown one chip, and the same mistake in the other direction would pass an unstyled chip. It names the chip it wants now, on a song page that always has one |
+| Whether Home has a hero, read off the screen, to decide what Home should show (0.1.93, caught 2026-11-02) | that **Home rendered the branch the archive calls for** | **a Home that lost its hero**, which reads exactly like between tours. Staged: the hero forced off on a day with shows, the branch read off the screen, `SMOKE PASSED` with 4 checks and 3 SKIPs. With the branch read from the raw rows the same fault fails 17 lines. `homeBranch()` is the only thing that decides now |
 
 The shape is always a **proxy**: the check tests a side effect rather than the
 thing itself, and the side effect has more than one cause. The row that polls for
@@ -1534,6 +1536,56 @@ checks were verified this way:
   layout-diff's two cold boots, inside Carton's minute. The output was kept, and run alone 75s later
   with no change it read `DEPLOY VERIFIED — live BUILD is 0.1.93`, 9 routes live. So layout-diff and
   a deploy check want the same minute's gap as two layout-diffs.
+- The between-tours checks (2026-11-02, scripts only, no bump; `docs/plan.md`, "Gap chart, Home between
+  tours, and ports", item 2). Between tours the run read 15 failures on a correct app, in 8 blocks,
+  and the earliest day that could happen is 2027-01-24. `homeBranch()` decides from the cached archive's
+  raw `shows` rows and never from the screen; the checks that read the hero read only on its branch,
+  with a SKIP naming each one; a plain chip is named rather than found first; and the Home hierarchy
+  check moved into the scoped `home`.
+  **Whether the clock belongs in the smoke test: no.** The branch is walked on every run instead, in
+  `home` and in `section-heads`, by `withBetweenTours()`: the cached archive staged without its
+  future-dated rows, from a copy and back, a reload each way and no request to The Carton, about 4.5s
+  each. A clock in the page could not reach The Carton's own answer, and it would date the app's
+  `fetchedAt` forward. `--between-tours` is the third way, for the checks outside those two sections:
+  Carton's shows table answered without its future-dated rows, to the page and to the script. It is
+  **not a push gate**, its verdict says so whichever way it reads, and it fails if the strip did not
+  take. It combines with `--only`, and every bad form of `--only` still exits 2 beside it. Each proof
+  staged from a scratch Node script by exact string, the staged hash confirmed different and the new
+  text read back before the run, the file restored from a byte copy by hash, `git status --short`
+  confirmed, 25s apart, `--only home`:
+  - the hero forced off on a day with shows: smoke 17, `Home (dark): 0 .hero element(s), expected exactly
+    1` and `Home at 360: no hero on the screen, and the archive holds a future-dated show`, exit 1 at 45s.
+  - **the same fault, with the branch read off the screen: `SMOKE PASSED`, exit 0 at 19s, 4 checks and 3
+    SKIPs, every one `between tours, no hero to read`.** A bug read as a calendar. That is the measure
+    of what a check holding "whichever branch renders" would have been worth, and why the brief's
+    wording was not built as written.
+  - `homeBranch()` forced to between tours on a day with shows: smoke 54, led by `a hero on the screen,
+    and the archive holds no future-dated show`.
+  - the stage not stripping: smoke 1, `the between-tours stage did not strip: 10 future-dated show(s)
+    still in the archive`.
+  - the stage's restore removed: smoke 1, `the between-tours stage was not undone: hero false, 795 show
+    rows against 805`. The same `fetchedAt` on both sides, because nothing else had moved it.
+  - the head reworded on the branch: smoke 2, `the first head reads "Latest show", expected "Most recent
+    show"`, and the card, which is found by that head, read as missing.
+  - the card reading the oldest show: smoke 1, `the card reads "Sat, Feb 23, 2013", "Toad's Place · New
+    Haven, CT", and the archive's newest played show is ["2026-10-23 Spirit of the Suwannee Music Park ·
+    Live Oak, FL"]`.
+  - `--between-tours` with its strip disabled, `--only home`: smoke 1, `the rehearsal did not strip: 10
+    future-dated show(s) reached the archive`, and the verdict `SMOKE FAILED — BETWEEN-TOURS REHEARSAL, not
+    the push gate — 1 problem(s) — SCOPED, not a full run: home, 13 checks`.
+
+  Green on the real dates, under a scratch clock on a copy of the test, `--only home,section-heads`, each
+  exit 0 with 27 checks and 3 SKIPs: 2027-01-24, the first day there is no show listed, and 2027-06-01.
+  Both cards read Sat, Jan 23, 2027, The Mission Ballroom · Denver, CO, with 0 raw titles: the bare card
+  that `docs/plan.md` holds open. The full rehearsal on these files: `SMOKE PASSED — BETWEEN-TOURS
+  REHEARSAL, not the push gate — all routes rendered`, 0 failures, 377 ok and 7 SKIPs, every one naming
+  what went unread. The same run on 0.1.93's test read 15 failures, 375 ok and 2 SKIPs, which is this
+  fix's red. Scoped green on the real calendar: `--only home,section-heads`, 39 checks, with the stage
+  undone twice.
+
+  **Dropped, each with its reason:** the h1 reworded, the same exact text comparison as the head;
+  each hero-only block's gate on its own, one helper, and the rehearsal reads them all; a repeat per
+  theme, since the walk reads no colour and `section-heads` reads both.
 
 Do this for every new check. It is the only thing that separates a real check
 from a comforting one.
@@ -1982,6 +2034,7 @@ landed". The second is the worse of the two because it passes.
 | `node --test` | instant | none | always, before anything else |
 | `node scripts/smoke.mjs` | ~10 min (613s at 0.1.93, 578s at 0.1.92, 526s at 0.1.91, 490s at 0.1.90, 404s at 0.1.89, 407s at 0.1.88, 386s at 0.1.87, 380s at 0.1.86, 356s at 0.1.85, so this row's old "~1 min" had gone stale well before 0.1.86) | Carton (cold pull) | **before every push** |
 | `node scripts/smoke.mjs --only <section>` | 11–120s (`home` 61s at 0.1.93; `song-detail` 18–22s, `section-heads` 47–50s and `show-detail` 69s at 0.1.92; `nav-states` 29–54s at 0.1.91; `show-detail` 69–118s, `jam-button` ~80s and `jam-notes` ~70s at 0.1.90, with the boot; `jam-notes` reaches each sheet through the Shows tab now) | Carton (cold pull) | for a red proof, re-running only the section the check lives in. **Never the gate for a push:** the full run is. An unknown name or a run of zero checks fails, and the verdict says it was scoped |
+| `node scripts/smoke.mjs --between-tours` | about the full run's; combines with `--only` | Carton (cold pull) | when Home or anything on it changes. Carton's shows table is answered without its future-dated rows, to the page and to the script, so every check reads the branch the calendar has not reached yet. **Never the gate for a push,** and its verdict says so. It fails if the strip did not take |
 | `node scripts/gap-oracle.mjs` | ~1 min | Carton (cold pull + 20 song pages) | after any change to gap arithmetic, to the show universe in `buildIndex`, or to `gapHistory()`; it compares every Show Gap cell on 20 Carton song pages against the app's own `gapAtShow()`, and the gap history's one-entry-per-show fold (0.1.83) against the same pages grouped by show, and **SKIPs, never passes,** when Carton is unreachable. The smoke test carries a one-song spot check of the same parity |
 | `node scripts/contrast.mjs` | instant | none | when eyeballing a colour; the assertions already run in `node --test` |
 | `node scripts/deadcss.mjs` | instant | none | when a CSS rule looks inert; lists every declaration the cascade can never let win. The assertions already run in `node --test` (`tests/deadcss.test.mjs`) |

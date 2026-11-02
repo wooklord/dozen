@@ -29,6 +29,7 @@ import { ROUTES, REDIRECTS } from './routes.mjs';
 import { parseSongPage } from './gap-oracle.mjs';
 import { openChrome, CDP_TIMEOUT } from './cdp.mjs';
 import { WHEN_STATES } from '../src/util/when.js';
+import { localToday } from '../src/util/dates.js';
 
 // A SCOPED RUN, AND WHAT STOPS IT READING AS A CLEAN ONE.
 //
@@ -41,7 +42,33 @@ import { WHEN_STATES } from '../src/util/when.js';
 // a mistyped name fails here before Chrome starts, a run that executes no check
 // fails in endRun(), and its verdict line says it was scoped and how much ran.
 const SECTIONS = ['nav-states', 'show-detail', 'song-detail', 'home', 'section-heads', 'jam-button', 'jam-notes', 'sheet', 'markup', 'stale-table'];
-const ONLY = parseOnly(process.argv.slice(2));
+// The between-tours rehearsal, `--between-tours`, alone or with --only (0.1.94).
+// Home has two branches and the calendar picks one, so the branch the calendar is
+// not on is read by a stage inside `home` and `section-heads`, and every other
+// check in the run reads only the branch of the day. Between tours they read the
+// other one, for the first time, on a day nobody is watching: on 0.1.93 fifteen of
+// them failed on a correct app, and the earliest day that could happen is
+// 2027-01-24. So this answers The Carton's shows table without its future-dated
+// rows, to the page and to this script alike, and runs everything on that.
+//
+// NOT THE PUSH GATE, and its verdict says so: the full run on the real calendar is.
+// It fails if the strip did not take, so it cannot read green on the wrong branch.
+const BETWEEN_TOURS = process.argv.includes('--between-tours');
+const ONLY = parseOnly(process.argv.slice(2).filter((a) => a !== '--between-tours'));
+const REHEARSAL = BETWEEN_TOURS ? ' — BETWEEN-TOURS REHEARSAL, not the push gate' : '';
+const stripFuture = (text) => {
+  const body = JSON.parse(text);
+  if (Array.isArray(body.data)) body.data = body.data.filter((r) => String(r.showdate) <= localToday());
+  return JSON.stringify(body);
+};
+if (BETWEEN_TOURS) {
+  const carton = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const res = await carton(url, opts);
+    if (!String(url).includes('/api/v2/shows.json')) return res;
+    return new Response(stripFuture(await res.text()), { status: res.status, headers: { 'content-type': 'application/json' } });
+  };
+}
 
 function parseOnly(args) {
   const refuse = (why) => {
@@ -146,7 +173,7 @@ server.listen(0, () => {
   run().catch(async (err) => {
     fail(`the run stopped: ${err.message}`);
     const scope = ONLY ? ` — SCOPED, not a full run: ${ONLY.join(', ')}` : '';
-    console.log(`\nSMOKE FAILED — ${failures} problem(s); the run stopped before its end${scope}`);
+    console.log(`\nSMOKE FAILED${REHEARSAL} — ${failures} problem(s); the run stopped before its end${scope}`);
     await finish();
   });
 });
@@ -162,9 +189,27 @@ async function finish() {
 
 async function run() {
   const runtimeErrors = [];
+  // The rehearsal's other half: the page's own request for the shows table. One that
+  // could not be rewritten is a failure, or the run would be on the real calendar.
+  const answerStripped = async (p) => {
+    try {
+      const b = await browser.send('Fetch.getResponseBody', { requestId: p.requestId });
+      const text = b.base64Encoded ? Buffer.from(b.body, 'base64').toString('utf8') : b.body;
+      await browser.send('Fetch.fulfillRequest', {
+        requestId: p.requestId,
+        responseCode: 200,
+        responseHeaders: [{ name: 'content-type', value: 'application/json' }, { name: 'access-control-allow-origin', value: '*' }],
+        body: Buffer.from(stripFuture(text)).toString('base64'),
+      });
+    } catch (err) {
+      fail(`the rehearsal could not rewrite the shows table: ${err.message}`);
+      await browser.send('Fetch.continueRequest', { requestId: p.requestId }).catch(() => {});
+    }
+  };
   browser = await openChrome({
     chrome: CHROME, profile: PROFILE,
     onEvent: (m) => {
+      if (m.method === 'Fetch.requestPaused') answerStripped(m.params);
       if (m.method === 'Runtime.exceptionThrown') {
         const d = m.params.exceptionDetails;
         runtimeErrors.push('uncaught: ' + (d.exception?.description || d.text).split('\n')[0]);
@@ -175,6 +220,7 @@ async function run() {
     },
   });
   const { send } = browser;
+  if (BETWEEN_TOURS) await send('Fetch.enable', { patterns: [{ urlPattern: '*thecarton.net/api/v2/shows.json*', requestStage: 'Response' }] });
   const evaluate = async (expression) =>
     (await send('Runtime.evaluate', { expression, returnByValue: true }))?.result?.value;
   // Same thing, but resolves a promise instead of handing back "[object
@@ -183,6 +229,95 @@ async function run() {
   // which stringifies to something truthy and quietly passes a check.
   const evaluateAsync = async (expression) =>
     (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }))?.result?.value;
+
+  // The cached archive, read and written in the page.
+  const IDB_JS = `
+    const db = () => new Promise((res, rej) => { const q = indexedDB.open('dozen'); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+    const readKey = async (k) => { const d = await db(); try { return await new Promise((res, rej) => { const q = d.transaction('payloads').objectStore('payloads').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); } finally { d.close(); } };
+    const writeKey = async (k, v) => { const d = await db(); try { await new Promise((res, rej) => { const t = d.transaction('payloads', 'readwrite'); t.objectStore('payloads').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); } finally { d.close(); } };
+    const dropKey = async (k) => { const d = await db(); try { await new Promise((res, rej) => { const t = d.transaction('payloads', 'readwrite'); t.objectStore('payloads').delete(k); t.oncomplete = res; t.onerror = () => rej(t.error); }); } finally { d.close(); } };
+  `;
+  const rebootAt = async (hash, ready) => {
+    await evaluate(`window.__beforeReboot = true; location.hash = ${JSON.stringify(hash)};`);
+    await send('Page.reload', {});
+    for (let i = 0; i < 80; i++) {
+      await sleep(250);
+      if (await evaluate(`!window.__beforeReboot && document.readyState === 'complete' && !!(${ready})`).catch(() => false)) return true;
+    }
+    return false;
+  };
+
+  // --- Which of Home's two branches the archive calls for (0.1.94) --------------
+  //
+  // Home renders the hero when the archive holds a future-dated show, and "Nothing
+  // on the books" when it holds none. Every check that reads the hero asks this.
+  //
+  // THE ANSWER COMES FROM THE RAW ROWS AND NEVER FROM THE SCREEN. Asked of the
+  // screen, a Home that lost its hero on a scheduled day would answer "between
+  // tours", and each check would then pass for the branch the fault had put there.
+  // Three readers did ask the screen until this build, and the proof that staged
+  // that fault with a screen-derived branch is in CLAUDE.md. The test mirrors
+  // futureShows in src/data/index.js, every artist and showdate > today, on the
+  // app's own localToday(); the newest played show mirrors countedShows.
+  const homeBranch = async () => {
+    const read = () => evaluateAsync(`(async () => {${IDB_JS}
+      const { localToday } = await import('/src/util/dates.js');
+      const a = await readKey('archive.v1');
+      const shows = (a && a.shows) || [];
+      const today = localToday();
+      const played = shows.filter((r) => (r.artist_id == null || Number(r.artist_id) === 1) && String(r.showdate) <= today);
+      const top = played.reduce((m, r) => (String(r.showdate) > m ? String(r.showdate) : m), '');
+      return { today, shows: shows.length, fetchedAt: a ? a.fetchedAt : null,
+        future: shows.filter((r) => String(r.showdate) > today).length,
+        newest: played.filter((r) => String(r.showdate) === top) };
+    })()`);
+    // A first paint can come before the archive is on disk.
+    let b = await read();
+    for (let i = 0; i < 40 && !b.shows; i++) { await sleep(250); b = await read(); }
+    return { ...b, hero: b.future > 0 };
+  };
+  let branch = null;
+
+  // The themes a check of the hero reads, or none and a SKIP that names it. Correct
+  // between tours, and not a pass: the line says what went unread.
+  const heroThemes = (what) => {
+    if (branch.hero) return ['dark', 'light'];
+    skip(`${what}: between tours, no hero to read`);
+    return [];
+  };
+
+  // Runs `fn` on the between-tours branch, whatever day it is. On a day with shows
+  // the cached archive is staged without its future-dated rows, in place and from a
+  // copy, so this costs a reload and no request to The Carton, and the walk is on
+  // every run rather than on the day the calendar gets there. A day that is already
+  // between tours, or the rehearsal, needs no stage.
+  const withBetweenTours = async (fn) => {
+    if (!branch.hero) { await fn(branch); return; }
+    const before = await evaluateAsync(`(async () => {${IDB_JS}
+      const a = await readKey('archive.v1');
+      await writeKey('smoke-branch-backup', a);
+      const out = { shows: a.shows.length, fetchedAt: a.fetchedAt };
+      a.shows = a.shows.filter((r) => String(r.showdate) <= ${JSON.stringify(branch.today)});
+      await writeKey('archive.v1', a);
+      return out;
+    })()`);
+    try {
+      if (!(await rebootAt('#/home', `document.querySelector('#main .screen')`))) { fail('the between-tours stage did not boot'); return; }
+      const staged = await homeBranch();
+      if (staged.future || staged.hero) { fail(`the between-tours stage did not strip: ${staged.future} future-dated show(s) still in the archive`); return; }
+      await fn(staged);
+    } finally {
+      await evaluateAsync(`(async () => {${IDB_JS}
+        const b = await readKey('smoke-branch-backup');
+        if (b) { await writeKey('archive.v1', b); await dropKey('smoke-branch-backup'); }
+      })()`);
+    }
+    const heroBack = await rebootAt('#/home', `document.querySelector('#main .hero')`);
+    const back = await homeBranch();
+    if (!heroBack || back.shows !== before.shows || back.fetchedAt !== before.fetchedAt || !back.hero) {
+      fail(`the between-tours stage was not undone: hero ${heroBack}, ${back.shows} show rows against ${before.shows}, fetchedAt ${back.fetchedAt} against ${before.fetchedAt}`);
+    } else pass(`the between-tours stage undone: the hero back, ${back.shows} show rows, the same fetchedAt`);
+  };
 
   // --- Literal "null" / "undefined" on screen (0.1.91) -------------------------
   //
@@ -685,6 +820,12 @@ async function run() {
     const end = await shot();
     if (!atLanding(end)) fail(`Shows nav: the section did not end on the landing: ${describe(end)}`);
   }
+
+  console.log('\nHome branch:');
+  branch = await homeBranch();
+  if (branch.shows < 100) fail(`Home's branch could not be decided: the cached archive holds ${branch.shows} show row(s)`);
+  else if (BETWEEN_TOURS && branch.future) fail(`the rehearsal did not strip: ${branch.future} future-dated show(s) reached the archive`);
+  else pass(branch.hero ? `${branch.future} future-dated show(s) in the archive, so the hero` : 'no future-dated show in the archive, so "Nothing on the books"');
 
   if (ONLY) {
     console.log(`SCOPED RUN: ${ONLY.join(', ')}`);
@@ -2375,7 +2516,7 @@ async function run() {
   // the .carton-link treatment is ever retuned both move together, and a
   // literal here would be the copy that drifted.
   console.log('\nHome venue block:');
-  for (const theme of ['dark', 'light']) {
+  for (const theme of heroThemes('Home venue block')) {
     await evaluate(`document.documentElement.setAttribute('data-theme', ${JSON.stringify(theme)});`);
     await evaluate(`location.hash = '#/home';`);
     await sleep(1500);
@@ -2442,7 +2583,8 @@ async function run() {
     return { size: c.fontSize, weight: c.fontWeight, color: c.color, border: c.borderTopWidth };
   })()`);
 
-  if (!homeLink || !otherLink) fail('Carton link: could not compare Home against another screen');
+  if (!branch.hero) skip("Carton link beside Home's venue button: between tours, no hero to read");
+  else if (!homeLink || !otherLink) fail('Carton link: could not compare Home against another screen');
   else {
     const differs = ['size', 'weight', 'color', 'border'].filter((k) => homeLink[k] !== otherLink[k]);
     if (differs.length) {
@@ -2451,85 +2593,8 @@ async function run() {
   }
   await evaluate(`document.documentElement.removeAttribute('data-theme');`);
 
-  // --- Home's hierarchy: one hero object, then reference (0.1.74) -----------
-  //
-  // The page read as a flat stack of same-weight sections. Two things fixed it
-  // and both are asserted, because either one alone would leave the complaint
-  // standing:
-  //
-  //  1. The upcoming show is ONE element. Not "a .hero exists" -- that would
-  //     pass on an empty div. The h1, the venue line, the stat grid and the
-  //     action row must all be INSIDE it, which is the claim that makes the
-  //     stats unambiguously part of the show rather than of the section below.
-  //  2. The countdown kicker must render SMALLER than the section titles under
-  //     it. It used to BE a .section-title, so "IN 81 DAYS" and "ON THIS DATE"
-  //     were the same element at the same size and the page had three headings
-  //     of equal rank. Measured as a comparison, never against 11px: a type
-  //     scale retune must move both together or fail here.
-  //
-  // And the order: the hero first, the date section last. Asserted by position in
-  // the rendered document, not by reading the source.
-  console.log('\nHome hierarchy:');
-  for (const theme of ['dark', 'light']) {
-    await evaluate(`document.documentElement.setAttribute('data-theme', ${JSON.stringify(theme)});`);
-    await evaluate(`location.hash = '#/home';`);
-    await sleep(1500);
-    const h = await evaluate(`(() => {
-      const screen = document.querySelector('.screen');
-      const hero = screen && screen.querySelector('.hero');
-      const kicker = hero && hero.querySelector('.hero-kicker');
-      const titles = [...screen.querySelectorAll('.section-title')];
-      const sections = [...screen.querySelectorAll(':scope > .section')];
-      const last = sections[sections.length - 1];
-      return {
-        heroes: screen ? screen.querySelectorAll('.hero').length : null,
-        holds: hero ? {
-          h1: !!hero.querySelector('.screen-title'),
-          venue: !!hero.querySelector('.venue-line'),
-          stats: !!hero.querySelector('.stat-grid'),
-          actions: !!hero.querySelector('.card-actions'),
-        } : null,
-        // Since 0.1.92 the screen opens with the "Upcoming show" head and the
-        // hero follows it directly; nothing else may come before the hero.
-        headFirst: screen.firstElementChild && screen.firstElementChild.matches('.section-head') ? (screen.firstElementChild.querySelector('.section-title') || {}).textContent : null,
-        heroIsFirst: hero ? !!screen.firstElementChild && screen.firstElementChild.nextElementSibling === hero : null,
-        kickerIsSectionTitle: kicker ? kicker.classList.contains('section-title') : null,
-        kickerSize: kicker ? parseFloat(getComputedStyle(kicker).fontSize) : null,
-        titleSizes: titles.map((t) => parseFloat(getComputedStyle(t).fontSize)),
-        lastSectionTitle: last ? (last.querySelector('.section-title') || {}).textContent : null,
-      };
-    })()`);
-
-    if (h.heroes !== 1) fail(`Home (${theme}): ${h.heroes} .hero element(s), expected exactly 1`);
-    else {
-      const missing = Object.entries(h.holds || {}).filter(([, v]) => !v).map(([k]) => k);
-      if (missing.length) {
-        fail(`Home (${theme}): the hero card does not contain ${missing.join(', ')} — the show's parts are still loose on the page`);
-      } else if (h.headFirst !== 'Upcoming show') {
-        fail(`Home (${theme}): the screen opens with ${JSON.stringify(h.headFirst)}, not the "Upcoming show" head over the hero`);
-      } else if (!h.heroIsFirst) {
-        fail(`Home (${theme}): something renders between the "Upcoming show" head and the hero`);
-      } else pass(`${theme}: one hero holding the date, venue, stats and actions, under the "Upcoming show" head that opens the screen`);
-    }
-
-    const minTitle = Math.min(...(h.titleSizes.length ? h.titleSizes : [0]));
-    if (h.kickerIsSectionTitle) {
-      fail(`Home (${theme}): the countdown is still a .section-title — it ranks equal with the page's headings`);
-    } else if (!h.kickerSize || !minTitle) {
-      fail(`Home (${theme}): could not measure the kicker (${h.kickerSize}) against the section titles (${JSON.stringify(h.titleSizes)})`);
-    } else if (h.kickerSize >= minTitle) {
-      fail(`Home (${theme}): the countdown is ${h.kickerSize}px against section titles at ${minTitle}px — it must be smaller`);
-    } else pass(`${theme}: countdown ${h.kickerSize}px under section titles at ${minTitle}px`);
-
-    const lastWanted = ON_DATE_HEAD(h.heroes > 0);
-    if (String(h.lastSectionTitle || '').trim() !== lastWanted) {
-      fail(`Home (${theme}): the last section is ${JSON.stringify(h.lastSectionTitle)}, expected "${lastWanted}"`);
-    } else pass(`${theme}: "${lastWanted}" is the last section on the page`);
-  }
-  await evaluate(`document.documentElement.removeAttribute('data-theme');`);
-
-  // The section under the hero and the date section are read in the scoped `home`
-  // section below, across every upcoming show.
+  // Home's hierarchy, the section under the hero and the date section are read in
+  // the scoped `home` section below, across every upcoming show.
 
   // --- Venue text is one size everywhere it is not in a row -----------------
   //
@@ -2549,7 +2614,7 @@ async function run() {
   // small. A literal 15px here would be a second copy of --t-md and would go
   // red on a deliberate retune of the type scale rather than on this bug.
   console.log('\nvenue text size:');
-  for (const theme of ['dark', 'light']) {
+  for (const theme of heroThemes('venue text size')) {
     await evaluate("document.documentElement.setAttribute('data-theme', " + JSON.stringify(theme) + ");");
     await evaluate("location.hash = '#/home';");
     await sleep(1500);
@@ -4526,10 +4591,12 @@ async function run() {
   // that difference is established and this check is not the place to enforce
   // it away.
   console.log('\nchip borders:');
-  await evaluate(`location.hash = '#/home';`);
+  await evaluate(`location.hash = '#/show/1728657865';`);
   await sleep(1400);
+  // A show page, because Home has a chip only on the hero's branch. The title chip
+  // comes first in the DOM and is hidden at the top of the page.
   const chipBorder = await evaluate(`(() => {
-    const chip = document.querySelector('.chip');
+    const chip = document.querySelector('.chip:not(.title-chip)');
     const btn = document.querySelector('.btn');
     if (!chip || !btn) return { found: false, chip: !!chip, btn: !!btn };
     const cs = getComputedStyle(chip), bs = getComputedStyle(btn);
@@ -4556,12 +4623,20 @@ async function run() {
   // is missing is the exact trap this repo keeps re-learning; it was caught by
   // re-introducing the 0.1.46 bug on `.search` and watching it stay green.
   // `.segmented` needs the settings sheet opened, so that is done too.
-  const BORDERED = ['.chip', '.status-chip', '.icon-btn-bordered', '.search', '.segmented'];
+  //
+  // THE CHIP IS NAMED, NOT THE FIRST ONE FOUND (0.1.94). A plain `.chip` was answered
+  // by Home's "Change" for as long as Home had one. Between tours it does not, and
+  // the first `.chip` the sweep met was the Sort chip on Songs, which carries the
+  // lead chip's amber edge on purpose: a correct app, reading red, because the check
+  // had only ever been shown one chip. A song page's Back chip is on every day.
+  const PLAIN_CHIP = '.chip:not(.chip-lead):not(.title-chip)';
+  const BORDERED = [PLAIN_CHIP, '.status-chip', '.icon-btn-bordered', '.search', '.segmented'];
   const seen = new Map();
   let wantBorder = null;
   for (const [where, hash, openSheet] of [
     ['Home', '#/home', false],
     ['Songs', '#/songs', false],
+    ['a song page', '#/song/49', false],
     ['settings sheet', '#/home', true],
   ]) {
     await evaluate(`location.hash = ${JSON.stringify(hash)};`);
@@ -4603,24 +4678,25 @@ async function run() {
 
   // Chip TAP TARGET, measured from the rendered ::after rather than the CSS.
   // 34px box, 44px hit region -- the floor for one-handed use in a venue.
-  const chipHit = await evaluate(`(() => {
-    const chips = [...document.querySelectorAll('.chip')];
-    if (!chips.length) return null;
-    return chips.map((c) => {
+  const chipHit = [];
+  for (const hash of ['#/home', '#/song/49']) {
+    await evaluate(`location.hash = ${JSON.stringify(hash)};`);
+    await sleep(1200);
+    chipHit.push(...await evaluate(`[...document.querySelectorAll(${JSON.stringify(PLAIN_CHIP)})].map((c) => {
       const b = c.getBoundingClientRect();
       const a = getComputedStyle(c, '::after');
       const ah = parseFloat(a.height) || 0;
       return { text: c.textContent.trim(), box: Math.round(b.height), hit: Math.round(Math.max(b.height, ah)) };
-    });
-  })()`);
-  if (!chipHit) fail('chips: none found to measure');
+    })`));
+  }
+  if (!chipHit.length) fail('chips: none found to measure');
   else {
     const short = chipHit.filter((c) => c.hit < 44);
     if (short.length) fail(`chips: ${short.map((c) => `${JSON.stringify(c.text)} ${c.hit}px`).join(', ')} under the 44px floor`);
     else pass(`${chipHit.length} chip(s): ${chipHit[0].box}px box, ${chipHit[0].hit}px tap target`);
   }
 
-  if (!chipBorder.found) fail(`chips: need both a .chip and a .btn on Home (chip=${chipBorder.chip} btn=${chipBorder.btn})`);
+  if (!chipBorder.found) fail(`chips: need both a .chip and a .btn on a show page (chip=${chipBorder.chip} btn=${chipBorder.btn})`);
   else if (chipBorder.chipColor !== chipBorder.btnColor) {
     fail(`chips: ${JSON.stringify(chipBorder.chipText)} border ${chipBorder.chipColor} != ${JSON.stringify(chipBorder.btnText)} ${chipBorder.btnColor}`);
   } else if (chipBorder.chipWidth !== chipBorder.btnWidth) {
@@ -4958,22 +5034,6 @@ async function run() {
         const went = await evaluate(`({ hash: location.hash, sheets: document.querySelectorAll('.sheet, .sheet-backdrop').length })`);
         if (went.hash !== `#/song/${Number(last.song_id)}` || went.sheets) fail(`${tag}: tapping the last entry's title reached ${went.hash} with ${went.sheets} sheet part(s) left`);
         else pass(`${tag}: a title in the sheet closes it and opens the song`);
-      };
-
-      const IDB_JS = `
-        const db = () => new Promise((res, rej) => { const q = indexedDB.open('dozen'); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
-        const readKey = async (k) => { const d = await db(); try { return await new Promise((res, rej) => { const q = d.transaction('payloads').objectStore('payloads').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); } finally { d.close(); } };
-        const writeKey = async (k, v) => { const d = await db(); try { await new Promise((res, rej) => { const t = d.transaction('payloads', 'readwrite'); t.objectStore('payloads').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); } finally { d.close(); } };
-        const dropKey = async (k) => { const d = await db(); try { await new Promise((res, rej) => { const t = d.transaction('payloads', 'readwrite'); t.objectStore('payloads').delete(k); t.oncomplete = res; t.onerror = () => rej(t.error); }); } finally { d.close(); } };
-      `;
-      const rebootAt = async (hash, ready) => {
-        await evaluate(`window.__beforeReboot = true; location.hash = ${JSON.stringify(hash)};`);
-        await send('Page.reload', {});
-        for (let i = 0; i < 80; i++) {
-          await sleep(250);
-          if (await evaluate(`!window.__beforeReboot && document.readyState === 'complete' && !!(${ready})`).catch(() => false)) return true;
-        }
-        return false;
       };
 
       // A card names no show, and two shows can share a date and a venue, so a card
@@ -5364,14 +5424,15 @@ async function run() {
             empty: !!s.querySelector(':scope > .empty') };
         })()`;
         const dayOf = (d) => (String(d || '').match(/^[A-Z][a-z]{2}, ([A-Z][a-z]{2} \d{1,2}), \d{4}/) || [])[1] || null;
-        const onDateProblems = (r) => {
+        const onDateProblems = (r, hero = branch.hero) => {
           if (r.sections !== 1) return [`${r.sections} section(s) carry data-section="on-date", the route marker's half`];
           const p = [];
           if (!r.isHead) p.push('the section does not open with a .section-head');
-          const wantHead = ON_DATE_HEAD(r.hero);
-          if (r.title !== wantHead) p.push(`the head reads ${JSON.stringify(r.title)}, and ${r.hero ? 'a hero' : 'no hero'} on the screen wants ${JSON.stringify(wantHead)}`);
+          if (r.hero !== hero) p.push(`${r.hero ? 'a hero' : 'no hero'} on the screen, and the archive ${hero ? 'holds a future-dated show' : 'holds no future-dated show'}`);
+          const wantHead = ON_DATE_HEAD(hero);
+          if (r.title !== wantHead) p.push(`the head reads ${JSON.stringify(r.title)}, and the archive's branch wants ${JSON.stringify(wantHead)}`);
           if (r.titleLines !== 1) p.push(`the head runs to ${r.titleLines} line(s)`);
-          const wantDay = r.hero ? dayOf(r.heroDate) : r.today;
+          const wantDay = hero ? dayOf(r.heroDate) : r.today;
           if (!wantDay) p.push(`no month and day parsed out of the hero's date ${JSON.stringify(r.heroDate)}, so the line under the head went unchecked`);
           if (!r.line || r.line.cls !== 'screen-sub') p.push(`the head is followed by ${JSON.stringify(r.line)}, not the .screen-sub date line`);
           else if (wantDay && r.line.text !== wantDay) p.push(`the line under the head reads ${JSON.stringify(r.line.text)}, the anchor's month and day is ${JSON.stringify(wantDay)}`);
@@ -5385,6 +5446,86 @@ async function run() {
           if (off.length) p.push(`${off.length} card(s) not on ${wantDay}, e.g. ${JSON.stringify(off[0].slice(0, 40))}`);
           return p;
         };
+
+        // --- Home's hierarchy: one hero object, then reference (0.1.74) -----------
+        //
+        // The page read as a flat stack of same-weight sections. Two things fixed it
+        // and both are asserted, because either one alone would leave the complaint
+        // standing:
+        //
+        //  1. The upcoming show is ONE element. Not "a .hero exists" -- that would
+        //     pass on an empty div. The h1, the venue line, the stat grid and the
+        //     action row must all be INSIDE it, which is the claim that makes the
+        //     stats unambiguously part of the show rather than of the section below.
+        //  2. The countdown kicker must render SMALLER than the section titles under
+        //     it. It used to BE a .section-title, so "IN 81 DAYS" and "ON THIS DATE"
+        //     were the same element at the same size and the page had three headings
+        //     of equal rank. Measured as a comparison, never against 11px: a type
+        //     scale retune must move both together or fail here.
+        //
+        // And the order: the hero first, the date section last. Asserted by position in
+        // the rendered document, not by reading the source.
+        console.log('\nHome hierarchy:');
+        for (const theme of heroThemes('Home hierarchy')) {
+          await evaluate(`document.documentElement.setAttribute('data-theme', ${JSON.stringify(theme)});`);
+          await evaluate(`location.hash = '#/home';`);
+          await sleep(1500);
+          const h = await evaluate(`(() => {
+            const screen = document.querySelector('.screen');
+            const hero = screen && screen.querySelector('.hero');
+            const kicker = hero && hero.querySelector('.hero-kicker');
+            const titles = [...screen.querySelectorAll('.section-title')];
+            const sections = [...screen.querySelectorAll(':scope > .section')];
+            const last = sections[sections.length - 1];
+            return {
+              heroes: screen ? screen.querySelectorAll('.hero').length : null,
+          nothing: !!screen && [...screen.querySelectorAll('h1')].some((n) => n.textContent.trim() === 'Nothing on the books'),
+              holds: hero ? {
+                h1: !!hero.querySelector('.screen-title'),
+                venue: !!hero.querySelector('.venue-line'),
+                stats: !!hero.querySelector('.stat-grid'),
+                actions: !!hero.querySelector('.card-actions'),
+              } : null,
+              // Since 0.1.92 the screen opens with the "Upcoming show" head and the
+              // hero follows it directly; nothing else may come before the hero.
+              headFirst: screen.firstElementChild && screen.firstElementChild.matches('.section-head') ? (screen.firstElementChild.querySelector('.section-title') || {}).textContent : null,
+              heroIsFirst: hero ? !!screen.firstElementChild && screen.firstElementChild.nextElementSibling === hero : null,
+              kickerIsSectionTitle: kicker ? kicker.classList.contains('section-title') : null,
+              kickerSize: kicker ? parseFloat(getComputedStyle(kicker).fontSize) : null,
+              titleSizes: titles.map((t) => parseFloat(getComputedStyle(t).fontSize)),
+              lastSectionTitle: last ? (last.querySelector('.section-title') || {}).textContent : null,
+            };
+          })()`);
+
+          if (h.heroes !== 1) fail(`Home (${theme}): ${h.heroes} .hero element(s), expected exactly 1`);
+          else {
+            const missing = Object.entries(h.holds || {}).filter(([, v]) => !v).map(([k]) => k);
+            if (missing.length) {
+              fail(`Home (${theme}): the hero card does not contain ${missing.join(', ')} — the show's parts are still loose on the page`);
+            } else if (h.nothing) {
+          fail(`Home (${theme}): "Nothing on the books" on a screen with a hero`);
+        } else if (h.headFirst !== 'Upcoming show') {
+              fail(`Home (${theme}): the screen opens with ${JSON.stringify(h.headFirst)}, not the "Upcoming show" head over the hero`);
+            } else if (!h.heroIsFirst) {
+              fail(`Home (${theme}): something renders between the "Upcoming show" head and the hero`);
+            } else pass(`${theme}: one hero holding the date, venue, stats and actions, under the "Upcoming show" head that opens the screen`);
+          }
+
+          const minTitle = Math.min(...(h.titleSizes.length ? h.titleSizes : [0]));
+          if (h.kickerIsSectionTitle) {
+            fail(`Home (${theme}): the countdown is still a .section-title — it ranks equal with the page's headings`);
+          } else if (!h.kickerSize || !minTitle) {
+            fail(`Home (${theme}): could not measure the kicker (${h.kickerSize}) against the section titles (${JSON.stringify(h.titleSizes)})`);
+          } else if (h.kickerSize >= minTitle) {
+            fail(`Home (${theme}): the countdown is ${h.kickerSize}px against section titles at ${minTitle}px — it must be smaller`);
+          } else pass(`${theme}: countdown ${h.kickerSize}px under section titles at ${minTitle}px`);
+
+          const lastWanted = ON_DATE_HEAD(true);
+          if (String(h.lastSectionTitle || '').trim() !== lastWanted) {
+            fail(`Home (${theme}): the last section is ${JSON.stringify(h.lastSectionTitle)}, expected "${lastWanted}"`);
+          } else pass(`${theme}: "${lastWanted}" is the last section on the page`);
+        }
+        await evaluate(`document.documentElement.removeAttribute('data-theme');`);
 
         console.log('\nHome: the date section:');
         await evaluate(`localStorage.removeItem('dozen.selectedShow.v1');`);
@@ -5513,11 +5654,13 @@ async function run() {
           }
           report(where, p);
         }
-        // SKIP is for a Home with no hero to walk, which is correct between tours. A
-        // walk stopped by a fault has already said so, and one that stops early is
-        // a fault of its own: "walked 1" would otherwise read as a green line.
+        // SKIP is for a day the archive says has no hero to walk. A walk that read no
+        // hero when the archive holds a future-dated show is a failure, whatever the
+        // screen says, and one that stops early is a fault of its own: "walked 1" would
+        // otherwise read as a green line.
         if (!walked) {
-          if (!bad) skip('no hero on Home, so the section under it was not walked');
+          if (!branch.hero) skip('Home, the section under the hero: between tours, no hero to read');
+          else if (!bad) report('the walk', [`it read no hero, and the archive holds ${branch.future} future-dated show(s)`]);
         } else {
           if (picks && walked !== picks) report('the walk', [`it stopped after ${walked} of ${picks} upcoming show(s)`]);
           if (!older) skip(`none of ${walked} upcoming show(s) is at a venue with two or more setlists, so a visit list outside a run block could not have shown`);
@@ -5527,7 +5670,8 @@ async function run() {
         console.log('\nHome and show detail: the venue button, and its row at 360:');
         await evaluate(`localStorage.removeItem('dozen.selectedShow.v1');`);
         await send('Emulation.setDeviceMetricsOverride', { width: 360, height: 844, deviceScaleFactor: 2, mobile: true });
-        for (const [name, hash, rowSel] of [['Home', '#/home', '.hero .card-actions'], ['show detail', '#/show/1728657865', '.card-actions.screen-actions']]) {
+        if (!branch.hero) skip("Home's venue button: between tours, no hero to read");
+        for (const [name, hash, rowSel] of [...(branch.hero ? [['Home', '#/home', '.hero .card-actions']] : []), ['show detail', '#/show/1728657865', '.card-actions.screen-actions']]) {
           await evaluate(`location.hash = '#/songs';`);
           await sleep(300);
           await evaluate(`location.hash = ${JSON.stringify(hash)};`);
@@ -5556,6 +5700,54 @@ async function run() {
           else pass(`${name}: "Full venue history" beside ${JSON.stringify(row.labels[1])} on one line at ${row.viewport}, and it opens ${JSON.stringify(row.venue)}`);
         }
         await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+        await homeFresh();
+
+        // The branch the calendar reaches last. It is held to the archive's newest
+        // played show and to the raw setlist rows, not to the screen and not to the
+        // app's index, and on a day with shows it runs on the stage. No theme: nothing
+        // here reads a colour, and the section heads below read both.
+        console.log('\nHome between tours:');
+        await withBetweenTours(async (b) => {
+          await homeFresh();
+          const r = await evaluate(`(() => { ${T_JS}
+            const screen = document.querySelector('#main .screen');
+            const h1s = [...screen.querySelectorAll('h1')];
+            const heads = [...screen.querySelectorAll('.section-head .section-title')].map(t);
+            const section = [...screen.querySelectorAll(':scope > .section')].find((x) => t(x.querySelector('.section-title')) === 'Most recent show');
+            const card = section ? section.querySelector(':scope > .card') : null;
+            const venue = card ? card.querySelector('.venue-line') : null;
+            return { heroes: screen.querySelectorAll('.hero').length, h1s: h1s.map(t), h1First: screen.firstElementChild === h1s[0],
+              sub: t(screen.querySelector(':scope > .screen-sub')), heads,
+              link: section ? (section.querySelector('.section-head a.carton-link') || {}).href || null : null,
+              date: venue ? t(venue.previousElementSibling) : null, venue: t(venue),
+              titles: card ? [...card.querySelectorAll('.setlist-song')].map((n) => n.textContent) : null };
+          })()`);
+          const p = [];
+          if (r.heroes) p.push(`${r.heroes} .hero element(s), and the archive holds no future-dated show`);
+          if (JSON.stringify(r.h1s) !== JSON.stringify(['Nothing on the books'])) p.push(`the screen's h1 reads ${JSON.stringify(r.h1s)}, expected "Nothing on the books"`);
+          else if (!r.h1First) p.push('"Nothing on the books" is not the first thing on the screen');
+          if (r.sub !== 'The Carton has no future-dated shows in the archive right now.') p.push(`the line under the title reads ${JSON.stringify(r.sub)}`);
+          if (r.heads[0] !== 'Most recent show') p.push(`the first head reads ${JSON.stringify(r.heads[0])}, expected "Most recent show"`);
+          const stray = r.heads.filter((x) => ['Upcoming show', 'Earlier at this venue', 'Earlier in this run'].includes(x));
+          if (stray.length) p.push(`a head of the hero's branch is on the screen: ${JSON.stringify(stray)}`);
+          // Two shows can share the newest date, and either may head the card.
+          let match = null;
+          for (const row of b.newest) {
+            if (r.date === await wantDate(row.showdate) && r.venue === wantVenue(row)) { match = row; break; }
+          }
+          if (!b.newest.length) p.push('the archive holds no played show, so the card has nothing to match');
+          else if (!match) p.push(`the card reads ${JSON.stringify(r.date)}, ${JSON.stringify(r.venue)}, and the archive's newest played show is ${JSON.stringify(b.newest.map((x) => x.showdate + ' ' + wantVenue(x)))}`);
+          else {
+            const want = (nightRows.get(Number(match.show_id)) || []).map((x) => squeeze(x.songname));
+            const got = (r.titles || []).map(squeeze);
+            if (JSON.stringify(got) !== JSON.stringify(want)) p.push(`the card's titles read ${JSON.stringify(got)}, the raw rows give ${JSON.stringify(want)}`);
+            const link = `https://thecarton.net/setlists/${match.permalink}`;
+            if (r.link !== link) p.push(`the head's Carton link is ${JSON.stringify(r.link)}, expected ${link}`);
+          }
+          p.push(...onDateProblems(await evaluate(READ_ON_DATE), false));
+          if (p.length) for (const x of p) fail(`Home between tours: ${x}`);
+          else pass(`"Nothing on the books", then "Most recent show" over ${r.date}, ${r.venue} with its ${r.titles.length} raw title(s) and its Carton link, then "${ON_DATE_HEAD(false)}"`);
+        });
         await homeFresh();
       }
 
@@ -5642,8 +5834,9 @@ async function run() {
             const where = `${r.hash} (${theme})`;
             const p = headProblems(where, read, HEADED.has(r.hash));
             if (r.hash === '#/home') {
-              if (!/^(Upcoming show|Most recent show)$/.test(read.first || '')) p.push(`${where}: the first head reads ${JSON.stringify(read.first)}, expected "Upcoming show" over the hero (or "Most recent show" between tours)`);
-              if (read.onDate !== ON_DATE_HEAD(read.hero)) p.push(`${where}: the date section is headed ${JSON.stringify(read.onDate)}, and ${read.hero ? 'a hero' : 'no hero'} on the screen wants ${JSON.stringify(ON_DATE_HEAD(read.hero))}`);
+              const wantFirst = branch.hero ? 'Upcoming show' : 'Most recent show';
+              if (read.first !== wantFirst) p.push(`${where}: the first head reads ${JSON.stringify(read.first)}, and the archive's branch wants ${JSON.stringify(wantFirst)}`);
+              if (read.onDate !== ON_DATE_HEAD(branch.hero)) p.push(`${where}: the date section is headed ${JSON.stringify(read.onDate)}, and the archive's branch wants ${JSON.stringify(ON_DATE_HEAD(branch.hero))}`);
             }
             if (COUNTED[r.hash]) p.push(...countedProblems(where, read, COUNTED[r.hash]));
             if (p.length) for (const x of p) fail(x);
@@ -5663,6 +5856,26 @@ async function run() {
           else pass(`${whereShows}: ${shows.heads.length} head(s) at 15px/700/uppercase in --ink-dim with the rule, "Venues" badged with its ${shows.heads.find((h) => h.title === 'Venues').rows} rows, none loose`);
           await setShowsQuery('');
           await setShowsView('compact');
+        }
+        // The heads of the branch the walk above did not read, on the stage. Between
+        // tours the walk above read them already.
+        if (branch.hero) {
+          await withBetweenTours(async () => {
+            for (const theme of ['dark', 'light']) {
+              await evaluate(`document.documentElement.setAttribute('data-theme', ${JSON.stringify(theme)});`);
+              await evaluate(`location.hash = '#/songs';`);
+              await sleep(300);
+              await evaluate(`location.hash = '#/home';`);
+              await sleep(1100);
+              const read = await evaluate(READ_HEADS);
+              const where = `#/home between tours (${theme})`;
+              const p = headProblems(where, read, true);
+              if (read.first !== 'Most recent show') p.push(`${where}: the first head reads ${JSON.stringify(read.first)}, expected "Most recent show"`);
+              if (read.onDate !== ON_DATE_HEAD(false)) p.push(`${where}: the date section is headed ${JSON.stringify(read.onDate)}, expected ${JSON.stringify(ON_DATE_HEAD(false))}`);
+              if (p.length) for (const x of p) fail(x);
+              else pass(`${where}: ${read.heads.length} head(s) at 15px/700/uppercase in --ink-dim with the rule, "Most recent show" first and "${ON_DATE_HEAD(false)}" over the date section`);
+            }
+          });
         }
         await evaluate(`document.documentElement.setAttribute('data-theme', 'dark');`);
         const READ_SHEET = `(() => { const t = (n) => ((n || {}).textContent || '').trim(); const sh = document.querySelector('.sheet'); if (!sh) return null; const h2 = sh.querySelector('h2');
@@ -6734,10 +6947,10 @@ async function run() {
     console.log(
       '\n' +
         (failures
-          ? `SMOKE FAILED — ${failures} problem(s)${scope}${skipNote}`
+          ? `SMOKE FAILED${REHEARSAL} — ${failures} problem(s)${scope}${skipNote}`
           : ONLY
-            ? `SMOKE PASSED${scope}${skipNote}`
-            : `SMOKE PASSED — all routes rendered${skipNote}`),
+            ? `SMOKE PASSED${REHEARSAL}${scope}${skipNote}`
+            : `SMOKE PASSED${REHEARSAL} — all routes rendered${skipNote}`),
     );
     await finish();
   }
