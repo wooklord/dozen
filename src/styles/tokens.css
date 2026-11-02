@@ -47,8 +47,12 @@
      room without competing with the content underneath them. The light bump
      is smaller than the dark one because dark was the case that needed it.
 
-     Used by .section-title and .stat-label only. Anything else wanting to be
-     quiet still uses --ink-faint. */
+     Worn by .stat-label, the sheet group titles and descriptions (0.1.82) and
+     the lead chips' labels; "used by .section-title and .stat-label only" had
+     been false since 0.1.82 and was corrected 2026-11-01. .section-title wore
+     it through 0.1.91; 0.1.92 moves section heads up to --ink-dim
+     (docs/plan.md, "Song and show page presentation"). Anything else wanting
+     to be quiet still uses --ink-faint. */
   --dk-ink-label: #a39b8f;
   --dk-ink-venue: #f5efe6;
   --dk-ink-place: #cabfae;

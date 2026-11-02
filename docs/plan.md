@@ -1219,6 +1219,96 @@ search, the search alone) are reached and left through "All shows", and year + a
 one pill at a time, each exit leaving the other narrowing in place. Unfiltered is the landing: every
 other state must reach it in one tap, and it has nothing to leave.
 
+### Song and show page presentation (2026-11-01, the dev's picks, for BUILD 0.1.92)
+
+Four asks from the phone, on the Laurel song page and show 1728657865, planned against a
+measurement by injection on the built pages at 360 and 390 in both themes (`docs/design.md`,
+0.1.92, has the figures), then an addendum the same day. Seven items; each names what it supersedes.
+**Four premises in the asks were wrong and are corrected first, because a plan built on them would
+have shipped the wrong thing:**
+
+- **The per-card "Carton ↗" links on song detail are not one destination.** Laurel's 13 go to 13
+  different show pages on The Carton (`/setlists/{permalink}`, one per entry), One Stop Shop's 8 to
+  8. A footer cannot absorb them as one link, which is why item 1 replaces them with a way to the
+  show rather than folding them.
+- **Show detail's "Setlist" head shares the weak rule.** It is the same `.section-title` as "Where
+  it has landed" and "Jam chart entries": 13px, 700, uppercase, 0.08em, `--ink-label`, not
+  `--ink-dim`. It reads stronger under the venue line with a badge beside it; deep in a scroll the
+  same rule loses to the 15px text around it. "The size and ink of the Setlist head" was therefore
+  no change, and item 5 defines a stronger rule for every head instead.
+- **Neither page's entry cards carried a green edge.** Only the Every performance rows do, 4px wide
+  (`.row-shell[data-jam="true"]::before`), not 3px. Show detail's cards are `.card.jam-card` from
+  `jamEntryCard()`; song detail's were hand-built `.card`s with their notes in `--ink`, where the
+  show page's notes are `--ink-dim`.
+- **The target is BUILD 0.1.92.** 0.1.91 shipped with the Shows nav above and is live.
+
+1. **Song detail's Carton links move to one footer row, and the per-card links go.** `cartonRow()`
+   in `src/ui/components.js` renders "On The Carton:" and one link per destination, 44px tall at
+   the attribution's 13px underlined `--ink-dim`, directly above `attribution()`. Song detail
+   passes `Song`; the "View on The Carton" link under "Add to picks" goes with it, which closes the
+   72px between the button and the stat tiles to 24. Each entry card's date line becomes a control
+   to the app's own show page, the Every performance rows' pattern, and the show page carries that
+   show's Carton link; the 13 inline links go, 44px of card each. Measured on Laurel: 552px shorter
+   at 360 and at 390 from this item alone. **Supersedes** the link under the button and the
+   per-card links, which shipped in 0.1.16 unruled.
+2. **Show detail's two source links join the same row,** `Setlist` and `Gap chart`;
+   `.setlist-source` and `.gap-chart-source` go, rules and all, and the route marker's structural
+   half moves to `.section.gap-chart`, emitted in one place. 24px shorter, and the setlist card
+   sits 24px above the Gap chart head where the hanging link made it 70. **Supersedes** 0.1.36's
+   "move the show one under the setlist", 0.1.45's recede of that link and 0.1.72's "they did not
+   take the Carton link's place" (`docs/design.md`), and item 2 of "Show detail layout" above
+   where it links Carton's chart under the rows. The attribution rule stands as written in
+   `CLAUDE.md` ("deep-link back to the corresponding `thecarton.net` page from every show, song,
+   and venue view") and in the build table above ("every show/song/venue links home to Carton"):
+   a footer row on the view is a deep link on the view, and the minimum is one link to the
+   corresponding page per view. The gap chart link and the entries' show links were never
+   required by it.
+3. **Gap history's "Song page on The Carton" link under its title joins the row too,** so the three
+   screens use the one `cartonRow()` pattern. Home, Shows, Venue and Jams keep their inline links:
+   none of them has an orphan.
+4. **The jam edge, one rule for rows and cards:** `.row-shell[data-jam="true"]::before,
+   .jam-card::before` at 4px of `--jam`, the card clipping it to its corners. Song detail's cards
+   become the `.jam-card` shape (head, venue line, `.jam-card-note`), which moves their notes to
+   `--ink-dim` as on the show page and in the sheet, and the "Jam chart entries" head takes the
+   same `--jam` count badge the show page's head has, beside the byline that already counts the
+   entries (the dev's call). The sheet's cards get the edge with the component. **Extends** the
+   0.1.85 design's green edge on the Every performance rows to the cards.
+5. **Section heads, app-wide through `sectionHead()`:** `.section-title` at `--t-md`, 700,
+   uppercase, 0.08em, in `--ink-dim`; `.section-head` with a 1px `--line` rule above and 12px
+   under it. +16px per head: 48 on the Laurel page, 46 on the show. Contrast `--ink-dim` on the
+   shell 8.99 dark and 7.09 light, above `--ink-label`'s 6.85 and 6.01, so section labels stay
+   brighter than Carton links. The scale after: 19px screen title in `--ink`; 15px sheet title in
+   `--ink`, sentence case; 15px section head, uppercase in `--ink-dim`; 11px sheet group and stat
+   labels in `--ink-label`. The Shows sheets are untouched. **Home was screenshot at 360 dark
+   before any code, with the rule on every head and with the first head's rule suppressed**
+   (`docs/design.md`, 0.1.92): the first head followed the hero card with 32px of shell between
+   the card's edge and the rule, which read as a section opening, not a doubled edge. Item 6 then
+   put a head above the hero, and the same check applies to it. **Supersedes** the
+   `.section-title` comment of 0.1.45 ("13px is the same treatment at a size that holds its own
+   above a card").
+6. **Home gets a head at the top, above the first card (the addendum, the dev's call):**
+   `sectionHead('Upcoming show')` above the hero when the top card is a scheduled show. Between
+   tours the top card is the latest played show, and the view already heads it "Most recent
+   show", which is kept as the better word over "Latest show"; the bare `div.section-title`
+   reading "No upcoming shows" above the screen title in that branch becomes a `p.screen-sub`
+   line, since it is a status, not a section. "On this date" stays the route marker. The
+   no-upcoming branch renders only between tours and was not measured.
+7. **Every section heading goes through `sectionHead()`, verified (the addendum).** The source
+   was listed: the hand-built heads were Home's "Earlier in this run" (`div.section-title` in the
+   run-only card), Home's "No upcoming shows" (item 6), and the Shows detail view's counted heads
+   (`h2.section-title` from `countedHead()`), and all three now build through `sectionHead()`.
+   Five more `div.section-title`s were labels inside sheets, the Settings sheet's "Appearance"
+   and "Data" and the gap explainer's "Which shows count", "The Carton's own gap notes" and "How
+   gap is counted": those are group labels in a sheet, so they take the sheet group scale of
+   0.1.82 (`h3.sheet-group-title`, 11px in `--ink-label`) rather than a 15px head with a rule
+   under a 15px sheet title. The smoke test's `section-heads` section walks every route and holds
+   every head to the treatment, and fails on any `.section-title` that is not inside a
+   `.section-head`, on the page or in an open sheet.
+
+**Scope check:** the row's words are navigation labels; the edge and the badge restate Carton's own
+jam chart membership and count; the new head names what the card is. Nothing is computed that The
+Carton does not show.
+
 ## Out of scope — parked
 
 Anything crossing the scope rule goes to [`phase3_ideas.md`](phase3_ideas.md), not into the app.

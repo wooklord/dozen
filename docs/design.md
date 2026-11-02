@@ -1970,6 +1970,54 @@ open instead of dismissing it.
 **Not measured:** a real phone, and the pill row at 360. Three filters already take two lines at
 390, so 360 wraps the same or sooner, which the row's `flex-wrap` allows; the widths are not read.
 
+### Song and show page presentation (0.1.92)
+
+The ruling is in `docs/plan.md`, "Song and show page presentation". Measured by injection on the
+built 0.1.91 pages in headless Chrome, before any code: Laurel (song 275), One Stop Shop (song 49)
+and show 1728657865 at 360 and 390, dark and light. Every figure read the same in both themes, and
+the same at both widths unless two are given.
+
+**What the asks described, read back from the pages.** The link under "Add to picks" sat in a 44px
+tap box 4px under the button with the 24px section margin under it: 72px from the button's bottom
+to the stat tiles. Laurel's 13 jam cards each carried a "Carton ↗" link to that entry's show page
+(13 distinct destinations; One Stop Shop's 8 cards, 8) in a 44px line inside the card: 222px cards
+at 390, 241 at 360. Their notes rendered in `--ink`; the show page's `.jam-card-note` is
+`--ink-dim`. No card on either page had a green edge; the Every performance rows' is 4px. Every
+section head on both pages, "Setlist" included, was the one `.section-title` rule: 13px, 700,
+uppercase, `--ink-label`, 18.8px tall, 24px under the content above it.
+
+**After injection**, the links moved to one row above the attribution (44px tall with a 24px margin)
+and the cards reshaped:
+
+| | Before | After |
+|---|---|---|
+| Button bottom to tiles top | 72px | 24px |
+| Laurel page height, 390 / 360 | 9706 / 9918 | −552 from the links alone; −504 with the heads |
+| One Stop Shop, 390 / 360 | 10915 / 11050 | −332 / −331; −285 / −284 with the heads |
+| Show page, 390 / 360 | 3053 / 3130 | −24; +22 with the heads |
+| Show: setlist card to Gap chart head | 70px | 24px; 39 with the head rule |
+| A Laurel card at 390 | 222px | 178px, width 358 and text left 33 unchanged by the edge |
+
+The edge is a `::before` overlay, so it moves no text. The section-head variants, per head:
+
+| Variant | Head height | Per page (3 heads) |
+|---|---|---|
+| 15px and `--ink-dim` only | 21.8px (+3) | +9 Laurel, +7 show |
+| plus a 1px `--line` rule and 12px padding (chosen) | 34.8px (+16) | +48, +46 |
+| plus a 32px section margin instead | 21.8px, 32px above (+11) | +41, +31 |
+
+Contrast, from the tokens: `--ink-dim` on the shell 8.99 dark and 7.09 light, on a card 8.43 and
+7.64; `--ink-label` on the shell 6.85 and 6.01; `--jam` on a card 9.54 and 6.52 (the edge, a
+graphic held to 3:1), on the shell 10.18 and 6.06 (the count badge). Every pair was already in
+`scripts/contrast.mjs`.
+
+**Home at 360 dark, before any code, with the rule on every head and with the first head's rule
+suppressed.** Home's screen is the hero card, then two sections, "Previous shows" and "On this date
+(Nov 6)". With the rule on every head the first head's rule sat 32px under the hero's bottom edge
+(24px section margin and the hero's 8px) with the title 12px under the rule; read as a section
+opening, not a doubled edge, so there is no first-head exception. The shots are in the session's
+scratch directory, not the repo, as screenshot captures are (`CLAUDE.md`, scratch checks).
+
 ## Attribution
 
 Not a footer afterthought. Every show, song and venue view carries a visible link home to the
