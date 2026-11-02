@@ -1313,6 +1313,72 @@ have shipped the wrong thing:**
 jam chart membership and count; the new head names what the card is. Nothing is computed that The
 Carton does not show.
 
+#### Amendment (2026-11-02, the dev's asks after the 0.1.92 phone check, for BUILD 0.1.93)
+
+Five asks, planned against a measurement by injection on the built 0.1.92 pages, Home, song 275,
+venue 73 and show 1728657865 at 360 and 390 in both themes (`docs/design.md`, 0.1.93, has the
+figures). The dev approved the plan with three changes, marked A, B and C below as the dev's picks.
+Each item names what it supersedes.
+
+1. **Counted heads become badges, through one function.** `countedHead(title, count)` moves from
+   `src/views/shows.js` to `src/ui/components.js` and returns `sectionHead(title, el('span.badge',
+   ...))`: the shape of the "Jam chart entries" head's badge in the plain `.badge`, because green
+   means jam chart only. It reaches song detail's "Every performance", the venue page's "Every
+   show", the Shows detail view's "Venues", and Home's head in item 2. The first three were every
+   head printing a parenthesised count, listed from the source; the Songs list's "Still open (N)"
+   sections had gone in 0.1.79. The `shown of total` branch goes with the move: its one caller
+   passed the same number twice, so it never rendered. "Jam chart entries" keeps `.badge-jam`. No
+   route marker moves for this: the venue's is the bare "Every show". **Supersedes** the
+   parenthesised heads shipped unruled in 0.1.16 (song) and 0.1.23 (venue, Shows), the "house
+   parenthetical" in `docs/design.md` (0.1.77), and the bare `countedHead()` form in item 7 above.
+2. **Home's last section names what it looks up.** The parenthesised value on this head was a date,
+   not a count, so it takes three parts:
+   - **The head (A, the dev's pick).** "On the date of the show" when an upcoming show anchors the
+     section: 230.7px beside the badge, one line at 360 and at 390, 77px and 107px to spare. The
+     first proposal, "On the date of the upcoming show", wraps to two lines at both widths. Between
+     tours the anchor is `localToday()` and the head reads "On this date".
+   - **The date line (B, the dev's pick).** `formatMonthDay(md)`, "Nov 6", in a `p.screen-sub`
+     directly under the head, through the existing formatter with no new wording. Not
+     `formatShowDate`: the section matches shows on that month and day in earlier years, and the
+     full date also repeats the hero's h1.
+   - **The badge.** The number of shows listed, through `countedHead()`, reading 0 over the empty
+     state.
+   - **The route marker moves.** The two heads share one word, so head text alone cannot be the
+     marker. It becomes the conjunction the show route already uses: the text "date" and the
+     selector `.section[data-section="on-date"]`, emitted in one place in `src/views/home.js`. The
+     smoke checks hold whichever head the branch renders: a hero on the screen wants "On the date
+     of the show", no hero wants "On this date".
+
+   **Supersedes** the "On this date (Mon D)" head (0.1.16, its month spelled out since 0.1.67) and
+   "'On this date' stays the route marker" in item 6 above.
+3. **"Previous shows" becomes what it lists.** The section holds the newest same-venue visit with a
+   setlist, expanded; below it until this build the earlier same-venue visits with a setlist, as
+   one-liners; and, when the upcoming show sits in a run of consecutive dates, "Earlier in this
+   run": the run's played shows the venue list did not render. Each branch's head is now true of
+   what is under it. A visit expanded: "Earlier at this venue", with the run block keeping its own
+   "Earlier in this run" head as the marked exception. No visit but run rows: the section head
+   itself is "Earlier in this run" and the inner head goes, since the card holds nothing else.
+   Neither: "Earlier at this venue" over the existing note. **Supersedes** 0.1.74's "the header
+   stays generic" (the comment above `runBlock` in `src/views/home.js`). It still names no venue,
+   so the header sweep's Rule 2 count stays zero.
+4. **The earlier-visit one-liners go; the run rows stay.** They are the `.visit-list` rows
+   `structureList()` built in the card's foot: a date and a set structure. Their count and newest
+   date are on the hero's two stats, and every one of them is on the venue page behind the hero's
+   button, with the same structure in a `.badge-set`. The run rows stay, because nothing else on
+   Home carries the run. `VENUE_STRUCTURE_LIMIT` becomes 1, so a same-venue run show older than the
+   newest visit stays in the run list rather than going from both. The merge check is rewritten,
+   not shrunk: a venue with setlist shows expands its newest, held to the venue page, and renders
+   no visit list outside a run block. **Supersedes** 0.1.74's "the visits before it as one-liners"
+   and 0.1.72's cap of five.
+5. **"Full venue history" on both buttons (C, the dev's pick, adds Home's).** Same destination, same
+   label. Show detail's row uses 243px at 360 and 390; Home's hero row keeps 55px spare at 360 and
+   85px at 390. Both stay on one line, and the smoke test reads both at 360. Supersedes nothing
+   written.
+
+**Scope check:** the counts are rows on the screen, the date line is the month and day the section
+already matched on, and the heads name what the rows are. Nothing is computed that The Carton does
+not show, and every label describes what has happened.
+
 ## Out of scope — parked
 
 Anything crossing the scope rule goes to [`phase3_ideas.md`](phase3_ideas.md), not into the app.
