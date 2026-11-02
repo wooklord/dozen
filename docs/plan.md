@@ -723,6 +723,14 @@ immediately preceding show" are the thing that was wrong, in both the code and t
    > **redirects to the all-songs index** (`/song/`), and 360 was the number of songs on it. The
    > song's live slug is `t`, matching the API. The decision stands on the real page, quoted
    > above; the false figure is left here, struck, so the correction is visible.
+
+   > **An oversight in this decision, recorded 2026-11-02.** It took the show out of the gap
+   > universe and never weighed the show's own gap chart. `gapAtShow()` returns a null gap for a
+   > show with no position, and the chart printed `String(e.gap)`, so from 0.1.78 (`883d5f9`,
+   > 2026-10-24) all five rows read "null". Excluding the show stays right. The chart not being
+   > considered was the miss, and 0.1.94 fixes that much: the chart leaves a show it does not apply
+   > to (*Gap chart, Home between tours, and ports*, below). **The broader second-artist exclusion
+   > is still the open ruling this decision named, and 0.1.94 does not make it.**
 3. **The universe runs through today, not through the newest show with a setlist.** The two give
    identical numbers on 2026-10-24 because no show falls between 2026-10-23 and today, so this is
    **recorded as unproven.** The observation that settles it: on a show day, before the setlist
@@ -1296,7 +1304,8 @@ have shipped the wrong thing:**
    reading "No upcoming shows" above the screen title in that branch goes, since the title
    "Nothing on the books" and its sub-line already say it and a status is not a section. "On
    this date" stays the route marker. The no-upcoming branch renders only between tours and
-   was not measured.
+   was not measured for this build. It was on 2026-11-02, for 0.1.94 (*Gap chart, Home between
+   tours, and ports*, below).
 7. **Every section heading goes through `sectionHead()`, verified (the addendum).** The source
    was listed: the hand-built heads were Home's "Earlier in this run" (`div.section-title` in the
    run-only card), Home's "No upcoming shows" (item 6), and the Shows detail view's counted heads
@@ -1378,6 +1387,122 @@ Each item names what it supersedes.
 **Scope check:** the counts are rows on the screen, the date line is the month and day the section
 already matched on, and the heads name what the rows are. Nothing is computed that The Carton does
 not show, and every label describes what has happened.
+
+### Gap chart, Home between tours, and ports (2026-11-02, the dev's picks, for BUILD 0.1.94)
+
+Three items from the 0.1.93 report. Everything below was measured on 0.1.93 against the live API on
+2026-11-02, in headless Chrome.
+
+**1. The gap chart leaves a show it does not apply to.** Show detail renders the chart only when
+`gapChartApplies(chart)` holds: at least one row has a gap or is a debut. That leaves out exactly
+one of the 620 shows with setlist rows: 1770761863, the one `artist_id` 2 show (Dani Battat,
+2026-02-10). No heading and no empty state, since the chart does not apply there. The Carton row
+keeps its "Gap chart" link, as upcoming shows already do; whether Carton has a chart for this show
+is unverified, because `/gap-chart/` is never fetched. A single null gap in a chart that does
+render prints "—" through `gapFigure()`, never `String(null)`, the same dash the gap history prints.
+A show with setlist rows dated after the phone's today has no position either and takes the same
+path. **This is the fix for an oversight in the 2026-10-24 ruling** (its decision 2 carries the
+note), and it does not decide the broader second-artist exclusion, which stays open.
+
+**Two corrections to the brief, recorded as corrections:**
+
+- **(a) "No row has a gap" would have hidden two correct charts.** The brief's rule, taken literally,
+  also removes the chart from 2013-02-23 (`1633187309`, 2 rows) and 2024-06-18 (`1718902938`, 1
+  row), where every row is a debut and the chart reads "Debut" correctly. **The rule is "no gap and
+  no debut".**
+- **(b) The null dates from 0.1.78 (`883d5f9`, 2026-10-24), not 0.1.90.** 0.1.78 took the show out
+  of the universe while the chart's own route printed `String(e.gap)`, so `#/gapchart/1770761863`
+  read "null" from then on. 0.1.90 (`c075ade`, 2026-11-01) only moved the chart onto the show page.
+  Read from git, not by running the old builds.
+
+**The sweep: every other place a null gap could print,** for that show and its five songs. Song
+358 is You Can Close Your Eyes, 359 Freeway Flowers and 360 Windblown Eyes, played only at that show;
+12 Boom or Bust and 313 Thorns are also Eggy songs.
+
+| Screen | Renders on 0.1.93 | Literals |
+|---|---|---|
+| Show detail's chart | "null" ×5, "null shows since previously played" ×5, empty meta lines | **10** |
+| `#/gapchart/1770761863` | redirects to the same page | **10** |
+| The gap explainer, from the chart's link, its figure and a song's tile | counts only, "1 by another artist — not counted" | 0 |
+| Song detail, 358/359/360 | "—", 0, "—", "—", "none, never played", two empty states | 0 |
+| Song detail, 12 and 313 | real figures, 13 and 30 shows since last | 0 |
+| Gap history, 358/359/360 | "—", "—", 0, the empty state, no strip | 0 |
+| Gap history, 12 and 313 | real figures, no row for that show | 0 |
+| Songs, 7 sorts and 6 filters, and a search by name | 358/359/360 never listed; 12 and 313 read numbers wherever listed; 0 dashes | 0 |
+| Picks, each added through the song's button | 358/359/360 "Never played"; 313 "30 shows since last"; 12 "13 shows since last" | 0 |
+| Jams, Shows, venue 282, Home, Settings | Jams guards a null and lists none of the three; the rest read no gap for that show | 0 |
+
+Rendering all 805 shows, 370 songs and 370 gap histories detached, against the real index, took 1.5s
+and the only hit in the archive was that show. "On this date" on Feb 10 needs a clock to reach; by
+reading, it goes through `setlistCard`, which reads no gap. The other callers of `gapAtShow()` are
+`longestObservedGap`, which filters a null, and `gapHistory`, whose row is guarded.
+
+**2. Home's branch is decided from the archive, never from the screen.** The brief named one check
+going red between tours. **A full smoke run with future-dated shows stripped from Carton's answer
+read 15 failures in 8 blocks on a correct app**, 375 ok, 2 skips: the Home hierarchy check 4, the
+venue block 4, the Carton link comparison 1, venue text size 2, the `.chip` border sweep 1, the chip
+tap target 1, chip against `.btn` 1, the venue button row 1. As things stand that gate breaks on
+2027-01-24, the day after the last listed show, unless Carton lists more.
+
+A check that "holds whichever branch renders" by reading the branch off the screen passes a Home
+that lost its hero to a bug: it reads as between tours. Three lines already did that. So one
+`homeBranch()` decides from the cached archive's raw `shows` rows against today, which also keeps it
+clear of Carton's rate limit answering with no rows. Fewer than 100 rows fails as undecidable.
+Blocks that only a hero can answer SKIP by name between tours. The hierarchy check holds the hero
+and "Upcoming show" when a show is scheduled, and "Nothing on the books" and "Most recent show"
+between tours. The `.chip` sweep passed only because Home's "Change" chip was the first one it saw,
+so it becomes `.chip:not(.chip-lead)`, with a song page added to the sweep.
+
+**The clock does not go in the smoke test.** The branch is walked on every run by removing the
+future-dated rows from the cached archive in IndexedDB, rebooting with the real clock, reading, and
+restoring.
+
+| | A page clock at 2027-06-01 | The archive stage |
+|---|---|---|
+| Carton requests | 3, a silent refresh | 0 |
+| Left behind | `fetchedAt` of 2027-06-01 stays after the clock is removed; the chip reads "unknown" | nothing, restored clean |
+| "Most recent show" | Jan 23, 2027, no setlist | Oct 23, 2026, its setlist |
+| "On this date" | badge 0, the empty state | badge 1, one card |
+| Time | 2.1s, then the refresh | 2.2s |
+
+The clock stays in scratch, for the proofs and for the two run-row branches, which need a past
+today. **`node scripts/smoke.mjs --between-tours` is committed too** (the dev's call): the whole
+suite with future-dated shows stripped in flight, because the stage only walks Home and a later
+check reading the hero unguarded would otherwise stay hidden until the calendar exposes it. It is
+not a push gate, its verdict says it is a rehearsal, and it fails if the strip did not take.
+
+**3. The operating system picks the ports.** The DevTools port collision (`lghub_updater` holding
+127.0.0.1:9180, inside the random range) reproduced on 0.1.93's launcher: `Unexpected token '<'`
+after 27s, **10 Chrome processes left**, against a `cdp.mjs` comment saying a failed launch leaves
+nothing running. A bind-and-connect probe was planned and measured: `listen(port)` with no host
+reads "free" on the exact collision, a bind on 127.0.0.1 reads "free" with 0.0.0.0 held, and a
+connect reads refused on a port an outbound socket holds. The dev picked the option with nothing to
+get wrong: **Chrome is launched with `--remote-debugging-port=0` and the port read back from
+`DevToolsActivePort` in its own profile**, measured at 219ms and clean. So `openChrome()` loses its
+`port` argument, there is no range and no probe, and the window between checking and launching does
+not exist. Kept from the plan: a non-JSON answer names the port and the content type, and a failed
+launch kills Chrome by its profile. **The local servers in the smoke test and layout-diff get the
+same pattern (the dev's call):** `listen(0)`, reading the assigned port back.
+
+**Scope check:** item 1 removes a section and prints a dash, with no new label, statistic or host.
+`/gap-chart/` stays linked and unfetched. Items 2 and 3 are scripts. Nothing is computed that The
+Carton does not show.
+
+**Open, recorded and not fixed (the dev's call):**
+
+1. **A phone clock running ahead leaves a future `fetchedAt`, and the app will not refresh until
+   that date.** Seen under the scratch clock at 2027-06-01: the expired TTL fired the silent refresh
+   (`setlists/showyear/2027`, `shows`, `jamcharts`), which wrote `fetchedAt` 2027-06-01T16:00:00Z. With
+   the clock removed and the page reloaded, the value was still there, the status chip read "unknown",
+   and no request went out. `isStale()` compares `now - fetchedAt` with the TTL, and that difference
+   stays negative until the date passes.
+2. **A bare "Most recent show" card when the newest show has no setlist yet.** Between tours, on the
+   days after a show and before its setlist posts, the card is a date, a venue and "Show detail",
+   with nothing to say the setlist is missing. Seen under the same clock, on Jan 23, 2027.
+3. **The three Dani Battat songs read "never been played".** 358, 359 and 360 are one tap from their
+   setlist titles on that show's page, which land on "This song is in the catalog but has never been
+   played." True of Eggy, and it reads wrong from there. The wording belongs to the open second-artist
+   ruling (decision 2 of the 2026-10-24 reversal), so it waits for that.
 
 ## Out of scope — parked
 
