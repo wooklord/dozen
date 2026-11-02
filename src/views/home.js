@@ -13,6 +13,7 @@
 import { el, append, openSheet } from '../ui/dom.js';
 import {
   sectionHead,
+  countedHead,
   emptyState,
   setlistCard,
   cartonLink,
@@ -68,17 +69,13 @@ export function renderHome(ctx) {
   const today = localToday();
   const show = getSelectedShow(index);
 
-  // "On this date" keys off the upcoming show when there is one, and off today
-  // otherwise -- so this section always has something to show.
-  const anchorDate = show ? show.showdate : today;
-
   if (show) {
     renderNextShow(screen, ctx, show, today);
   } else {
     renderNoUpcoming(screen, ctx, today);
   }
 
-  renderOnThisDate(screen, ctx, anchorDate, show?.show_id);
+  renderOnThisDate(screen, ctx, show, today);
 
   append(screen, attribution());
   return screen;
@@ -162,7 +159,7 @@ function renderNextShow(screen, { index, navigate }, show, today) {
       el(
         'button.btn.btn-small',
         { type: 'button', onclick: () => navigate(`#/venue/${show.venue_id}`) },
-        'Venue history',
+        'Full venue history',
       ),
       // DELIBERATELY UNCHANGED, only moved. Still .carton-link: --t-2xs at
       // weight 400 in --ink-faint, no border, no button treatment. It sits
@@ -181,48 +178,44 @@ function renderNextShow(screen, { index, navigate }, show, today) {
   append(screen, sectionHead('Upcoming show'));
   append(screen, hero);
 
-  // --- Previous shows: ONE section, was two (0.1.74) -------------------------
+  // --- What came before this show: ONE section (0.1.74, 0.1.93) --------------
   //
-  // "Previous set structures" and "Last time at {venue}" were two headers over
-  // the same history, and the top row of the structure list WAS the show in the
-  // card below it -- `venueRows[0]` and the old `lastAtVenue` resolve to the
-  // same show by construction, both being the newest show at this venue with a
-  // recorded setlist. Toad's Place rendered "Nov 26, 2025  S1+S2+E" and then,
-  // 250px lower, "Wed, Nov 26, 2025" with SET 1 / SET 2 / ENCORE spelled out.
-  // The same fact, twice, in two typographic registers.
+  // One card: this venue's newest visit with a setlist, in full; then, behind a
+  // rule, the played shows of this show's run that the card is not showing. Each
+  // branch's head is true of what is under it (docs/plan.md, "Song and show page
+  // presentation", the 0.1.93 amendment): "Earlier at this venue" over a visit,
+  // with "Earlier in this run" keeping its own head below it as the marked
+  // exception, since those rows are at other venues or older than the visit; and
+  // "Earlier in this run" as the section's own head when there is no visit and
+  // the card holds nothing else. Neither names the venue: the hero's venue line
+  // is directly above, and the run rows are mostly elsewhere.
   //
-  // So it is one card: the most recent visit in full, then a rule, then the
-  // visits before it as one-liners. The expanded visit is the one you read; the
-  // rest are the index you scan.
+  // THE VISITS BEFORE THE NEWEST WENT IN 0.1.93. They were one-liners in this
+  // card's foot from 0.1.74, a date and a set structure. Their count and newest
+  // date are in the hero's two stats, and every one of them is on the venue page
+  // behind the hero's button, with the same structure in a .badge-set. So
+  // VENUE_STRUCTURE_LIMIT is 1, and the run rows stay because nothing else on
+  // Home carries the run.
   //
-  // THE EXPANDED ROW DROPS ITS STRUCTURE SUMMARY. "S1+S2+E" is a stand-in for a
-  // setlist you cannot see, and this row is the setlist -- printing the summary
-  // above SET 1 / SET 2 / ENCORE would reintroduce, one level down, the exact
-  // duplication this merge exists to remove.
+  // THE EXPANDED ROW CARRIES NO STRUCTURE SUMMARY. "S1+S2+E" is a stand-in for a
+  // setlist you cannot see, and this row is the setlist.
   //
-  // ONE SOURCE FOR THE LIST. `lastAtVenue` used to be computed here from its own
-  // filter of showsByVenue while the list came from previousSetStructures(); two
-  // derivations of one fact that agreed only because nobody had changed either.
-  // The card reads venueRows[0] now, so they cannot drift apart.
+  // ONE SOURCE. The card reads venueRows[0], the same derivation the run list is
+  // deduped against, so the two cannot drift apart. It was its own filter of
+  // showsByVenue until 0.1.74.
   const { venueRows, runRows } = previousSetStructures(index, show);
   const lastVisit = venueRows[0] || null;
-  const earlierVisits = venueRows.slice(1);
 
-  // .visit-list, not a bare .fn-list (0.1.74). The merged card contains TWO
-  // fn-lists -- these visit one-liners and the setlist's own footnotes -- and
-  // with nothing to tell them apart, anything reading "the rows in this card"
-  // silently counted footnotes as visits. The smoke check for the merge was
-  // written that way and passed only because the show it happened to walk to
-  // had a setlist with no footnotes. Its own class, so the two are different
-  // things in the DOM as well as in the head.
-  //
-  // The date's colour and weight moved into that class at the same time. They
-  // were an inline style, which is the one place a palette change cannot reach.
-  const structureList = (rows) =>
+  // .visit-list, not a bare .fn-list (0.1.74). The card holds a second fn-list,
+  // the setlist's own footnotes, and with nothing to tell the two apart anything
+  // reading "the rows in this card" silently counted footnotes as visits. The
+  // smoke check for the merge was written that way and passed only because the
+  // show it happened to walk to had a setlist with no footnotes.
+  const runList = () =>
     el(
       'ul.fn-list.visit-list',
       null,
-      rows.map((s) =>
+      runRows.map((s) =>
         el('li', null, [
           el('span.visit-date', { text: formatShowDateShort(s.showdate) }),
           el('span', { text: showStructure(index, s.show_id) || '—' }),
@@ -230,37 +223,10 @@ function renderNextShow(screen, { index, navigate }, show, today) {
       ),
     );
 
-  // "Earlier in this run" KEEPS ITS LABEL. It is the named subset -- a different
-  // criterion from the list above, at other venues -- and nothing else on the
-  // screen says so.
-  //
-  // It is also why this header does NOT name the venue. 0.1.69 gave "Last time
-  // at {venue}" the name because it sat a whole block below the hero venue line
-  // and labelled a card that was otherwise just a date; the merge removed that
-  // distance -- this section now follows the hero card directly, and the stat
-  // beside it already reads "MOST RECENT · Nov 26, 2025", which is the date
-  // heading the card. Naming the venue here would also be wrong for the run
-  // rows, which are at OTHER venues. So the header stays generic, the venue
-  // list stays unlabelled under it (0.1.72's reasoning, unchanged), and the run
-  // list keeps the label that marks it as the exception.
-  const runBlock = runRows.length
-    ? el('div', { style: { marginTop: earlierVisits.length || lastVisit ? '12px' : '0' } }, [
-        sectionHead('Earlier in this run'),
-        structureList(runRows),
-      ])
-    : null;
-
   const previous = el('div.section');
-  append(previous, sectionHead('Previous shows'));
 
   if (lastVisit) {
-    const foot =
-      earlierVisits.length || runBlock
-        ? el('div.card-foot', null, [
-            earlierVisits.length ? structureList(earlierVisits) : null,
-            runBlock,
-          ])
-        : null;
+    append(previous, sectionHead('Earlier at this venue'));
     append(
       previous,
       setlistCard({
@@ -278,17 +244,21 @@ function renderNextShow(screen, { index, navigate }, show, today) {
         // than to the section, so it goes where every other per-show Carton
         // link goes: beside Show detail in the card's own action row.
         extraActions: [cartonLink(showPermalink(lastVisit), 'Carton')],
-        foot,
+        foot: runRows.length
+          ? el('div.card-foot', null, [sectionHead('Earlier in this run'), runList()])
+          : null,
       }),
     );
-  } else if (runBlock) {
-    append(previous, el('div.card', null, [runBlock]));
+  } else if (runRows.length) {
+    append(previous, sectionHead('Earlier in this run'));
+    append(previous, el('div.card', null, [runList()]));
   } else {
     // ONE empty state, not two. A venue with no recorded history used to
     // produce "No played shows at this venue or earlier in this run." and then
     // "No previous setlist recorded at this venue." -- 154px of two sentences
     // saying nothing, twice. Five of the seventeen upcoming shows are at a
     // venue with no prior visit, so this is the common case, not the edge.
+    append(previous, sectionHead('Earlier at this venue'));
     append(
       previous,
       el('div.card', null, [
@@ -346,14 +316,28 @@ function renderNoUpcoming(screen, { index, navigate }, today) {
 
 // ----------------------------------------------------------- on this date ---
 
-function renderOnThisDate(screen, { index, navigate }, anchorDate, excludeShowId) {
-  const md = monthDayKey(anchorDate);
-  const anniversaries = onThisDate(index, md, excludeShowId).filter((s) =>
+// What was played on this month and day in earlier years. The day is the
+// upcoming show's when there is one, and today's between tours, so this section
+// always has something to say and Home is never empty.
+//
+// THE HEAD NAMES THE ANCHOR AND THE LINE UNDER IT NAMES THE DAY (0.1.93). The day
+// sat in the head's parentheses until then, the one parenthesised head that was
+// not a count. "On the date of the show" is the dev's wording for the branch with
+// a show and it fits beside the badge at 360; "On the date of the upcoming show"
+// wrapped at 360 and at 390. The line is the month and day and not the full date,
+// because that is what the section matches on, and the full date is the hero's h1.
+//
+// data-section is the route marker's structural half (scripts/routes.mjs): the
+// two heads share one word, so head text alone could not be the marker.
+function renderOnThisDate(screen, { index, navigate }, show, today) {
+  const md = monthDayKey(show ? show.showdate : today);
+  const anniversaries = onThisDate(index, md, show?.show_id).filter((s) =>
     index.setlistByShow.has(Number(s.show_id)),
   );
 
-  const section = el('div.section');
-  append(section, sectionHead(`On this date (${formatMonthDay(md)})`));
+  const section = el('div.section', { 'data-section': 'on-date' });
+  append(section, countedHead(show ? 'On the date of the show' : 'On this date', anniversaries.length));
+  append(section, el('p.screen-sub', { text: formatMonthDay(md) }));
 
   if (!anniversaries.length) {
     append(section, emptyState('No shows played on this calendar date in past years.'));

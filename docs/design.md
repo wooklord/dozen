@@ -698,7 +698,9 @@ set-structure block below the hero venue line, labelling a card whose own headin
 The 0.1.74 merge removed the distance. That section now follows the hero card directly, and the
 stat immediately above it reads `MOST RECENT · Nov 26, 2025` — the same date that heads the card.
 So the header went generic (`Previous shows`) and the exception went with it. Adding a venue header
-back now requires editing that number, which is the point.
+back now requires editing that number, which is the point. (`Previous shows` went in 0.1.93 for
+heads that say what they list, "Earlier at this venue" and "Earlier in this run". Neither names a
+venue, so the count stands.)
 
 Both proved red against real defects rather than invented ones: restoring `Previously at {venue}`
 reports *"2 header(s) name an on-screen venue, expected 1"*, and adding `Every show at {venuename}`
@@ -893,7 +895,9 @@ printed `Nov 26, 2025  S1+S2+E` and then, 250px lower, `Wed, Nov 26, 2025` with 
 ENCORE spelled out. One fact, twice, in two typographic registers.
 
 They are one card now: **the most recent visit in full, then a rule, then the visits before it as
-one-liners.** The expanded visit is the one you read; the rest are the index you scan.
+one-liners.** The expanded visit is the one you read; the rest are the index you scan. **The
+one-liners went in 0.1.93:** their count and newest date are on the hero's stats, and every one of
+them is on the venue page behind the hero's button. The run rows in the same foot stay.
 
 **The expanded row drops its structure summary.** `S1+S2+E` is a stand-in for a setlist you cannot
 see. On the row that *is* the setlist, printing the summary above SET 1 / SET 2 / ENCORE would
@@ -1090,7 +1094,8 @@ inherit its order. **The heat max stays list-wide** across the divider, so a 300
 search matching one song gets one header, not three. The count line above the sections is
 unchanged. Under the other four sorts nothing changes; the section logic is scoped to that figure.
 
-**The headers use the house parenthetical**, `Still open (175)`, not the middot form the chat first
+**The headers use the house parenthetical** (ended in 0.1.93, when a count became a plain badge
+through `countedHead()`), `Still open (175)`, not the middot form the chat first
 suggested: "Every show (12)", "Every performance (125)" and "Shows (63)" already count that way, and
 the header sweep's Rule 1 already strips a trailing `(N)` before testing a title for an echo. The
 middot was proposed without that convention in view. They are `sectionHead()` inside `.section`,
@@ -2040,6 +2045,74 @@ the injection figures above are the record, and the full run's 396 checks hold t
 
 **Not measured:** a real phone, and the no-upcoming branch of Home, which renders only between
 tours.
+
+### Counted heads, Home's heads, one visit (0.1.93)
+
+The ruling is the 2026-11-02 amendment under "Song and show page presentation" in `docs/plan.md`.
+Measured by injection on the built 0.1.92 pages in headless Chrome before any code: Home, song 275,
+venue 73 and show 1728657865 at 360 and 390, dark and light.
+
+**The dev's three picks, each measured.**
+
+| Pick | Read at 360 and 390, both themes | Result |
+|---|---|---|
+| A, the head with an upcoming show | "On the date of the show" 230.7px, one line, 77 and 107px spare, 71 and 101 with a two-digit badge, head 34.9px | used; "On this date" (116.5px) stays between tours, where the anchor is today |
+| | "On the date of the upcoming show" wraps to 2 lines, head 56.5px | not used, and the reason the word is left out |
+| B, the date line | `formatMonthDay(md)`, "Nov 6", in `p.screen-sub`: 18.8px, 13px, 8px under the head | used. Tried in `.note` first, whose 11px read too quiet |
+| C, "Full venue history" on Home too | Home's row 54.7px spare of 294 at 360, 84.7 of 324 at 390; show detail's uses 243 of 328 and 358 | one line on both screens |
+
+Removing the one-liners took 55px off Ardmore at 360 and 56 at 390. The badge makes a head 0.2px
+taller, which injection rounded away and `layout-diff` did not: the rows under it sit 0.2px lower.
+
+**Two things the plan did not say, both inside item 4.** The foot's "Earlier in this run" head
+carries no rule of its own, by the same structural selector as the head that opens a screen:
+`.card-foot` already draws one, and the two read doubled. That double was already on screen since
+0.1.92 for a one-visit show in a run. And `.card-foot > .visit-list:first-child` became
+`.fn-list.visit-list`, because a visit list no longer opens a foot.
+
+**`data-section`, not a class.** The route marker's selector is `.section[data-section="on-date"]`.
+A new class would have needed a rule behind it, since `tests/deadcss.test.mjs` fails an emitted
+class that matches none, and this one has nothing to style.
+
+**Built, and read back.** The `home` smoke section reads the head, its one line, the date line and
+the badge at both widths, then walks all ten upcoming shows and holds each against the venue page
+behind its own button: five expanded a visit, five rendered the note, three sat at a venue with two
+or more setlists. `section-heads` reads the plain badge over 135 rows on One Stop Shop, 13 on the
+venue, 1 on the Shows venue query. `layout-diff` against the docs commit at 390 dark, 390 light and
+360 dark reads the same three times: Home 46 of 81 boxes; One Stop Shop 272 of 304 and the venue 14
+of 28, which are their titles, narrower without the count, and the rows 0.2px lower; the show 2 of
+64, its button 23.4px wider and the link beside it moved over; Songs, Shows, Jams, Picks and gap
+history identical. Stylesheets 248 rules on both sides, the one rule replaced.
+
+**Today's data reaches two of Home's branches.** No upcoming show has run rows, and no show is
+between tours. Under a scratch clock in the page, with the real archive, the other three all
+rendered right at 360 dark, with no error boundary:
+
+| Clock | Screen | Read |
+|---|---|---|
+| 2022-06-11 | a visit and run rows | "Earlier at this venue", then "Earlier in this run" in the foot: foot's rule 1px, head's 0, head 13px under the rule |
+| 2022-06-09 | run rows alone | "Earlier in this run" as the section's head with its 1px rule, one card, no foot |
+| 2027-06-01 | between tours | h1 "Nothing on the books", "Most recent show", "On this date" badge 0, line "Jun 1", the empty state |
+
+The plan said the run-only branch could not be staged. It could not on today's data alone; the clock
+reaches it, and the four proofs that needed these screens ran under it (`CLAUDE.md`, the 0.1.93
+checks). The smoke test does not carry the clock, so a full
+run reaches those branches only when the calendar does. Its Home hierarchy check wants one hero and
+would go red between tours on a correct app; that predates this build.
+
+**Found while proving this, and not fixed: a real show prints "null" on its gap chart.** Show
+1770761863, the one `artist_id` 2 show (Dani Battat, 2026-02-10), renders "null" and "null shows
+since previously played" on all five rows, on today's clock. `gapAtShow()` returns a null gap for a
+show outside the gap universe, and `src/views/show.js` prints `String(e.gap)`. The show left the
+universe in 0.1.78 by a recorded decision. A search of the docs for its id and its artist finds
+nothing weighing its chart, so that consequence reads as an oversight. It sat on the chart's own
+route until 0.1.90 put the chart on the show page. A
+show with setlist rows dated after the phone's today takes the same path, and no such row exists
+today. The literal watch never saw it, because no walk opens this show. The fix touches the open
+ruling on how far that show's exclusion goes (`docs/plan.md`, decision 2 of the gap-convention
+reversal), so it is the dev's.
+
+**Not measured:** a real phone.
 
 ## Attribution
 

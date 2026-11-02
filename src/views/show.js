@@ -232,7 +232,7 @@ export function renderShow(ctx, showId) {
 
   // --- Actions, BELOW the content ------------------------------------------
   //
-  // Venue history and Venue info. These sat between the venue line and the
+  // Full venue history and Venue info. These sat between the venue line and the
   // SETLIST heading until 0.1.72, which put controls in front of the one thing
   // this screen exists to show. Same reasoning as the Home cards: the setlist
   // is what the screen is opened to read. Gap chart was the third control here
@@ -256,7 +256,7 @@ export function renderShow(ctx, showId) {
       el(
         'button.btn.btn-small',
         { type: 'button', onclick: () => navigate(`#/venue/${show.venue_id}`) },
-        'Venue history',
+        'Full venue history',
       ),
       venueInfoButton(show),
     ]),

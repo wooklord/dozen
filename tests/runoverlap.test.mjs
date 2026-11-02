@@ -1,7 +1,8 @@
 // Run: node --test
 //
-// Home's "Previous set structures" card: the ORDER of its two lists and the
-// DIRECTION of the dedupe between them (0.1.72).
+// Home's card under the hero: the ORDER of its two lists and the DIRECTION of the
+// dedupe between them (0.1.72). Since 0.1.93 the venue list is the one visit the
+// card expands, and the run list is what renders under it.
 //
 // WHAT THIS COVERS AND WHY IT NEEDS A FIXTURE.
 //
@@ -138,11 +139,42 @@ test('deduping removes only the shared rows -- the rest of the run survives', ()
     ids(notShared),
     'the run list should keep every show the venue list is not already showing',
   );
-  assert.equal(
-    ids(venueRows).length,
-    ids(raw.venue).length,
+  assert.deepEqual(
+    ids(venueRows),
+    ids(raw.venue).slice(-VENUE_STRUCTURE_LIMIT).reverse(),
     'the venue list should be untouched by the dedupe',
   );
+});
+
+test('the venue list is the one visit the card expands, the newest (0.1.93)', () => {
+  // The visits before it were one-liners until 0.1.93. The anchor has three
+  // earlier visits, so a cap back at five renders three here and goes red.
+  const { index } = indexShifted(0);
+  const show = anchorIn(index, ANCHOR_DATE);
+  const raw = rawLists(index, show);
+  assert.equal(raw.venue.length, 3, 'the anchor no longer has older visits to leave out');
+
+  const { venueRows } = previousSetStructures(index, show);
+  assert.deepEqual(venueRows.map((s) => s.showdate), ['2022-06-11']);
+});
+
+test('the first night of a three-night stand renders in the run list (0.1.93)', () => {
+  // The reason the cap could go to 1. The anchor's run has one earlier night at
+  // this venue, so 2022-06-10's row is moved to it, the one synthesised field in
+  // this file: the anchor is then the last night of three, and the first of them
+  // is older than the one visit the card expands. It belongs to the run, and
+  // filtering the run list against the uncapped venue history would lose it from
+  // both lists.
+  const stand = buildIndex({
+    ...RAW,
+    shows: RAW.shows.map((r) =>
+      r.showdate === '2022-06-10' ? { ...r, venue_id: ANCHOR_VENUE } : r,
+    ),
+  });
+  const { venueRows, runRows } = previousSetStructures(stand, anchorIn(stand, ANCHOR_DATE));
+
+  assert.deepEqual(venueRows.map((s) => s.showdate), ['2022-06-11']);
+  assert.deepEqual(runRows.map((s) => s.showdate), ['2022-06-09', '2022-06-10']);
 });
 
 test('no show vanishes from both lists', () => {
@@ -165,12 +197,10 @@ test('no show vanishes from both lists', () => {
 });
 
 test('the dedupe follows the rows that RENDER, not the whole venue history', () => {
-  // The branch no real anchor can reach: a run-mate is within days of the
-  // anchor, so it is always among the newest venue shows and never falls off
-  // the cap. Shrinking the cap to zero is the only way to separate the two
-  // possible implementations, and they differ exactly here -- filtering the
-  // run list against the UNCAPPED venue history would make the shared show
-  // vanish from a card that is displaying neither list it belongs to.
+  // A cap of zero separates the two possible implementations on this fixture's
+  // own rows, and they differ exactly here -- filtering the run list against the
+  // UNCAPPED venue history would make the shared show vanish from a card that is
+  // displaying neither list it belongs to.
   const { index } = indexShifted(0);
   const show = anchorIn(index, ANCHOR_DATE);
   const raw = rawLists(index, show);
@@ -186,16 +216,20 @@ test('the dedupe follows the rows that RENDER, not the whole venue history', () 
 
 test('the venue list reads newest first and the run list reads forwards', () => {
   const { index } = indexShifted(0);
-  const { venueRows, runRows } = previousSetStructures(index, anchorIn(index, ANCHOR_DATE));
+  // A cap of 3 here, or one row is newest-first by having nothing to compare. The
+  // order decides which visit the default cap of 1 keeps.
+  const { venueRows } = previousSetStructures(index, anchorIn(index, ANCHOR_DATE), 3);
+  const { runRows } = previousSetStructures(index, anchorIn(index, ANCHOR_DATE));
 
   const dates = (rows) => rows.map((s) => s.showdate);
+  assert.equal(venueRows.length, 3, 'the anchor no longer has three visits to order');
   assert.deepEqual(
     dates(venueRows),
     [...dates(venueRows)].sort().reverse(),
     'venue list is not newest-first',
   );
   assert.deepEqual(dates(runRows), [...dates(runRows)].sort(), 'run list is not in date order');
-  assert.ok(venueRows.length <= VENUE_STRUCTURE_LIMIT, 'the venue list exceeded its cap');
+  assert.ok(runRows.length > 1, 'the run list has nothing to order');
 });
 
 test('the same case behaves identically when the anchor is an UPCOMING show', () => {

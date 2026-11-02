@@ -1305,13 +1305,15 @@ export function consecutiveRun(index, showdate, maxGapDays = 2) {
  * venue history. `limit` caps the venue list, and a show cut by that cap has
  * not been shown anywhere -- filtering the run list against the uncapped set
  * would make it vanish from both lists at once, which is the one failure this
- * ordering was chosen to avoid. `limit` exists so that property can be proved
- * rather than asserted: no real anchor can push a run-mate past the cap (a
- * run-mate is within days of the anchor, so it is always among the newest
- * venue shows), so the only way to exercise the branch is to shrink the cap.
- * The view never passes it.
+ * ordering was chosen to avoid.
+ *
+ * THE CAP IS 1 SINCE 0.1.93, when Home's card stopped listing the visits before
+ * the one it expands. It was 5 from 0.1.72. That makes the branch above a real
+ * one: on the last night of a three-night stand the first night is past the
+ * cap, and it renders in the run list. `limit` stays a parameter so a test can
+ * reach the zero case; the view never passes it.
  */
-export const VENUE_STRUCTURE_LIMIT = 5;
+export const VENUE_STRUCTURE_LIMIT = 1;
 
 export function previousSetStructures(index, show, limit = VENUE_STRUCTURE_LIMIT) {
   const played = (s) => s.showdate < show.showdate && index.setlistByShow.has(Number(s.show_id));

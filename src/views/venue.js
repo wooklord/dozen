@@ -14,7 +14,7 @@ import {
   venuePermalink,
   venueInfoLink,
   showPermalink,
-  sectionHead,
+  countedHead,
   emptyState,
   statTile,
   statValue,
@@ -96,7 +96,7 @@ export function renderVenue(ctx, venueId) {
 
   // --- Every show, newest first --------------------------------------------
   const listSection = el('div.section');
-  append(listSection, sectionHead(`Every show (${all.length})`));
+  append(listSection, countedHead('Every show', all.length));
 
   if (!all.length) {
     append(listSection, emptyState('No shows recorded at this venue.'));

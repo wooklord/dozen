@@ -1,8 +1,9 @@
 // Run: node --test
 //
-// formatMonthDay, the "On this date" header's formatter.
+// formatMonthDay, the formatter of the date line under Home's last head (in the
+// head itself until 0.1.93).
 //
-// It exists because the header rendered `md.replace('-', '/')` -- "10/15",
+// It exists because the head rendered `md.replace('-', '/')` -- "10/15",
 // the only numeric date anywhere in the UI, next to a card whose own date
 // reads "Wed Oct 15, 2025". Two spellings of the same day, two inches apart.
 

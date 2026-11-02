@@ -40,7 +40,7 @@ import { WHEN_STATES } from '../src/util/when.js';
 // Three ways a scoped run could report health it never established, each closed:
 // a mistyped name fails here before Chrome starts, a run that executes no check
 // fails in endRun(), and its verdict line says it was scoped and how much ran.
-const SECTIONS = ['nav-states', 'show-detail', 'song-detail', 'section-heads', 'jam-button', 'jam-notes', 'sheet', 'markup', 'stale-table'];
+const SECTIONS = ['nav-states', 'show-detail', 'song-detail', 'home', 'section-heads', 'jam-button', 'jam-notes', 'sheet', 'markup', 'stale-table'];
 const ONLY = parseOnly(process.argv.slice(2));
 
 function parseOnly(args) {
@@ -62,6 +62,10 @@ const want = (name) => {
   if (!SECTIONS.includes(name)) throw new Error(`a gate names "${name}", which is not in SECTIONS`);
   return !ONLY || ONLY.includes(name);
 };
+
+// The head over Home's last section, decided by what anchors it (0.1.93): the
+// upcoming show the hero names, or today between tours.
+const ON_DATE_HEAD = (hasHero) => (hasHero ? 'On the date of the show' : 'On this date');
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = 8123 + Math.floor(Math.random() * 400);
@@ -114,6 +118,7 @@ const server = http.createServer((req, res) => {
 
 let failures = 0;
 let checks = 0;
+let checksAtBoot = 0;
 const problems = [];
 const fail = (msg) => { checks++; failures++; problems.push(msg); console.log(`  FAIL  ${msg}`); };
 const pass = (msg) => { checks++; console.log(`  ok    ${msg}`); };
@@ -679,6 +684,7 @@ async function run() {
 
   if (ONLY) {
     console.log(`SCOPED RUN: ${ONLY.join(', ')}`);
+    checksAtBoot = checks;
     if (want('nav-states')) await navStates();
     await noteSections();
     await endRun();
@@ -2374,7 +2380,7 @@ async function run() {
       const venueLine = document.querySelector('.screen .venue-line');
       const venueName = venueLine ? venueLine.textContent.split('·')[0].trim() : null;
       const titles = [...document.querySelectorAll('.section-title')].map((n) => n.textContent.trim());
-      const btn = [...document.querySelectorAll('.btn-small')].find((b) => b.textContent.trim() === 'Venue history');
+      const btn = [...document.querySelectorAll('.btn-small')].find((b) => b.textContent.trim() === 'Full venue history');
       const link = btn ? btn.parentElement.querySelector('.carton-link') : null;
       const grid = document.querySelector('.stat-grid');
       const cs = link ? getComputedStyle(link) : null;
@@ -2400,10 +2406,10 @@ async function run() {
     } else pass(`${theme}: no header repeats "${home.venueName}"`);
 
     if (!home.sameRow) {
-      fail(`Home (${theme}): the Carton link is not in the Venue history action row`);
+      fail(`Home (${theme}): the Carton link is not in the Full venue history action row`);
     } else if (Math.abs(home.btnMid - home.linkMid) > 1) {
       fail(`Home (${theme}): link is not centred against the button (${Math.round(home.linkMid - home.btnMid)}px off)`);
-    } else pass(`${theme}: Carton link sits beside Venue history, centred to within 1px`);
+    } else pass(`${theme}: Carton link sits beside Full venue history, centred to within 1px`);
 
     // The stats sit under the venue line, not under a header that is gone.
     if (home.gridTop === null) fail(`Home (${theme}): no stat grid`);
@@ -2417,7 +2423,7 @@ async function run() {
   await evaluate(`location.hash = '#/home';`);
   await sleep(1400);
   const homeLink = await evaluate(`(() => {
-    const btn = [...document.querySelectorAll('.btn-small')].find((b) => b.textContent.trim() === 'Venue history');
+    const btn = [...document.querySelectorAll('.btn-small')].find((b) => b.textContent.trim() === 'Full venue history');
     const l = btn && btn.parentElement.querySelector('.carton-link');
     if (!l) return null;
     const c = getComputedStyle(l);
@@ -2457,7 +2463,7 @@ async function run() {
   //     of equal rank. Measured as a comparison, never against 11px: a type
   //     scale retune must move both together or fail here.
   //
-  // And the order: the hero first, "On this date" last. Asserted by position in
+  // And the order: the hero first, the date section last. Asserted by position in
   // the rendered document, not by reading the source.
   console.log('\nHome hierarchy:');
   for (const theme of ['dark', 'light']) {
@@ -2511,174 +2517,15 @@ async function run() {
       fail(`Home (${theme}): the countdown is ${h.kickerSize}px against section titles at ${minTitle}px — it must be smaller`);
     } else pass(`${theme}: countdown ${h.kickerSize}px under section titles at ${minTitle}px`);
 
-    if (!/^on this date/i.test(String(h.lastSectionTitle || '').trim())) {
-      fail(`Home (${theme}): the last section is ${JSON.stringify(h.lastSectionTitle)}, expected "On this date"`);
-    } else pass(`${theme}: "On this date" is the last section on the page`);
+    const lastWanted = ON_DATE_HEAD(h.heroes > 0);
+    if (String(h.lastSectionTitle || '').trim() !== lastWanted) {
+      fail(`Home (${theme}): the last section is ${JSON.stringify(h.lastSectionTitle)}, expected "${lastWanted}"`);
+    } else pass(`${theme}: "${lastWanted}" is the last section on the page`);
   }
   await evaluate(`document.documentElement.removeAttribute('data-theme');`);
 
-  // --- The merged "Previous shows" card says each show ONCE (0.1.74) --------
-  //
-  // "Previous set structures" and "Last time at {venue}" were two sections over
-  // the same history, and the structure list's top row WAS the show in the card
-  // below it: Toad's Place printed "Nov 26, 2025  S1+S2+E" and then, 250px
-  // lower, "Wed, Nov 26, 2025" with SET 1 / SET 2 / ENCORE spelled out.
-  //
-  // WHAT THIS CHECK IS FOR: the merged card on a venue WITH a prior visit --
-  // the most recent visit expanded as a setlist, the visits before it as
-  // one-liners in the same card's foot, each show printed once.
-  //
-  // THIS NEEDS A SHOW THAT ACTUALLY HAS VENUE HISTORY. The default selection is
-  // whichever upcoming show is next, and that is often a venue with none: Home
-  // then renders the run-only card ("Earlier in this run" over one-liners) or
-  // the empty state, and there is no visit to expand. The first version of this
-  // walk broke on "the section has one-liners", which run rows also satisfy, and
-  // then asserted a setlist body -- so on 2026-10-18, with the next show at a
-  // never-played venue inside a three-show run, it reported the app broken when
-  // the app was right. Same shape as every other failure in CLAUDE.md: a
-  // condition wider than the thing asserted.
-  //
-  // WHETHER THE VENUE HAS HISTORY IS READ FROM THE VENUE SCREEN, not from the
-  // card being tested and not from the hero's "shows played here" count. The
-  // card is the thing under test, so it cannot be its own witness; the hero
-  // count includes visits WITHOUT a setlist (Toad's Place: 12 played, 3 with
-  // setlists), and the card expands the newest visit WITH one. The venue screen
-  // puts .badge-set on exactly the rows that have setlist rows, so its count is
-  // the same universe. The walk hops there via the hero's "Venue history" button
-  // and back; the picked show survives the hop in localStorage.
-  //
-  // Three outcomes per picked show, and the first two are asserted:
-  //   venue has setlist shows, card has no setlist body  -> FAIL (the bug)
-  //   venue has none, section has run one-liners         -> run-only shape
-  //   venue has setlist shows, body AND one-liners        -> the merge, below
-  // If no upcoming show reaches the merge, that reports SKIP, not a green tick.
-  console.log('\nHome merges the venue history into one card:');
-  await evaluate(`location.hash = '#/home';`);
-  await sleep(1400);
-  const pickerCount = await evaluate(`(() => {
-    const c = [...document.querySelectorAll('.screen .chip')].find((x) => x.textContent.trim() === 'Change');
-    if (!c) return 0;
-    c.click();
-    const n = document.querySelectorAll('.sheet .sheet-item').length;
-    const back = document.querySelector('.sheet-backdrop');
-    if (back) back.click();
-    return n;
-  })()`);
-
-  let merged = null;
-  let runOnly = null;
-  let notExpanded = null;
-  for (let i = 0; i < pickerCount; i++) {
-    await evaluate(`(() => {
-      const c = [...document.querySelectorAll('.screen .chip')].find((x) => x.textContent.trim() === 'Change');
-      if (c) c.click();
-      const items = document.querySelectorAll('.sheet .sheet-item');
-      if (items[${i}]) items[${i}].click();
-    })()`);
-    await sleep(1400);
-    const probe = await evaluate(`(() => {
-      const heads = [...document.querySelectorAll('.screen .section-head')];
-      const prev = heads.find((n) => /previous/i.test(n.textContent));
-      const card = prev && prev.parentElement.querySelector('.card');
-      if (!card) return null;
-      const headDate = (card.firstElementChild || {}).textContent || '';
-      const foot = card.querySelector('.card-foot');
-      return {
-        sections: [...document.querySelectorAll('.screen .section-title')].map((n) => n.textContent.trim()),
-        headDate: headDate.trim(),
-        hasSetlist: !!card.querySelector('.setlist-card-body'),
-        // EVERY visit one-liner in the section, and separately the ones sitting
-        // in the foot. Selecting only the foot would make a build that renders
-        // no foot at all look like a show with no older visits -- the walk would
-        // run out and report SKIP, which is how the pre-merge layout would have
-        // slipped past the check written to describe the merge.
-        //
-        // .visit-list, NOT .fn-list. The merged card holds two fn-lists -- these
-        // rows and the setlist's own footnotes -- so the broader selector
-        // counted footnotes as visits, and this check passed its first green run
-        // only because the show it walked to had a setlist with none. Exactly
-        // the house failure: a real number about a wider universe than the
-        // output implies.
-        listRows: [...prev.parentElement.querySelectorAll('.visit-list li')].map((li) => li.textContent.trim()),
-        footRows: foot ? [...foot.querySelectorAll('.visit-list li')].map((li) => li.textContent.trim()) : [],
-        cards: prev.parentElement.querySelectorAll('.card').length,
-        hasFoot: !!foot,
-        runTitle: [...prev.parentElement.querySelectorAll('.section-title')].some((n) => /earlier in this run/i.test(n.textContent)),
-        actionsBeforeFoot: !!(foot && card.querySelector('.card-actions') &&
-          card.querySelector('.card-actions').compareDocumentPosition(foot) & Node.DOCUMENT_POSITION_FOLLOWING),
-      };
-    })()`);
-    if (!probe) continue; // no Previous shows card at all -- nothing to say about this show
-
-    // Independent witness: how many shows WITH a setlist the venue screen lists.
-    const hopped = await evaluate(`(() => {
-      const b = [...document.querySelectorAll('.hero .card-actions .btn-small')].find((x) => x.textContent.trim() === 'Venue history');
-      if (!b) return false; b.click(); return true;
-    })()`);
-    if (!hopped) { fail(`Home: picker item ${i} renders no "Venue history" button on the hero`); break; }
-    await sleep(1000);
-    const venue = await evaluate(`(() => {
-      const head = [...document.querySelectorAll('.screen .section-head')].find((n) => /every show/i.test(n.textContent));
-      if (!head) return null;
-      return { hash: location.hash, setlistShows: head.parentElement.querySelectorAll('.badge-set').length };
-    })()`);
-    await evaluate(`location.hash = '#/home';`);
-    await sleep(1400);
-    if (!venue || !String(venue.hash).startsWith('#/venue/')) {
-      fail(`Home: picker item ${i}: "Venue history" did not land on a venue screen (${venue ? venue.hash : 'no Every show section'})`);
-      break;
-    }
-
-    if (venue.setlistShows > 0 && !probe.hasSetlist) {
-      notExpanded = { i, venue, probe };
-      break;
-    }
-    if (venue.setlistShows === 0 && probe.listRows.length && !runOnly) runOnly = { i, probe };
-    if (venue.setlistShows > 0 && probe.hasSetlist && probe.listRows.length) { merged = probe; break; }
-  }
-
-  if (runOnly) {
-    const p = runOnly.probe;
-    const wrong = [
-      p.hasSetlist ? 'a setlist body' : null,
-      p.hasFoot ? 'a .card-foot' : null,
-      !p.runTitle ? 'no "Earlier in this run" title' : null,
-      p.cards !== 1 ? `${p.cards} cards` : null,
-    ].filter(Boolean);
-    if (wrong.length) fail(`Home: a venue with no prior visit renders ${wrong.join(', ')} -- expected one run-only card`);
-    else pass(`run-only shape: one card, "Earlier in this run" over ${p.listRows.length} one-liner(s), no setlist, no foot (picker item ${runOnly.i})`);
-  }
-
-  if (notExpanded) {
-    fail(`Home: the venue screen lists ${notExpanded.venue.setlistShows} show(s) with a setlist, but the Previous shows card renders no setlist -- the most recent visit is not expanded (picker item ${notExpanded.i})`);
-  } else if (!merged) {
-    skip(`no upcoming show has a prior visit with a setlist AND older one-liners (walked ${pickerCount} show(s)) -- the merge could not be exercised`);
-  } else if (merged.footRows.length !== merged.listRows.length) {
-    fail(`Home: ${merged.listRows.length - merged.footRows.length} one-liner(s) sit outside the expanded card's foot — the two sections are still two objects`);
-  } else {
-    // The date heading the expanded card, reduced to "Mon D, YYYY" so it can be
-    // compared against the short form the one-liners use.
-    const shortHead = merged.headDate.replace(/^[A-Za-z]{3},\s*/, '');
-    const dupes = merged.footRows.filter((r) => r.includes(shortHead));
-    if (dupes.length) {
-      fail(`Home: ${JSON.stringify(shortHead)} is both the expanded card and a one-liner below it — ${JSON.stringify(dupes)}`);
-    } else pass(`the expanded visit ${JSON.stringify(shortHead)} appears once; ${merged.footRows.length} older visit(s) below it`);
-
-    if (merged.cards !== 1) {
-      fail(`Home: the Previous shows section holds ${merged.cards} cards, expected 1 — the two sections are still two objects`);
-    } else pass(`one card: setlist + ${merged.footRows.length} one-liner(s)`);
-
-    if (!merged.actionsBeforeFoot) {
-      fail('Home: the older visits do not follow the action row — "Show detail" would read as applying to the whole list');
-    } else pass('older visits sit below the action row, behind a rule');
-
-    const stale = merged.sections.filter((t) => /last time at|previous set structures/i.test(t));
-    if (stale.length) fail(`Home: a pre-merge header is still rendering — ${JSON.stringify(stale)}`);
-    else pass(`headers: ${JSON.stringify(merged.sections)}`);
-  }
-  await evaluate(`localStorage.removeItem('dozen.selectedShow.v1');`);
-  await evaluate(`location.hash = '#/home';`);
-  await sleep(1200);
+  // The section under the hero and the date section are read in the scoped `home`
+  // section below, across every upcoming show.
 
   // --- Venue text is one size everywhere it is not in a row -----------------
   //
@@ -2768,85 +2615,6 @@ async function run() {
   else if (rowSize.clipped !== rowSize.n) fail("venue size: " + (rowSize.n - rowSize.clipped) + " of " + rowSize.n + " row lines are sized down without truncating");
   else pass("dense rows: " + rowSize.n + " lines at " + rowSize.sizes[0] + "px, all truncating");
   await evaluate("document.documentElement.removeAttribute('data-theme');");
-
-  // --- "On this date" names its month ---------------------------------------
-  //
-  // The header rendered "10/15" while the card directly beneath it rendered
-  // "Wed Oct 15, 2025". Compared against THE CARDS, not against a literal
-  // month name: the assertion is that the two agree, which is what was wrong,
-  // and it cannot be satisfied by a header that merely looks date-shaped.
-  console.log('\n"On this date" header:');
-  await evaluate("location.hash = '#/home';");
-  await sleep(1500);
-  const otd = await evaluate(`(() => {
-    const h = [...document.querySelectorAll('.section-title')].find((n) => /on this date/i.test(n.textContent));
-    if (!h) return { found: false };
-    const section = h.closest('.section');
-    // RAW TEXT OUT, MATCHING DONE IN NODE. A backslash-d inside this template
-    // literal is not an escape -- it collapses to a literal "d" before the
-    // page ever sees it, so a date regex written here matches nothing and the
-    // caller reads that as "no dates on screen" and reports SKIPPED. Which is
-    // exactly what the first version of this did: it read as a legitimate
-    // quiet run and was a broken probe. No backslashes go inside this string.
-    const hero = document.querySelector('.screen .screen-title');
-    return {
-      found: true,
-      text: h.textContent.trim(),
-      heroText: hero ? hero.textContent.trim() : null,
-      cardTexts: section ? [...section.querySelectorAll('.card')].map((c) => c.textContent) : [],
-    };
-  })()`);
-
-  // "Fri, Sep 4, 2026" -- the weekday carries a comma. Written without one the
-  // first time, which matched nothing and read as "no dates on screen".
-  const DATE_RE = /[A-Z][a-z]{2},? [A-Z][a-z]{2} \d{1,2}, \d{4}/;
-  otd.heroDate = otd.heroText ? (otd.heroText.match(DATE_RE) || [])[0] || null : null;
-  otd.cardDates = (otd.cardTexts || []).map((t) => (t.match(DATE_RE) || [])[0]).filter(Boolean);
-
-  // TWO SEPARATE CLAIMS, REPORTED SEPARATELY. The format assertion holds every
-  // run; the agreement cross-check needs another date on screen to compare
-  // against, and there is not always one. Folding them together let a real
-  // pass disappear into a SKIPPED line on the first run of this check.
-  let mday = null;
-  if (!otd.found) fail('"On this date": header not found on Home');
-  else if (/\d+\s*\/\s*\d+/.test(otd.text)) fail('"On this date": still numeric - ' + JSON.stringify(otd.text));
-  else {
-    mday = otd.text.match(/\(([A-Z][a-z]{2}) (\d{1,2})\)/);
-    if (!mday) fail('"On this date": header does not name a month and day - ' + JSON.stringify(otd.text));
-    else pass('header names its month: ' + JSON.stringify(otd.text));
-  }
-
-  if (mday) {
-    // Prefer the HERO date. The section anchors off the upcoming show, whose
-    // date is the h1 at the top of the same screen, so that comparison is
-    // available on every run -- unlike the anniversary cards, which only exist
-    // when the archive happens to hold a show on this calendar day. Both are
-    // the same claim: the header and the dates around it name one day.
-    const against = otd.heroDate ? [otd.heroDate] : otd.cardDates;
-    const source = otd.heroDate ? 'the show it anchors on' : otd.cardDates.length + ' cards beneath it';
-    if (!against.length && (otd.cardTexts || []).length) {
-      // Cards on screen and not one parseable date in them is a BROKEN PROBE,
-      // not a quiet run, and the two must not report the same way. This is how
-      // the missing comma in DATE_RE was found: it skipped, looking exactly
-      // like a legitimate "no anniversaries today".
-      fail(
-        '"On this date": ' + otd.cardTexts.length + ' card(s) on screen and no date parsed out of any of them' +
-        ' — hero read ' + JSON.stringify(otd.heroText),
-      );
-    } else if (!against.length) {
-      // No cards and a hero with no date in it ("Nothing on the books") is a
-      // real state and proves nothing about agreement. Says what it saw, so a
-      // future probe failure cannot hide here either.
-      console.log(
-        '  SKIPPED  nothing to compare ' + JSON.stringify(otd.text) + ' against — hero read ' +
-        JSON.stringify(otd.heroText) + ', 0 cards',
-      );
-    } else {
-      const disagree = against.filter((d) => !d.includes(mday[1] + ' ' + mday[2] + ','));
-      if (disagree.length) fail('"On this date": header ' + JSON.stringify(otd.text) + ' disagrees with ' + JSON.stringify(disagree));
-      else pass(JSON.stringify(otd.text) + ' agrees with ' + source + ' (' + against.join(', ') + ')');
-    }
-  }
 
   // --- The venues with a blank field render a sane place line --------------
   //
@@ -2991,8 +2759,8 @@ async function run() {
   // before the page sees it, which is how the "On this date" probe silently
   // matched nothing in 0.1.67.
   console.log('\nvenue named in more than one header:');
-  // Section titles that may contain the screen title, per route, normalised and
-  // with any trailing count stripped -- the same reviewed-exception shape Rule 2
+  // Section titles that may contain the screen title, per route, normalised --
+  // the same reviewed-exception shape Rule 2
   // uses, and for the same reason: an invisible exception is how the last one
   // survived a sweep.
   //
@@ -3039,26 +2807,16 @@ async function run() {
     const rows = dom.rowTitles.map(norm);
     const names = [...new Set(dom.venueNames.map(norm))].filter((n) => n.length >= 3);
 
-    // Rule 1 — a section title echoing the screen title.
-    //
-    // A COUNT HEADER IS NOT AN ECHO. Shows renders an h1 "Shows" over a
-    // section head "Shows (63)", and Songs and the venue screen do the same
-    // thing: the section title IS the screen title plus a count, which is a
-    // deliberate pattern and says something the h1 does not. The defect this
-    // rule is for is the screen title EMBEDDED IN A LONGER PHRASE -- "Every
-    // show at Toad's Place" under an h1 already reading "Toad's Place".
-    //
-    // So the parenthetical is stripped first, and an exact match after that is
-    // allowed. Anything still containing the title with other words around it
-    // is the echo. Found by the check going red on #/shows, which is the right
-    // way round: narrowed, not switched off.
-    const stripCount = (s) => s.replace(/\s*\([^)]*\)\s*$/, '').trim();
+    // Rule 1 — a section title echoing the screen title. The defect is the screen
+    // title in a head at all: "Every show at Toad's Place" under an h1 already
+    // reading "Toad's Place". It used to strip a trailing "(N)" and allow an exact
+    // match, for heads like "Shows (63)" under an h1 reading "Shows"; since 0.1.93
+    // no title carries a count, so there is nothing to strip and no such allowance.
     const allowed = SECTION_TITLE_ECHOES_ALLOWED[r.hash] || [];
     const echoes = [];
     for (const t of titles) {
       for (const s of sections) {
-        const bare = stripCount(s);
-        if (bare !== t && bare.includes(t) && !allowed.includes(bare)) echoes.push({ t, s });
+        if (s.includes(t) && !allowed.includes(s)) echoes.push({ t, s });
       }
     }
     if (echoes.length) {
@@ -4998,10 +4756,19 @@ async function run() {
         fetch('https://thecarton.net/api/v2/setlists.json?limit=20000'),
         fetch('https://thecarton.net/api/v2/jamcharts.json?limit=20000'),
       ]);
-      noteRows = (await s.json()).data;
-      noteTable = (await j.json()).data;
+      const sBody = await s.json();
+      const jBody = await j.json();
+      // Carton's rate limit answers with a well-formed envelope and no rows, so
+      // nothing throws, and every section below simply would not run: on
+      // 2026-11-02 that printed no line at all and read SMOKE PASSED.
+      if (!sBody.data?.length || !jBody.data?.length) {
+        skip(`no section below ran: The Carton answered its tables with no rows (setlists ${JSON.stringify(sBody.error_message)}, jamcharts ${JSON.stringify(jBody.error_message)})`);
+      } else {
+        noteRows = sBody.data;
+        noteTable = jBody.data;
+      }
     } catch (err) {
-      skip(`jam chart notes not checked: The Carton's tables could not be read (${err.message})`);
+      skip(`no section below ran: The Carton's tables could not be read (${err.message})`);
     }
     if (noteRows && noteTable) {
       const squeeze = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
@@ -5527,6 +5294,267 @@ async function run() {
         else pass(`song 275: the first card's date (${tapped}) opens its show, ${landed.hash}, headed the same`);
       }
 
+      // --- Home: the date section, the section under the hero, the venue button -
+      //
+      // docs/plan.md, "Song and show page presentation", the 0.1.93 amendment.
+      // Scopable, so the proofs re-run it alone. The two checks it replaces sat
+      // before the sections and crossed no name into the rest.
+      //
+      // THE DATE SECTION. The head is the one its branch renders, decided by the
+      // hero on the screen. The line directly under it names the day: the hero's
+      // month and day with a show, today's without, and every card's date agrees.
+      // The head once read "10/15" over a card reading "Wed Oct 15, 2025", which is
+      // why the line is compared with the dates around it and not with a shape. The
+      // badge counts the cards. RAW TEXT OUT, MATCHING IN NODE: a backslash inside
+      // an evaluate string collapses before the page sees it, which is how a date
+      // probe here once matched nothing and read as a quiet run.
+      //
+      // THE SECTION UNDER THE HERO, across every upcoming show, because its branch
+      // depends on the show. Whether a venue has history is read from the venue
+      // page and not from the card under test: the card cannot be its own witness,
+      // and the hero's count includes visits with no setlist (Toad's Place: 12
+      // played, 3 with setlists), where the venue page puts .badge-set on exactly
+      // the rows that have setlist rows. Each head has to be true of what is under
+      // it, the expanded visit has to be the venue page's newest setlist, and no
+      // visit list may sit outside a run block, and the expanded show may not also
+      // be a row beneath it, the 0.1.74 check this replaces: the run list keeps that
+      // risk though the venue list went. Only a venue with two or more
+      // setlists could show that last fault, since that is where the one-liners
+      // lived, so a walk that reaches none reports SKIP and not a green line.
+      //
+      // Run rows are absent between tours and early in one, because a run's earlier
+      // nights have no setlists yet. The tally says how many shows reached each
+      // branch, so a run where one went unreached reads as that.
+      //
+      // THE VENUE BUTTON. One label on both screens, and one line at 360 on both,
+      // read by each control's centre because Home's row holds a 36px button beside
+      // a 44px link. Then the press: it has to reach the page of the venue the
+      // screen names.
+      if (want('home')) {
+        const T_JS = `const t = (n) => ((n || {}).textContent || '').trim();`;
+        const homeFresh = async () => {
+          await evaluate(`location.hash = '#/songs';`);
+          await sleep(300);
+          await evaluate(`location.hash = '#/home';`);
+          await sleep(1300);
+        };
+        const READ_ON_DATE = `(() => { ${T_JS}
+          const all = [...document.querySelectorAll('#main .section[data-section="on-date"]')];
+          const s = all[0];
+          const hero = document.querySelector('#main .hero');
+          const out = { sections: all.length, hero: !!hero, heroDate: hero ? t(hero.querySelector('.screen-title')) : null,
+            today: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) };
+          if (!s) return out;
+          const head = s.firstElementChild;
+          const title = head.querySelector('.section-title');
+          if (!title) return { ...out, title: null };
+          const badge = head.querySelector(':scope > .badge');
+          const line = head.nextElementSibling;
+          const range = document.createRange();
+          range.selectNodeContents(title);
+          return { ...out, isHead: head.matches('.section-head'), title: t(title),
+            titleLines: new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size,
+            badge: badge ? { text: t(badge), cls: badge.className } : null,
+            line: line ? { text: t(line), cls: line.className } : null,
+            cards: [...s.querySelectorAll(':scope > .card')].map((c) => t(c.firstElementChild)),
+            empty: !!s.querySelector(':scope > .empty') };
+        })()`;
+        const dayOf = (d) => (String(d || '').match(/^[A-Z][a-z]{2}, ([A-Z][a-z]{2} \d{1,2}), \d{4}/) || [])[1] || null;
+        const onDateProblems = (r) => {
+          if (r.sections !== 1) return [`${r.sections} section(s) carry data-section="on-date", the route marker's half`];
+          const p = [];
+          if (!r.isHead) p.push('the section does not open with a .section-head');
+          const wantHead = ON_DATE_HEAD(r.hero);
+          if (r.title !== wantHead) p.push(`the head reads ${JSON.stringify(r.title)}, and ${r.hero ? 'a hero' : 'no hero'} on the screen wants ${JSON.stringify(wantHead)}`);
+          if (r.titleLines !== 1) p.push(`the head runs to ${r.titleLines} line(s)`);
+          const wantDay = r.hero ? dayOf(r.heroDate) : r.today;
+          if (!wantDay) p.push(`no month and day parsed out of the hero's date ${JSON.stringify(r.heroDate)}, so the line under the head went unchecked`);
+          if (!r.line || r.line.cls !== 'screen-sub') p.push(`the head is followed by ${JSON.stringify(r.line)}, not the .screen-sub date line`);
+          else if (wantDay && r.line.text !== wantDay) p.push(`the line under the head reads ${JSON.stringify(r.line.text)}, the anchor's month and day is ${JSON.stringify(wantDay)}`);
+          if (!r.badge) p.push('no badge on the head');
+          else {
+            if (r.badge.cls !== 'badge') p.push(`the head's badge is class ${JSON.stringify(r.badge.cls)}, not the plain .badge`);
+            if (Number(r.badge.text) !== (r.cards || []).length) p.push(`the head's badge reads ${JSON.stringify(r.badge.text)}, ${(r.cards || []).length} card(s) listed`);
+          }
+          if (!(r.cards || []).length && !r.empty) p.push('no cards and no empty state under the head');
+          const off = (r.cards || []).filter((c) => dayOf(c) !== wantDay);
+          if (off.length) p.push(`${off.length} card(s) not on ${wantDay}, e.g. ${JSON.stringify(off[0].slice(0, 40))}`);
+          return p;
+        };
+
+        console.log('\nHome: the date section:');
+        await evaluate(`localStorage.removeItem('dozen.selectedShow.v1');`);
+        for (const w of [360, 390]) {
+          await send('Emulation.setDeviceMetricsOverride', { width: w, height: 844, deviceScaleFactor: 2, mobile: true });
+          await homeFresh();
+          const r = await evaluate(READ_ON_DATE);
+          const p = onDateProblems(r);
+          if (p.length) for (const x of p) fail(`Home at ${w}: ${x}`);
+          else pass(`at ${w}: ${JSON.stringify(r.title)} on one line, badge ${r.badge.text} over ${r.cards.length} card(s), ${JSON.stringify(r.line.text)} directly under it, the day of the hero and of every card`);
+        }
+
+        console.log('\nHome: the section under the hero, across the upcoming shows:');
+        const READ_UNDER_HERO = `(() => { ${T_JS}
+          const hero = document.querySelector('#main .screen .hero');
+          if (!hero) return null;
+          const s = hero.nextElementSibling;
+          if (!s || !s.matches('.section')) return { noSection: true };
+          const head = s.firstElementChild;
+          const headText = head && head.matches('.section-head') ? t(head.querySelector('.section-title')) : null;
+          const cards = [...s.querySelectorAll(':scope > .card')];
+          const card = cards[0] || null;
+          const foot = card ? card.querySelector(':scope > .card-foot') : null;
+          const actions = card ? card.querySelector(':scope > .card-actions') : null;
+          const footHead = foot ? foot.firstElementChild : null;
+          return { head: headText, titles: [...s.querySelectorAll('.section-title')].map(t), cards: cards.length,
+            hasSetlist: !!(card && card.querySelector('.setlist-card-body')),
+            cardDate: card && card.querySelector('.setlist-card-body') ? t(card.firstElementChild) : null,
+            note: card ? t(card.querySelector(':scope > .note')) : '',
+            hasFoot: !!foot,
+            footHead: footHead && footHead.matches('.section-head') ? t(footHead.querySelector('.section-title')) : null,
+            footRule: footHead ? getComputedStyle(footHead).borderTopWidth : null,
+            footBorder: foot ? getComputedStyle(foot).borderTopWidth : null,
+            footAfterActions: !!(foot && actions && (actions.compareDocumentPosition(foot) & Node.DOCUMENT_POSITION_FOLLOWING)),
+            lists: [...s.querySelectorAll('.visit-list')].map((ul) => {
+              const prev = ul.previousElementSibling;
+              const underRunHead = !!prev && prev.matches('.section-head') && t(prev.querySelector('.section-title')) === 'Earlier in this run';
+              const aloneInCard = ul.parentElement.matches('.card') && ul.parentElement.children.length === 1 && headText === 'Earlier in this run';
+              return { rows: ul.children.length, rowTexts: [...ul.children].map(t), inRunBlock: (ul.parentElement === foot && underRunHead) || aloneInCard, first: t(ul.firstElementChild) };
+            }) };
+        })()`;
+        const READ_VENUE_PAGE = `(() => { ${T_JS}
+          const head = [...document.querySelectorAll('#main .section-head')].find((n) => t(n.querySelector('.section-title')) === 'Every show');
+          if (!head) return { hash: location.hash, setlisted: null };
+          return { hash: location.hash, setlisted: [...head.parentElement.querySelectorAll(':scope > .rows > li')].filter((li) => li.querySelector('.badge-set')).map((li) => t(li.querySelector('.row-title'))) };
+        })()`;
+        await homeFresh();
+        const picks = await evaluate(`(() => {
+          const c = [...document.querySelectorAll('.screen .chip')].find((x) => x.textContent.trim() === 'Change');
+          if (!c) return 0;
+          c.click();
+          const n = document.querySelectorAll('.sheet .sheet-item').length;
+          const back = document.querySelector('.sheet-backdrop');
+          if (back) back.click();
+          return n;
+        })()`);
+        await sleep(400);
+        const tally = { visit: 0, visitAndRun: 0, runOnly: 0, neither: 0 };
+        let walked = 0;
+        let older = 0;
+        let bad = 0;
+        const report = (where, p) => { for (const x of p) { bad++; fail(`Home, ${where}: ${x}`); } };
+        for (let i = 0; i < Math.max(picks, 1); i++) {
+          if (picks) {
+            await evaluate(`(() => {
+              const c = [...document.querySelectorAll('.screen .chip')].find((x) => x.textContent.trim() === 'Change');
+              if (c) c.click();
+              const items = document.querySelectorAll('.sheet .sheet-item');
+              if (items[${i}]) items[${i}].click();
+            })()`);
+            await sleep(1400);
+          }
+          const under = await evaluate(READ_UNDER_HERO);
+          if (!under) break;
+          if (under.noSection) { report(`picker item ${i}`, ['the hero is not followed by a .section']); break; }
+          const date = await evaluate(READ_ON_DATE);
+          const where = `picker item ${i} (${date.heroDate})`;
+          report(where, onDateProblems(date));
+
+          // The independent witness: the venue page behind the hero's button.
+          const hopped = await evaluate(`(() => {
+            const b = [...document.querySelectorAll('.hero .card-actions .btn-small')].find((x) => x.textContent.trim() === 'Full venue history');
+            if (!b) return false; b.click(); return true;
+          })()`);
+          if (!hopped) { report(where, ['no "Full venue history" button on the hero']); break; }
+          await sleep(1000);
+          const venue = await evaluate(READ_VENUE_PAGE);
+          await evaluate(`location.hash = '#/home';`);
+          await sleep(1400);
+          if (!venue.setlisted || !String(venue.hash).startsWith('#/venue/')) {
+            report(where, [`"Full venue history" landed on ${venue.hash}, with ${venue.setlisted ? 'an' : 'no'} Every show section`]);
+            break;
+          }
+          walked++;
+
+          const p = [];
+          const stale = under.titles.filter((x) => /previous shows|previous set structures|last time at/i.test(x));
+          if (stale.length) p.push(`a head that went in 0.1.93 is still rendering, ${JSON.stringify(stale)}`);
+          const outside = under.lists.filter((l) => !l.inRunBlock);
+          if (outside.length) p.push(`a visit list outside a run block, ${outside[0].rows} row(s), e.g. ${JSON.stringify(outside[0].first)}`);
+          if (venue.setlisted.length) {
+            if (venue.setlisted.length >= 2) older++;
+            if (under.head !== 'Earlier at this venue') p.push(`the venue page lists ${venue.setlisted.length} show(s) with a setlist and the section is headed ${JSON.stringify(under.head)}`);
+            if (under.cards !== 1) p.push(`${under.cards} cards, expected 1`);
+            if (!under.hasSetlist) p.push(`the venue page lists ${venue.setlisted.length} show(s) with a setlist, and the card expands none`);
+            else if (under.cardDate !== venue.setlisted[0]) p.push(`the card expands ${JSON.stringify(under.cardDate)}, and the venue page's newest setlist is ${JSON.stringify(venue.setlisted[0])}`);
+            const shortDate = under.cardDate ? under.cardDate.slice(under.cardDate.indexOf(', ') + 2) : '';
+            const dupes = shortDate ? under.lists.flatMap((l) => l.rowTexts).filter((x) => x.includes(shortDate)) : [];
+            if (dupes.length) p.push(`${JSON.stringify(shortDate)} is both the expanded card and a row beneath it, ${JSON.stringify(dupes)}`);
+            if (under.hasFoot) {
+              if (under.footBorder !== '1px') p.push(`the foot's own rule is ${under.footBorder}, and the head opening it carries none`);
+              if (under.footHead !== 'Earlier in this run') p.push(`the card's foot opens with ${JSON.stringify(under.footHead)}, not the "Earlier in this run" head`);
+              if (under.footRule !== '0px') p.push(`the foot's head draws its own ${under.footRule} rule under the foot's`);
+              if (!under.footAfterActions) p.push('the foot does not follow the action row, so "Show detail" reads as applying to the whole list');
+              tally.visitAndRun++;
+            } else tally.visit++;
+          } else if (under.lists.length) {
+            if (under.head !== 'Earlier in this run') p.push(`no visit, run rows only, and the section is headed ${JSON.stringify(under.head)}`);
+            if (under.titles.length !== 1) p.push(`no visit, run rows only, and ${under.titles.length} heads, ${JSON.stringify(under.titles)}`);
+            if (under.cards !== 1 || under.hasSetlist || under.hasFoot) p.push(`no visit, run rows only, and ${under.cards} card(s), setlist ${under.hasSetlist}, foot ${under.hasFoot}`);
+            tally.runOnly++;
+          } else {
+            if (under.head !== 'Earlier at this venue') p.push(`no visit and no run rows, and the section is headed ${JSON.stringify(under.head)}`);
+            if (under.cards !== 1 || !under.note) p.push(`no visit and no run rows, and ${under.cards} card(s) with the note ${JSON.stringify(under.note)}`);
+            tally.neither++;
+          }
+          report(where, p);
+        }
+        // SKIP is for a Home with no hero to walk, which is correct between tours. A
+        // walk stopped by a fault has already said so, and one that stops early is
+        // a fault of its own: "walked 1" would otherwise read as a green line.
+        if (!walked) {
+          if (!bad) skip('no hero on Home, so the section under it was not walked');
+        } else {
+          if (picks && walked !== picks) report('the walk', [`it stopped after ${walked} of ${picks} upcoming show(s)`]);
+          if (!older) skip(`none of ${walked} upcoming show(s) is at a venue with two or more setlists, so a visit list outside a run block could not have shown`);
+          if (!bad) pass(`walked ${walked} upcoming show(s): ${tally.visit} expanded a visit, ${tally.visitAndRun} a visit and run rows, ${tally.runOnly} run rows alone, ${tally.neither} neither; ${older} at a venue with two or more setlists; every head true of what is under it, every expanded visit the venue page's newest, the date section right on each`);
+        }
+
+        console.log('\nHome and show detail: the venue button, and its row at 360:');
+        await evaluate(`localStorage.removeItem('dozen.selectedShow.v1');`);
+        await send('Emulation.setDeviceMetricsOverride', { width: 360, height: 844, deviceScaleFactor: 2, mobile: true });
+        for (const [name, hash, rowSel] of [['Home', '#/home', '.hero .card-actions'], ['show detail', '#/show/1728657865', '.card-actions.screen-actions']]) {
+          await evaluate(`location.hash = '#/songs';`);
+          await sleep(300);
+          await evaluate(`location.hash = ${JSON.stringify(hash)};`);
+          await sleep(1300);
+          const row = await evaluate(`(() => { ${T_JS}
+            const r = document.querySelector(${JSON.stringify(rowSel)});
+            if (!r) return null;
+            const box = r.getBoundingClientRect();
+            const venue = t(document.querySelector('#main .screen .venue-line')).split('·')[0].trim();
+            return { viewport: innerWidth, venue, labels: [...r.children].map(t), buttons: [...r.querySelectorAll('.btn-small')].map(t),
+              centres: [...r.children].map((k) => { const b = k.getBoundingClientRect(); return b.top + b.height / 2; }),
+              rights: [...r.children].map((k) => k.getBoundingClientRect().right), rowRight: box.right };
+          })()`);
+          if (!row) { fail(`${name}: no ${rowSel}`); continue; }
+          const p = [];
+          const label = row.buttons.filter((b) => /venue history/i.test(b));
+          if (label.length !== 1 || label[0] !== 'Full venue history') p.push(`the venue button reads ${JSON.stringify(label)}, not exactly "Full venue history"`);
+          const spread = Math.max(...row.centres) - Math.min(...row.centres);
+          if (spread > 1) p.push(`the row is on more than one line at ${row.viewport}: ${JSON.stringify(row.labels)}, centres ${Math.round(spread)}px apart`);
+          if (Math.max(...row.rights) > row.rowRight + 0.5) p.push(`the row overruns its box at ${row.viewport}: ${Math.round(Math.max(...row.rights))} past ${Math.round(row.rowRight)}`);
+          if (p.length) { for (const x of p) fail(`${name}: ${x}`); continue; }
+          await evaluate(`[...document.querySelectorAll(${JSON.stringify(rowSel + ' .btn-small')})].find((b) => b.textContent.trim() === 'Full venue history').click()`);
+          await sleep(1000);
+          const landed = await evaluate(`(() => { ${T_JS} return { hash: location.hash, h1: t(document.querySelector('#main .screen h1.screen-title')) }; })()`);
+          if (!String(landed.hash).startsWith('#/venue/') || landed.h1 !== row.venue) fail(`${name}: the venue button reached ${landed.hash}, headed ${JSON.stringify(landed.h1)}, and the screen names ${JSON.stringify(row.venue)}`);
+          else pass(`${name}: "Full venue history" beside ${JSON.stringify(row.labels[1])} on one line at ${row.viewport}, and it opens ${JSON.stringify(row.venue)}`);
+        }
+        await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+        await homeFresh();
+      }
+
       // --- Section heads: one rule on every route and in the sheets ------------
       //
       // docs/plan.md, "Song and show page presentation", items 5 to 7. Every
@@ -5535,8 +5563,10 @@ async function run() {
       // above and 12px under it. And no .section-title anywhere outside a
       // .section-head -- the line the addendum asked for, which is what catches
       // a hand-built head on any screen. Home's first head reads "Upcoming show"
-      // over the hero ("Most recent show" between tours) and "On this date" is
-      // still on the page. Then the sheets: the Shows When sheet, the Settings
+      // over the hero ("Most recent show" between tours) and its last is the one
+      // its branch renders. No title carries a parenthesised value, and the three
+      // heads that count their rows carry the plain .badge reading their own row
+      // count (the 0.1.93 amendment, item 1). Then the sheets: the Shows When sheet, the Settings
       // sheet and the gap explainer keep the sheet scale -- the title at 15px,
       // the group labels at 11px -- and hold no .section-title at all.
       if (want('section-heads')) {
@@ -5548,9 +5578,12 @@ async function run() {
           const heads = [...document.querySelectorAll('#main .section-head')].map((h) => { const title = h.querySelector('.section-title'); const cs = title ? getComputedStyle(title) : null; const hs = getComputedStyle(h); return {
             title: t(title), hasTitle: !!title, size: cs ? cs.fontSize : null, weight: cs ? cs.fontWeight : null, transform: cs ? cs.textTransform : null, color: cs ? cs.color : null, dim: !!cs && cs.color === inkDim,
             opensScreen: h.parentElement.matches('#main .screen') && h.parentElement.firstElementChild === h,
+            opensFoot: h.parentElement.matches('.card-foot') && h.parentElement.firstElementChild === h,
+            badge: (() => { const b = h.querySelector(':scope > .badge'); return b ? { text: t(b), cls: b.className } : null; })(),
+            rows: h.parentElement.querySelectorAll(':scope > .rows > li').length,
             rule: hs.borderTopWidth, ruleColor: hs.borderTopColor, ruleLine: hs.borderTopColor === line, pad: hs.paddingTop }; });
           const loose = [...document.querySelectorAll('.section-title')].filter((n) => !n.closest('.section-head')).map((n) => JSON.stringify(t(n)) + ' in ' + (n.closest('.sheet') ? 'a sheet' : (n.parentElement.className || n.parentElement.tagName)));
-          return { heads, loose, first: heads[0] ? heads[0].title : null, hasOnThisDate: heads.some((h) => /^On this date/.test(h.title)) };
+          return { heads, loose, first: heads[0] ? heads[0].title : null, hero: !!document.querySelector('#main .hero'), onDate: t(document.querySelector('#main .section[data-section="on-date"] .section-title')) };
         })()`;
         // The routes that carry section heads at rest. Songs, Jams, Picks, the
         // gap history and the compact Shows landing render none (the Shows
@@ -5565,14 +5598,16 @@ async function run() {
           for (const h of r.heads) {
             const off = [];
             if (!h.hasTitle) off.push('no .section-title inside');
+            if (h.title.includes('(')) off.push('a parenthesised value in its title -- a count goes in the badge, a date on the line under the head');
             if (h.size !== '15px') off.push(`${h.size}, not 15px`);
             if (h.weight !== '700') off.push(`weight ${h.weight}`);
             if (h.transform !== 'uppercase') off.push(`text-transform ${h.transform}`);
             if (!h.dim) off.push(`${h.color}, not --ink-dim`);
             // The head that opens a screen -- Home's, the screen's first child
-            // under the app header -- carries no rule; every other head does.
-            if (h.opensScreen) {
-              if (h.rule !== '0px' || h.pad !== '0px') off.push(`opens the screen but carries rule ${h.rule}, padding-top ${h.pad} -- under the app header's edge that reads doubled`);
+            // under the app header -- carries no rule, and nor does the one that
+            // opens a card's foot, which draws its own; every other head does.
+            if (h.opensScreen || h.opensFoot) {
+              if (h.rule !== '0px' || h.pad !== '0px') off.push(`opens the ${h.opensScreen ? 'screen' : "card's foot"} but carries rule ${h.rule}, padding-top ${h.pad} -- under the edge above it that reads doubled`);
             } else {
               if (h.rule !== '1px' || !h.ruleLine) off.push(`rule ${h.rule} ${h.ruleColor}, not 1px --line`);
               if (h.pad !== '12px') off.push(`padding-top ${h.pad}, not 12px`);
@@ -5580,6 +5615,18 @@ async function run() {
             if (off.length) p.push(`${where}: head ${JSON.stringify(h.title)}: ${off.join('; ')}`);
           }
           if (r.loose.length) p.push(`${where}: ${r.loose.length} .section-title outside a .section-head: ${r.loose.join(', ')}`);
+          return p;
+        };
+        // The heads countedHead() reaches, each held to the rows under it. Home's
+        // is read in the `home` section, against its cards.
+        const COUNTED = { '#/song/49': 'Every performance', '#/venue/73': 'Every show' };
+        const countedProblems = (where, r, title) => {
+          const h = r.heads.find((x) => x.title === title);
+          if (!h) return [`${where}: no head reading ${JSON.stringify(title)} among ${JSON.stringify(r.heads.map((x) => x.title))}`];
+          if (!h.badge) return [`${where}: "${title}" carries no badge`];
+          const p = [];
+          if (h.badge.cls !== 'badge') p.push(`${where}: "${title}"'s badge is class ${JSON.stringify(h.badge.cls)}, not the plain .badge`);
+          if (!h.rows || Number(h.badge.text) !== h.rows) p.push(`${where}: "${title}"'s badge reads ${JSON.stringify(h.badge.text)}, and the section lists ${h.rows} row(s)`);
           return p;
         };
         for (const theme of ['dark', 'light']) {
@@ -5592,23 +5639,24 @@ async function run() {
             const p = headProblems(where, read, HEADED.has(r.hash));
             if (r.hash === '#/home') {
               if (!/^(Upcoming show|Most recent show)$/.test(read.first || '')) p.push(`${where}: the first head reads ${JSON.stringify(read.first)}, expected "Upcoming show" over the hero (or "Most recent show" between tours)`);
-              if (!read.hasOnThisDate) p.push(`${where}: no "On this date" head -- the route marker`);
+              if (read.onDate !== ON_DATE_HEAD(read.hero)) p.push(`${where}: the date section is headed ${JSON.stringify(read.onDate)}, and ${read.hero ? 'a hero' : 'no hero'} on the screen wants ${JSON.stringify(ON_DATE_HEAD(read.hero))}`);
             }
+            if (COUNTED[r.hash]) p.push(...countedProblems(where, read, COUNTED[r.hash]));
             if (p.length) for (const x of p) fail(x);
             else if (!read.heads.length) pass(`${where}: no section heads on this route, and no .section-title loose on it`);
-            else pass(`${where}: ${read.heads.length} head(s) at 15px/700/uppercase in --ink-dim with the 1px --line rule and 12px under it, none loose${r.hash === '#/home' ? `, the first "${read.first}" opening the screen with no rule` : ''}`);
+            else pass(`${where}: ${read.heads.length} head(s) at 15px/700/uppercase in --ink-dim with the 1px --line rule and 12px under it, none loose, no value in a title${r.hash === '#/home' ? `, the first "${read.first}" opening the screen with no rule` : ''}${COUNTED[r.hash] ? `, "${COUNTED[r.hash]}" badged with its ${read.heads.find((h) => h.title === COUNTED[r.hash]).rows} rows` : ''}`);
           }
-          // The Shows detail view's counted heads, "Venues (N)", render with a
-          // venue query: the one hand-built h2 the addendum found, through
-          // sectionHead() since 0.1.92.
+          // The Shows detail view's counted head, "Venues", renders with a venue
+          // query: the one hand-built h2 the addendum found, through sectionHead()
+          // since 0.1.92 and countedHead() since 0.1.93.
           await setShowsView('detail');
           await setShowsQuery('Toad');
           const shows = await evaluate(READ_HEADS);
           const whereShows = `#/shows, detail view with a venue query (${theme})`;
           const ps = headProblems(whereShows, shows, true);
-          if (shows.heads.length && !shows.heads.some((h) => /^Venues \(/.test(h.title))) ps.push(`${whereShows}: no "Venues (N)" head among ${JSON.stringify(shows.heads.map((h) => h.title))}`);
+          if (shows.heads.length) ps.push(...countedProblems(whereShows, shows, 'Venues'));
           if (ps.length) for (const x of ps) fail(x);
-          else pass(`${whereShows}: ${shows.heads.length} head(s) at 15px/700/uppercase in --ink-dim with the rule, "${shows.heads[0].title}" among them, none loose`);
+          else pass(`${whereShows}: ${shows.heads.length} head(s) at 15px/700/uppercase in --ink-dim with the rule, "Venues" badged with its ${shows.heads.find((h) => h.title === 'Venues').rows} rows, none loose`);
           await setShowsQuery('');
           await setShowsView('compact');
         }
@@ -6651,9 +6699,12 @@ async function run() {
   await endRun();
 
   async function endRun() {
-    // Taken before the runtime-error line, which passes on any run at all. A SKIP
-    // is not a check, so a section Carton's absence skipped entirely reads zero.
-    const ran = checks;
+    // Counted from the sections' start and taken before the runtime-error line:
+    // that line and the boot's two literal-watch lines pass on any run that boots.
+    // Counting those two is what kept this guard from firing from 0.1.91 until
+    // 0.1.93. A SKIP is not a check, so a section Carton's absence skipped entirely
+    // reads zero.
+    const ran = checks - checksAtBoot;
     if (ONLY && !ran) fail(`--only ${ONLY.join(',')} executed zero checks, so this run proved nothing`);
 
     // Every state the run put on screen, sheets included: taken after `ran`,

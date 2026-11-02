@@ -25,7 +25,7 @@
 // `selector` is optional and is checked IN ADDITION to the text, by all three
 // consumers -- so what has to be unique is the CONJUNCTION, not the text alone.
 // Show detail has no text of its own that no other screen renders: its date
-// heading also appears on cards, 'Venue history' is also a Home button, 'Jam
+// heading also appears on cards, 'Full venue history' is also a Home button, 'Jam
 // chart entries' is also a song-detail section, and 'Gap chart' is its own
 // section's title since 0.1.90, when the chart's route was retired; until then
 // it was that route's heading and this screen's button. Contriving a string
@@ -35,8 +35,14 @@
 // `.setlist-source`, the setlist's Carton link, which moved into the footer
 // row with the chart's; the section is what the screen is, so it is the better
 // marker.
+//
+// Home's is the same conjunction since 0.1.93. Its last head reads "On the date
+// of the show" with an upcoming show and "On this date" between tours, and those
+// share one word, so the text half is that word and the selector is what makes
+// it Home: `data-section="on-date"`, emitted in one place (views/home.js). Which
+// head a branch renders is held by the smoke test's `home` section.
 export const ROUTES = [
-  { hash: '#/home', expect: 'On this date' },
+  { hash: '#/home', expect: 'date', selector: '.section[data-section="on-date"]' },
   { hash: '#/songs', expect: 'songs played live' },
   // "shows played ·", WITH the separator (0.1.82, third commit). The sub-line
   // reads "795 shows played · 9 upcoming", and bare 'shows played' also renders

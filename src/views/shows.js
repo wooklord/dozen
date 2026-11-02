@@ -30,7 +30,7 @@ import {
   showPermalink,
   attribution,
   emptyState,
-  sectionHead,
+  countedHead,
   venueLine,
   venuePlace,
 } from '../ui/components.js';
@@ -205,14 +205,6 @@ export function renderShows(ctx) {
   append(screen, attribution());
 
   // ---------------------------------------------------------------- helpers --
-
-  /** Section header carrying its own count, so a capped list is never silent.
-   *  Through sectionHead() since 0.1.92, so the one head rule reaches it; it
-   *  was a bare h2.section-title until then. */
-  function countedHead(title, shown, total) {
-    const label = shown < total ? `${title} (${shown} of ${total})` : `${title} (${total})`;
-    return sectionHead(label);
-  }
 
   /** Years that actually have shows, newest first. Derived, never hardcoded. */
   function archiveYears() {
@@ -459,7 +451,7 @@ export function renderShows(ctx) {
 
     if (venueHits.length) {
       const section = el('div.section');
-      append(section, countedHead('Venues', venueHits.length, venueHits.length));
+      append(section, countedHead('Venues', venueHits.length));
       const list = el('ul.rows');
       for (const { venue, reasons } of venueHits) {
         const played = (index.showsByVenue.get(Number(venue.venue_id)) || []).filter((s) => s.showdate <= index.today);

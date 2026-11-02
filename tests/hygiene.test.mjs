@@ -221,6 +221,26 @@ test('.row-meta gets tabular figures', () => {
   }
 });
 
+// --- section heads -------------------------------------------------------------
+
+test('a head prints its count through countedHead(), never in its title', () => {
+  // Four heads carried a parenthesised value until 0.1.93, each built where it
+  // was used, and one of them was a date. countedHead() is the one form now and
+  // the smoke test holds what renders; this holds the source, so a fifth cannot
+  // be written the old way on a screen the walk does not reach. Comments are
+  // stripped first, because these files talk about the old form.
+  const offenders = [];
+  for (const f of srcFiles().filter((p) => p.endsWith('.js'))) {
+    const src = fs.readFileSync(f, 'utf8').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const hits = src.match(/sectionHead\(\s*[`'"][^`'"\n]*\(/g);
+    if (hits) offenders.push(`${path.relative(ROOT, f)}: ${hits.join(', ')}`);
+    if (/function countedHead/.test(src) && !f.endsWith(path.join('ui', 'components.js'))) {
+      offenders.push(`${path.relative(ROOT, f)}: declares its own countedHead()`);
+    }
+  }
+  assert.deepEqual(offenders, [], 'a count goes in the badge countedHead() builds');
+});
+
 // --- venue text ----------------------------------------------------------------
 
 test('no view builds .venue-line markup by hand', () => {

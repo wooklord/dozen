@@ -833,11 +833,11 @@ export function setlistCard({
   ].filter(Boolean);
 
   // `foot` is a CONTENT SLOT, symmetric with `head` -- not an options flag.
-  // It exists for Home's merged venue card, where the most recent visit is
-  // rendered in full and the visits BEFORE it follow as one-liners inside the
-  // same card. It sits below the action row on purpose: those buttons open the
-  // setlist above them, so anything appended after the actions must read as a
-  // separate, quieter thing. .card-foot draws the rule that says so.
+  // It exists for Home's venue card, where the most recent visit is rendered in
+  // full and, when the upcoming show sits in a run, the run's earlier nights
+  // follow inside the same card. It sits below the action row on purpose: those
+  // buttons open the setlist above them, so anything appended after the actions
+  // must read as a separate, quieter thing. .card-foot draws the rule that says so.
   return el('div.card', style ? { style } : null, [
     head,
     parts ? el('div.setlist-card-body', null, el('div', null, [parts.sets, parts.footnotes])) : empty,
@@ -1002,6 +1002,18 @@ export function currentGapTile(index, value) {
 
 export function sectionHead(title, right = null) {
   return el('div.section-head', null, [el('h2.section-title', { text: title }), right]);
+}
+
+/**
+ * A head over a list, with the list's length in a badge beside it (0.1.93). The
+ * one way a head prints a count, so none can keep "Every show (13)": every head
+ * that counted its rows that way goes through here, and tests/hygiene.test.mjs
+ * fails on a sectionHead() whose title carries a parenthesis. The plain .badge,
+ * the shape of the "Jam chart entries" head's without its colour: green means
+ * jam chart only, and that head keeps its own .badge-jam.
+ */
+export function countedHead(title, count) {
+  return sectionHead(title, el('span.badge', { text: String(count) }));
 }
 
 export function emptyState(text) {

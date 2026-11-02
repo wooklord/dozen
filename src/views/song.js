@@ -10,6 +10,7 @@ import {
   attribution,
   cartonRow,
   sectionHead,
+  countedHead,
   emptyState,
   cartonLink,
   songPermalink,
@@ -253,10 +254,7 @@ export function renderSong(ctx, songId) {
 
   // --- Full performance history --------------------------------------------
   const histSection = el('div.section');
-  append(
-    histSection,
-    sectionHead(`Every performance (${song.performances.length})`),
-  );
+  append(histSection, countedHead('Every performance', song.performances.length));
   if (song.performances.length) {
     const list = el('ul.rows');
     for (const p of song.performances.slice().reverse()) {

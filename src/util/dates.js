@@ -63,8 +63,8 @@ export function formatShowDateShort(showdate) {
  *
  * NOT `md.replace('-', '/')`. "10/15" was the only numeric date rendered
  * anywhere in the UI, and it was ambiguous to exactly the reader this app is
- * for: an "On this date" header names a calendar day, and 10/15 reads as a
- * fraction before it reads as October. Every other date on screen goes
+ * for: the line under Home's last head names a calendar day, and 10/15 reads as
+ * a fraction before it reads as October. Every other date on screen goes
  * through formatShowDate/formatShowDateShort and spells its month, and this
  * one now comes out of the same locale call, so the abbreviations cannot
  * drift apart.

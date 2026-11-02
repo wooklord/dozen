@@ -248,7 +248,11 @@ a {
    own bottom edge -- two full-width lines with nothing between, screenshot at
    360 dark and read as doubled. A head that follows the hero card (32px of
    shell between the card's edge and the rule) read as a section opening and
-   keeps it. The selector is the screen's first child, not a caller option. */
+   keeps it. The selector is the screen's first child, not a caller option.
+
+   AND THE HEAD THAT OPENS A CARD'S FOOT (0.1.93): "Earlier in this run" under
+   an expanded visit. .card-foot draws the rule already, and the head's own sat
+   under it as a second line. */
 .section-head {
   display: flex;
   align-items: baseline;
@@ -258,7 +262,8 @@ a {
   border-top: 1px solid var(--line);
   padding-top: var(--s-3);
 }
-.screen > .section-head:first-child {
+.screen > .section-head:first-child,
+.card-foot > .section-head:first-child {
   border-top: 0;
   padding-top: 0;
 }
@@ -270,9 +275,9 @@ a {
    same rule, only read stronger for sitting under the venue line. --ink-dim on
    the shell measures 8.99 dark and 7.09 light, above --ink-label's 6.85 and
    6.01, so section labels stay brighter than Carton links. Applies to EVERY
-   section title, deliberately -- "Last time here" and "On this date" are the
-   same element as the rest, and a special case for two of them is how a type
-   scale starts drifting. The scale: 19px screen title in --ink; 15px sheet
+   section title, deliberately -- "Earlier at this venue" and Home's last head
+   are the same element as the rest, and a special case for two of them is how a
+   type scale starts drifting. The scale: 19px screen title in --ink; 15px sheet
    title in --ink, sentence case; this, 15px uppercase in --ink-dim; 11px
    sheet group and stat labels in --ink-label. */
 .section-title {
@@ -406,11 +411,11 @@ a {
 
 /* Content appended BELOW a setlist card's action row (0.1.74).
  *
- * Home's merged "Previous shows" card renders the most recent visit in full
- * and the visits before it as one-liners in the same card. The rule is not
- * decoration: the buttons above it open the setlist above them, so the rows
- * after them have to read as a separate, quieter thing or "Show detail" looks
- * like it applies to the whole list.
+ * Home's card under the hero renders the venue's most recent visit in full and,
+ * under it, the run's other played shows. The rule is not decoration: the
+ * buttons above it open the setlist above them, so the rows after them have to
+ * read as a separate, quieter thing or "Show detail" looks like it applies to
+ * the whole list.
  */
 .card-foot {
   margin-top: var(--s-4);
@@ -418,13 +423,14 @@ a {
   border-top: 1px solid var(--line);
 }
 
-/* .fn-list carries its own --s-3 top margin for when it follows body text.
-   As the first thing after the rule, that stacks with .card-foot's padding. */
-.card-foot > .visit-list:first-child {
+/* .fn-list carries its own --s-3 top margin for when it follows body text. A
+   .visit-list follows a head or opens a card, so it would stack with the head's
+   margin or the card's padding. Doubled because .fn-list is later in this file. */
+.fn-list.visit-list {
   margin-top: 0;
 }
 
-/* One previous visit: a date and the shape of the show.
+/* One show of the run: a date and the shape of the show.
  *
  * A .fn-list by layout -- it is the same two-column flex row -- but its own
  * class, because the merged card holds a second .fn-list (the setlist's
@@ -683,7 +689,7 @@ button.gap-figure:active {
   margin-top: 0;
 }
 
-/* Small buttons: Venue history, Show detail, Gap chart -- all three, one rule.
+/* Small buttons: Full venue history, Venue info, Show detail, Jam notes -- one rule.
  *
  * `.btn.btn-small` rather than `.btn-small` ON PURPOSE. The old single-class
  * rule sat EARLIER in this file than `.btn`, so at equal specificity `.btn`'s

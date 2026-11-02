@@ -488,6 +488,7 @@ then passes for the wrong reason, and reports health it never established.
 | "0 Chromes left" after a run, with a kill added to `close()` (2026-11-01, after 0.1.88) | that **the kill fixed the leak** | **the leak having stopped by itself**. It was called fixed on that count. Removing the kill to prove it left the run clean, and so was the old `close()`, 2 of 2. The cause was never established. The bullet on `close()` below has the account |
 | Open the When sheet and read its year grid, month grid, option rows and group titles (0.1.82 to 0.1.90, caught 2026-11-01) | that **the sheet renders right** | **the parts it named**, each right, with the text "nullnull" sitting under them in a text node no selector reached -- two `null` children handed to `replaceChildren`, which prints them. And it opened the sheet only from Aug 2019, the one state whose null branches are not taken. Nine builds, every run green. The smoke test watches the whole document's text now, in every state it walks, and must see its own control first |
 | `setShowsWhen(2019)` returning `'year'` (0.1.82 to 0.1.90, caught 2026-11-01) | that **a year is reachable the way a thumb reaches it** | **the driver dismissing the sheet through its backdrop** after the year -- the exit no user finds -- and then reporting the year reached. The driver had encoded the workaround as the procedure, so every check downstream walked a state by a path the UI did not offer, and "a year is a step toward a month" shipped as designed. The driver reports a pick that leaves the sheet open now, and the `nav-states` section fails on it; with the old driver put back under that fault the section is green, which is the measure of what it was worth |
+| `--only` failing a run of "zero checks" (0.1.91 to 0.1.92, caught 2026-11-02) | that **a scoped run executed its section** | **the boot's two literal-watch lines**, added in 0.1.91 and counted among the checks, so the guard read 2 whatever ran. And Carton's rate limit answers with a well-formed envelope and no rows, so the gate above every section closed without a throw and without a line. A proof with a fault staged read `SMOKE PASSED — SCOPED, not a full run: home, 2 checks`, exit 0. It was caught by the run taking 8s, not by its verdict, and a runner reading only the exit code would have recorded the fault as uncaught. The guard counts from the sections' start now, and the gate prints a SKIP |
 
 The shape is always a **proxy**: the check tests a side effect rather than the
 thing itself, and the side effect has more than one cause. The row that polls for
@@ -909,11 +910,11 @@ checks were verified this way:
   notes block became one function and the verdict another, so a full run executes
   the same code in the same order, and `git diff -w` shows only the wrappers, the
   gates, and two helpers moved above them. **Only `jam-button` (since 0.1.88),
-  `jam-notes`, `sheet`, `markup`, `stale-table`, `nav-states`, `show-detail`, `song-detail` and
-  `section-heads` can be scoped.** About
+  `jam-notes`, `sheet`, `markup`, `stale-table`, `nav-states`, `show-detail`, `song-detail`,
+  `home` and `section-heads` can be scoped.** About
   fifty names cross the sections before them, so wrapping those would change the full
   run to save time on it; a section joins when a proof needs it and it can stand alone
-  (`show-detail` joined in 0.1.90, `nav-states` in 0.1.91). Green, against 380s for a full run: `stale-table` 12s, `markup` 11s,
+  (`show-detail` joined in 0.1.90, `nav-states` in 0.1.91, `home` in 0.1.93). Green, against 380s for a full run: `stale-table` 12s, `markup` 11s,
   `sheet` 18s, `jam-notes` 34s.
   The three ways a scoped run could report health it never established:
   - an unknown name: `--only nope`, a bare `--only`, `--only ""`, `--onyl
@@ -923,10 +924,13 @@ checks were verified this way:
     --only stale-table executed zero checks, so this run proved nothing` and
     `SMOKE FAILED ... stale-table, 0 checks`, exit 1. A SKIP does not count as a
     check, and the runtime-error line, which passes on any run, is left out.
+    **That stopped being true in 0.1.91, when the boot's two literal-watch lines
+    were counted, and this guard could not fire until 0.1.93** (the table above).
   - the verdict: `SMOKE PASSED — SCOPED, not a full run: stale-table, 2 checks`,
     never "all routes rendered". `sheet,stale-table` names both and reads 15, the
     13 and 2 of their own runs, and every count equals the run's `ok` lines less
-    the runtime-error one.
+    the runtime-error one. Since 0.1.93, less the three literal-watch lines too, so
+    figures recorded for 0.1.91 and 0.1.92 read two higher than this count would.
   And a fourth, added because the first three cannot see it: a gate mistyped as
   `want('stale-tables')` stops the run, `a gate names "stale-tables", which is not
   in SECTIONS`, exit 1, on a full run as well as a scoped one.
@@ -1395,6 +1399,98 @@ checks were verified this way:
   Jams and Picks identical, having no section heads; stylesheets 244 rules against 248. **The
   dev expected every route to change; the four without a head did not, and that is the
   measure of where the head rule reaches.**
+- The 0.1.93 checks (counted heads, Home's heads, the one-liners, the button, 2026-11-02): a new
+  scoped section, `home`, which takes over the two Home checks that sat before the sections and
+  walks every upcoming show; `section-heads` holding each counted head to its rows; a hygiene
+  test; two run-overlap tests. Each proof was staged from a scratch Node script by exact string,
+  the staged hash confirmed different and the new text read back before the run, the file restored
+  from a byte copy by hash with `git status --short` confirmed, 25s apart. Each is `--only home`
+  unless marked. Green: 5 checks in 61s.
+
+  The dev's groupings:
+  - the venue's head put back as `sectionHead('Every show (N)')` (`--only section-heads`): 1 unit
+    failure, the new hygiene guard; smoke 4, both themes, `head "Every show (13)": a parenthesised
+    value in its title` and `no head reading "Every show"`.
+  - the badge off by one in `countedHead()` (`--only home,section-heads`): smoke 18, `the head's
+    badge reads "3", 2 card(s) listed` on Home at both widths and all ten shows, `"Every
+    performance"'s badge reads "136", and the section lists 135 row(s)`, the venue and the Shows
+    query the same.
+  - the date line fed today, the head and badge left right: smoke 12, `the line under the head
+    reads "Nov 2", the anchor's month and day is "Nov 6"`.
+  - the expanded-visit branch left reading "Previous shows": smoke 10 on the five shows that expand
+    one, `a head that went in 0.1.93 is still rendering` and `the venue page lists 2 show(s) with a
+    setlist and the section is headed "Previous shows"`.
+  - the one-liners rendered again, the cap back at five: 2 unit failures; smoke 6, `a visit list
+    outside a run block, 1 row(s), e.g. "Apr 8, 2022One set"` and `the card's foot opens with null`.
+  - the old label on both buttons: smoke 3, `the venue button reads ["Venue history"], not exactly
+    "Full venue history"`, on Home and show detail, and `no "Full venue history" button on the hero`.
+
+  Beyond the plan's list, because each is a comparison of its own:
+  - the head left "On this date" with a show anchoring it: smoke 12, `the head reads "On this date",
+    and a hero on the screen wants "On the date of the show"`. The plan had dropped the head text
+    under the grouping; the branch choice came with the dev's change A, after the grouping.
+  - the long form, the wording changed in the view and the check together so only the line count
+    can see it: smoke 12, `the head runs to 2 line(s)`.
+  - the card expanding the oldest visit: 7 unit failures; smoke 3, `the card expands "Fri, Apr 8,
+    2022", and the venue page's newest setlist is "Fri, Mar 22, 2024"`.
+  - the run list filtered against the uncapped history (`node --test` only): 2 unit failures, among
+    them "the first night of a three-night stand renders in the run list".
+  - `data-section` removed, through `layout-diff`: `working tree: #/home never rendered its marker
+    ("date")`, exit 1 in 28s.
+  - the action row stacking, every word right: smoke 2, `the row is on more than one line at 360 ...
+    centres 52px apart`, on Home and show detail. The plan had dropped this as the 390 line's
+    comparison; that line is older code, and this one had never been seen red.
+  - the row overrunning on one line: smoke 2, `the row overruns its box`.
+
+  **The clock.** Today's data reaches two of Home's branches, so the rest were proved on the real
+  archive with a scratch clock staged at 2022-06-09 (`Page.addScriptToEvaluateOnNewDocument`), the
+  walk cut to three shows and the venue page's rows read as of the hero. It is not in the smoke test.
+  The control, nothing wrong in the app: `walked 3 upcoming show(s): 0 expanded a visit, 2 a visit and
+  run rows, 1 run rows alone`. Every clocked run also carries two literal "null" lines from show
+  1728657865, a 2024 show the clock puts in the future. That is how a real defect was found (below).
+  The last two also carry `it stopped after 3 of 435`, from the cut.
+  - the run-only branch headed "Earlier at this venue": smoke 2, `no visit, run rows only, and the
+    section is headed "Earlier at this venue"`.
+  - the foot's head keeping its rule: smoke 2, `the foot's head draws its own 1px rule under the foot's`.
+  - the run list not deduped against the expanded visit: smoke 1, `"Jun 11, 2022" is both the expanded
+    card and a row beneath it, ["Jun 11, 2022S1+S2+E"]`.
+  - the foot drawing no rule: smoke 2, `the foot's own rule is 0px`.
+
+  **Three defects in the walk itself, found by reading its output, and one in the harness:**
+  - the once-only line: the first rewrite dropped 0.1.74's "the expanded visit appears once", which
+    the first full run could not show, since nothing tested for it. It was found comparing the old
+    block with the new after that run, and is the dedupe proof above. The plan's word was "rewritten,
+    not shrunk".
+  - the section under the hero not a `.section`: as first written, 1 SKIP reading `no hero on Home`
+    and `SMOKE PASSED`, exit 0. Fixed: `the hero is not followed by a .section`, exit 1. The old-label
+    proof had printed the same untrue SKIP, which is what led here.
+  - a walk stopping early read green as "walked 1". Staged after one show: `it stopped after 1 of 10
+    upcoming show(s)`.
+  - the zero-checks guard, the table row above. Carton staged answering with no rows: `--only home
+    executed zero checks`, exit 1; the same with the guard counting the boot's lines again: `SMOKE
+    PASSED ... home, 2 checks`, exit 0.
+
+  **Dropped, each with its reason:**
+  - the badge count alone under the date fault: the off-by-one above fires its comparison on Home.
+  - the same two `countedHead()` faults per head: one function, one comparison, the dev's grouping.
+
+  **Found and not fixed: show 1770761863 prints "null" on its gap chart,** today, on all five rows.
+  `docs/design.md`, 0.1.93, has it. It is the literal watch's blind spot as much as the chart's: the
+  watch reads what a walk opens, and no walk opens this show.
+
+  **A run lost to a port, not counted.** `lghub_updater` holds `127.0.0.1:9180`, inside the smoke
+  test's random DevTools range. One proof drew it: Chrome bound IPv6, `openChrome` read the updater's
+  HTML at `/json/list`, and the run stopped on `Unexpected token '<'` with the browser left up. The
+  next run read `swept 1 browsers, 1 profiles`. One draw in 400 on this machine, not fixed.
+
+  A full run after the last harness change: 270 passing, smoke 395 ok with 0 skips and no `WARN` in
+  613s, against 396 in 578s on 0.1.92: the old block's four lines and the month's two out, `home`'s
+  five in. The old walk stopped at the first show with older visits and this one reads all ten, at
+  about 4s a show, which accounts for the 35s. A comment in `src/ui/components.js` was corrected
+  during that run. `layout-diff 7ca9a8a`, 390 dark, 390 light and 360 dark, reads the same
+  three times, and only `scripts/smoke.mjs` and that comment changed after it: `#/home` 46 of 81
+  boxes, `#/song/49` 272 of 304, `#/venue/73` 14 of 28, the charted show 2 of 64; Songs, Shows, Jams,
+  Picks and gap history identical (`docs/design.md`, 0.1.93, reads what moved).
 
 Do this for every new check. It is the only thing that separates a real check
 from a comforting one.
@@ -1840,8 +1936,8 @@ landed". The second is the worse of the two because it passes.
 | Command | Speed | Network | Run it |
 |---|---|---|---|
 | `node --test` | instant | none | always, before anything else |
-| `node scripts/smoke.mjs` | ~10 min (578s at 0.1.92, 526s at 0.1.91, 490s at 0.1.90, 404s at 0.1.89, 407s at 0.1.88, 386s at 0.1.87, 380s at 0.1.86, 356s at 0.1.85, so this row's old "~1 min" had gone stale well before 0.1.86) | Carton (cold pull) | **before every push** |
-| `node scripts/smoke.mjs --only <section>` | 11–120s (`song-detail` 18–22s, `section-heads` 47–50s and `show-detail` 69s at 0.1.92; `nav-states` 29–54s at 0.1.91; `show-detail` 69–118s, `jam-button` ~80s and `jam-notes` ~70s at 0.1.90, with the boot; `jam-notes` reaches each sheet through the Shows tab now) | Carton (cold pull) | for a red proof, re-running only the section the check lives in. **Never the gate for a push:** the full run is. An unknown name or a run of zero checks fails, and the verdict says it was scoped |
+| `node scripts/smoke.mjs` | ~10 min (613s at 0.1.93, 578s at 0.1.92, 526s at 0.1.91, 490s at 0.1.90, 404s at 0.1.89, 407s at 0.1.88, 386s at 0.1.87, 380s at 0.1.86, 356s at 0.1.85, so this row's old "~1 min" had gone stale well before 0.1.86) | Carton (cold pull) | **before every push** |
+| `node scripts/smoke.mjs --only <section>` | 11–120s (`home` 61s at 0.1.93; `song-detail` 18–22s, `section-heads` 47–50s and `show-detail` 69s at 0.1.92; `nav-states` 29–54s at 0.1.91; `show-detail` 69–118s, `jam-button` ~80s and `jam-notes` ~70s at 0.1.90, with the boot; `jam-notes` reaches each sheet through the Shows tab now) | Carton (cold pull) | for a red proof, re-running only the section the check lives in. **Never the gate for a push:** the full run is. An unknown name or a run of zero checks fails, and the verdict says it was scoped |
 | `node scripts/gap-oracle.mjs` | ~1 min | Carton (cold pull + 20 song pages) | after any change to gap arithmetic, to the show universe in `buildIndex`, or to `gapHistory()`; it compares every Show Gap cell on 20 Carton song pages against the app's own `gapAtShow()`, and the gap history's one-entry-per-show fold (0.1.83) against the same pages grouped by show, and **SKIPs, never passes,** when Carton is unreachable. The smoke test carries a one-song spot check of the same parity |
 | `node scripts/contrast.mjs` | instant | none | when eyeballing a colour; the assertions already run in `node --test` |
 | `node scripts/deadcss.mjs` | instant | none | when a CSS rule looks inert; lists every declaration the cascade can never let win. The assertions already run in `node --test` (`tests/deadcss.test.mjs`) |
