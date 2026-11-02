@@ -801,7 +801,7 @@ checks were verified this way:
     (EPERM)`. The verdict stayed `SMOKE PASSED`. That the cleanup warns and the
     verdict stands was Code's default that day, offered as the dev's call and
     left open until 2026-11-01, when it was decided with its other half, that
-    leftovers never accumulate: the sweep, the last bullet of this list.
+    leftovers never accumulate: the sweep, the bullet headed "The sweep".
   - a call Chrome never answers -- `Runtime.evaluate` awaiting `new
     Promise(() => {})` -- staged in each script in turn. Smoke: `FAIL  the
     run stopped: CDP Runtime.evaluate timed out after 60s with no reply from
@@ -1077,7 +1077,7 @@ checks were verified this way:
   kill is a response to a condition that may recur. It is proved by staging the condition
   instead of waiting for it, `Browser.close` swapped for `Browser.getVersion`, with the
   verdict `SMOKE PASSED` both ways, on the 2026-10-28 default that was still the dev's
-  open call (made on 2026-11-01: the sweep, the last bullet of this list). With the
+  open call (made on 2026-11-01: the sweep, the bullet headed "The sweep"). With the
   kill: `stayed up after
   Browser.close -- its processes were killed`, 0 Chromes, the profile removed. Without:
   `still answers`, `EPERM`, 8 Chrome processes on that profile. Commit `9f3baf3`'s
@@ -1481,7 +1481,7 @@ checks were verified this way:
   **A run lost to a port, not counted.** `lghub_updater` holds `127.0.0.1:9180`, inside the smoke
   test's random DevTools range. One proof drew it: Chrome bound IPv6, `openChrome` read the updater's
   HTML at `/json/list`, and the run stopped on `Unexpected token '<'` with the browser left up. The
-  next run read `swept 1 browsers, 1 profiles`. One draw in 400 on this machine, not fixed.
+  next run read `swept 1 browsers, 1 profiles`. One draw in 400 on this machine, not fixed in 0.1.93; the ports bullet below closes it.
 
   A full run after the last harness change: 270 passing, smoke 395 ok with 0 skips and no `WARN` in
   613s, against 396 in 578s on 0.1.92: the old block's four lines and the month's two out, `home`'s
@@ -1491,6 +1491,49 @@ checks were verified this way:
   three times, and only `scripts/smoke.mjs` and that comment changed after it: `#/home` 46 of 81
   boxes, `#/song/49` 272 of 304, `#/venue/73` 14 of 28, the charted show 2 of 64; Songs, Shows, Jams,
   Picks and gap history identical (`docs/design.md`, 0.1.93, reads what moved).
+- The ports (2026-11-02, scripts only, no bump; `docs/plan.md`, "Gap chart, Home between tours,
+  and ports", item 3). **The dev's pick, over the free-port probe the plan first proposed:** Chrome
+  gets `--remote-debugging-port=0` and `openChrome()` reads the port back from `DevToolsActivePort`
+  in its own throwaway profile, and the smoke test's and layout-diff's servers `listen(0)`. No
+  script draws from a range now, so there is nothing to probe. `openChrome()` takes no port, waits
+  on the file and then on `/json/list` with a 30s ceiling where a fixed 2.5s sleep was, says what
+  answered when the port answers with anything but JSON, and on a failed launch kills every process
+  on its profile. The comment saying a failed launch leaves nothing running was false, 10 processes
+  measured, and is corrected. The smoke test's `CDP:` line prints the port. Each proof staged from a
+  scratch Node script by exact string, the staged hash confirmed different and the new text read
+  back before the run, the file restored from a byte copy by hash, `git status --short` confirmed:
+  - a `DEVPORT` draw and `port: DEVPORT` put back in the smoke test, the dev's: 1 unit failure,
+    `scripts/smoke.mjs draws a DevTools port`.
+  - `--remote-debugging-port=0` changed to a fixed port in `cdp.mjs`: 1 unit failure, `must let Chrome
+    pick its own DevTools port`.
+  - `server.listen(8123, ...)` put back, the dev's: 1 unit failure, `scripts/smoke.mjs listens on 8123,
+    not on the port the OS assigns`.
+  - **The next proof as planned could not reach what it was staged for.** A fixed port, with an HTML
+    server holding it on 127.0.0.1, was meant to produce the non-JSON error. On that port Chrome wrote
+    no `DevToolsActivePort` at all: `CDP: Chrome wrote no DevToolsActivePort to its profile within
+    30s`, exit 1 at 33s. That run is the proof of the ceiling and of the kill instead: `Chrome could
+    not be closed over CDP -- its 9 process(es) on this profile were killed`, 0 Chromes after it.
+  - the kill removed under that same stage, the dev's: 8 Chromes left on the profile and `the
+    throwaway profile was not removed (EPERM)`, exit 1 at 52s. The next run's first line read `swept
+    1 browsers, 1 profiles`, and 0 after it.
+  - the non-JSON error, re-staged where it can fire: `port ??= readPort()` staged to `port = 39211`
+    with the HTML server on it, Chrome on its own port: `CDP: port 39211 answered /json/list with
+    text/html, not JSON, so it is not this Chrome`, exit 1 at 3s, 0 Chromes and no `WARN`. On
+    0.1.93's launcher this was `Unexpected token '<'` at 27s with 10 left.
+  - the real updater, the dev's, no fault staged: `127.0.0.1:9180` read `bind EADDRINUSE / connect
+    ANSWERS` before and after, and `--only stale-table` between them read `CDP: 19 calls on port
+    59099` and `SMOKE PASSED — SCOPED, not a full run: stale-table, 2 checks`, no `WARN`.
+
+  **Dropped, each with its reason:** a fixed port in layout-diff's server and a draw in verify-deploy,
+  the same loop over the same three files as the proofs above; `--only` runs for the two
+  hygiene faults, which a unit test reads from the source.
+
+  The other two scripts, on these files: 271 passing; `layout-diff HEAD 390 dark` 9 routes identical,
+  stylesheets 248 rules both sides. **`verify-deploy` went red first:** `DEPLOY NOT VERIFIED`, 8 routes
+  `did not render live` and only Picks, which reads no archive, rendering. It ran straight after
+  layout-diff's two cold boots, inside Carton's minute. The output was kept, and run alone 75s later
+  with no change it read `DEPLOY VERIFIED — live BUILD is 0.1.93`, 9 routes live. So layout-diff and
+  a deploy check want the same minute's gap as two layout-diffs.
 
 Do this for every new check. It is the only thing that separates a real check
 from a comforting one.
@@ -1556,9 +1599,10 @@ any conclusion from what is on screen.
 
 Two accidents of its design make it immune, and both are worth preserving:
 
-- it serves on a **random port** each run (`8123 + rand(400)`), and service
-  worker scope is per-origin *including port*, so there is never a worker
-  registered for that origin;
+- it serves on the port the OS assigns each run (`listen(0)`, since 2026-11-02;
+  a draw from `8123 + rand(400)` until then), and service worker scope is
+  per-origin *including port*, so there is never a worker registered for that
+  origin;
 - it launches Chrome with a **throwaway `--user-data-dir`**, so there is no
   profile carrying one over.
 
@@ -1962,8 +2006,11 @@ launches its own. Since 2026-11-01 it also sweeps what earlier runs left before
 it launches -- every Chrome on a `dozen-smoke-`, `dozen-layout-` or
 `dozen-verify-` profile under the temp directory, and every such directory --
 and prints `swept N browsers, M profiles` as the run's first line; the hygiene
-test holds each script's profile prefix to that list. The decision and its
-proofs are the last bullet under *The recurring failure*.
+test holds each script's profile prefix to that list. Since 2026-11-02 Chrome
+picks its own DevTools port and the two local servers listen on 0, so no script
+draws from a range, and the hygiene test fails on a draw or a fixed port. Both
+decisions and their proofs are bullets under *The recurring failure*, "The sweep"
+and "The ports".
 
 **An archive snapshot for the smoke test was considered and dropped (2026-11-01).**
 The smoke test boots the app on a cold pull from The Carton every run, and the

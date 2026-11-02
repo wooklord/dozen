@@ -43,7 +43,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REF = process.argv[2] || 'HEAD';
 const WIDTH = Number(process.argv[3] || 390);
 const THEME = process.argv[4] || null; // 'light' | 'dark' | null (browser default)
-// TWO ports, so the two builds are two ORIGINS. This matters more than it
+// TWO servers, each on the port listen(0) assigns it (0.1.94; each drew from a
+// range until then), so the two builds are two ORIGINS. This matters more than it
 // looks: served from one origin at the same urls, the second boot reused the
 // FIRST build's parsed stylesheet -- it fetched the new CSS (verified) while
 // still rendering the old one -- and every route diffed as identical. A false
@@ -54,9 +55,6 @@ const THEME = process.argv[4] || null; // 'light' | 'dark' | null (browser defau
 // boot, ~38 per run. That trips The Carton's documented 60/minute limit if
 // this is run more than about twice in a row, which surfaces as an error
 // boundary. DO NOT run this in a tight loop -- wait a minute between runs.
-const PORT_A = 8700 + Math.floor(Math.random() * 100);
-const PORT_B = 8850 + Math.floor(Math.random() * 100);
-const DEVPORT = 9700 + Math.floor(Math.random() * 200);
 const PROFILE = path.join(os.tmpdir(), 'dozen-layout-' + Date.now());
 const WORKTREE = path.join(os.tmpdir(), 'dozen-ref-' + Date.now());
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -76,7 +74,7 @@ const TYPES = {
   '.svg': 'image/svg+xml', '.png': 'image/png',
 };
 
-function serve(root, port) {
+function serve(root) {
   return new Promise((res) => {
     const s = http.createServer((req, out) => {
       let p = decodeURIComponent(req.url.split('?')[0]);
@@ -94,7 +92,7 @@ function serve(root, port) {
       });
       out.end(fs.readFileSync(f));
     });
-    s.listen(port, () => res(s));
+    s.listen(0, () => res(s));
   });
 }
 
@@ -154,7 +152,7 @@ const main = async () => {
     ? (await import(pathToFileURL(refRoutesFile).href)).ROUTES
     : ROUTES;
 
-  browser = await openChrome({ chrome: CHROME, port: DEVPORT, profile: PROFILE, width: WIDTH });
+  browser = await openChrome({ chrome: CHROME, profile: PROFILE, width: WIDTH });
   const { send } = browser;
   const ev = async (expr, awaitPromise = false) => (await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise }))?.result?.value;
 
@@ -169,20 +167,11 @@ const main = async () => {
 
   const snap = async (port, label, routes) => {
     process.stdout.write(`  booting ${label}`);
-    // ?nosw IS LOAD-BEARING HERE, not hygiene.
-    //
-    // Both boots share one origin (see PORT above), so the service worker the
-    // FIRST boot registers stays active and serves ITS cached shell to the
-    // second. The second snapshot then renders the reference build's CSS and
-    // every route diffs as identical -- a false negative for any change at
-    // all. This tool briefly reported exactly that.
-    // ?nosw IS LOAD-BEARING HERE, not hygiene.
-    //
-    // Both boots share one origin (see PORT above), so the service worker the
-    // FIRST boot registers stays active and serves ITS cached shell to the
-    // second. The second snapshot then renders the REFERENCE build's CSS and
-    // every route diffs as identical -- a false negative for any change at
-    // all. This tool briefly reported exactly that before the flag was added.
+    // ?nosw keeps a worker out of both boots, so no snapshot is read through a
+    // worker's cache. It was added when both boots shared one origin, and the first
+    // boot's worker served its cached shell to the second, so every route diffed as
+    // identical. The two servers above close that case now. This block used to say
+    // the boots still share an origin, twice, and that stopped being true with them.
     await send('Page.navigate', { url: `http://localhost:${port}/?nosw#/home` });
     let booted = false;
     for (let i = 0; i < 90; i++) {
@@ -310,10 +299,10 @@ const main = async () => {
   // second boot then loaded the REFERENCE build's files over the old socket
   // while believing it was on the new server, and every route diffed as
   // identical. A false negative for any change at all.
-  const sA = await serve(WORKTREE, PORT_A);
-  const sB = await serve(ROOT, PORT_B);
-  const a = await snap(PORT_A, REF, REF_ROUTES);
-  const b = await snap(PORT_B, 'working tree', ROUTES);
+  const sA = await serve(WORKTREE);
+  const sB = await serve(ROOT);
+  const a = await snap(sA.address().port, REF, REF_ROUTES);
+  const b = await snap(sB.address().port, 'working tree', ROUTES);
   console.log('');
 
   // If the working tree differs from the ref in CSS but both sides rendered

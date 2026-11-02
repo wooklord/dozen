@@ -4,7 +4,8 @@
 // the copies had drifted: verify-deploy timed its calls out after its first
 // live route walk hung, and the other two never did.
 //
-// THREE THINGS THIS FILE EXISTS TO GET RIGHT (2026-10-28; the third 2026-11-01):
+// FOUR THINGS THIS FILE EXISTS TO GET RIGHT (2026-10-28; the third 2026-11-01; the
+// fourth 2026-11-02):
 //
 // 1. CLOSE THE BROWSER OVER CDP. On Windows the chrome.exe that spawn() starts
 //    hands off to a separate browser process and exits at once, so
@@ -44,6 +45,16 @@
 //    makes them so -- and the sweep assumes it: a run started beside another
 //    would sweep that run's Chrome, and the other run would fail loudly on its
 //    next CDP call, never silently.
+//
+// 4. CHROME PICKS ITS OWN PORT (2026-11-02, the dev's call). Each script drew from
+//    a range until then, and on one machine an updater held 127.0.0.1:9180 inside
+//    it. Chrome fell back to [::1], this file read the updater's HTML, and the run
+//    stopped on "Unexpected token '<'" with 10 Chrome processes left. So Chrome
+//    gets --remote-debugging-port=0 and the port is read back from
+//    DevToolsActivePort in its own throwaway profile, which nothing else writes.
+//    There is no range, no probe, and no window between checking and launching.
+//    The probe that was planned instead had to be right in three ways at once:
+//    listen(port) with no host reads "free" on the very collision above.
 import { spawn, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -53,6 +64,9 @@ import path from 'node:path';
 // navigator.serviceWorker.ready; this is more than twice that. The smoke test
 // prints each run's slowest call beside it, so the margin is on screen.
 export const CDP_TIMEOUT = 60000;
+// How long Chrome gets to write its port and open its first page. Measured at
+// about 220ms for the port; this used to be a fixed 2.5s sleep.
+const LAUNCH_TIMEOUT = 30000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -153,19 +167,32 @@ export async function sweepLeftovers(keep = launched) {
   return { browsers: browsers.size, profiles, processes: procs.length };
 }
 
-// Launches Chrome on `port` with a throwaway `profile` and connects to its
-// page. Resolves to { send, stats, close }; `onEvent` gets every protocol
-// event. If the connection fails, the browser is closed before the error is
-// thrown, so a failed launch leaves nothing running either. Before it spawns,
-// it sweeps what earlier runs left (3. above).
-export async function openChrome({ chrome, port, profile, width = 390, onEvent = null }) {
+// Launches Chrome with a throwaway `profile` on the port it picks for itself (4.
+// above) and connects to its page. Resolves to { send, stats, close }; `onEvent`
+// gets every protocol event. If the launch fails, every process on this profile
+// is killed before the error is thrown. This comment said that held until
+// 2026-11-02, when a failed launch was measured leaving 10 Chrome processes: the
+// close it relied on asked the DevTools port, and that port was the updater's.
+// Before it spawns, it sweeps what earlier runs left (3. above).
+export async function openChrome({ chrome, profile, width = 390, onEvent = null }) {
   launched.add(profile);
   await sweepLeftovers(launched);
   const proc = spawn(chrome, [
     '--headless=new', '--disable-gpu', '--no-first-run', '--hide-scrollbars',
-    `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`,
+    '--remote-debugging-port=0', `--user-data-dir=${profile}`,
     `--window-size=${width},844`, 'about:blank',
   ], { stdio: 'ignore' });
+
+  // Null until Chrome has written it. The file is two lines, the port and the
+  // browser's path, and a read can land before the second, so both are required.
+  let port = null;
+  const portFile = path.join(profile, 'DevToolsActivePort');
+  const readPort = () => {
+    try {
+      const m = fs.readFileSync(portFile, 'utf8').match(/^(\d+)\r?\n\/devtools\/browser\//);
+      return m ? Number(m[1]) : null;
+    } catch { return null; }
+  };
 
   let ws = null;
   let id = 0;
@@ -205,6 +232,7 @@ export async function openChrome({ chrome, port, profile, width = 390, onEvent =
   // and what counts is the port check after it.
   let chromePids = [];
   const closeBrowser = async () => {
+    if (port === null) throw new Error('Chrome never wrote its port');
     const version = await (await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(5000) })).json();
     const b = new WebSocket(version.webSocketDebuggerUrl);
     await new Promise((resolve, reject) => { b.onopen = resolve; b.onerror = () => reject(new Error('no browser connection')); });
@@ -220,6 +248,21 @@ export async function openChrome({ chrome, port, profile, width = 390, onEvent =
       b.send(JSON.stringify({ id: 2, method: 'Browser.close' }));
     });
     try { b.close(); } catch {}
+  };
+
+  // Every process on this profile, browser and helpers, from the sweep's own
+  // listing. The way to reach a Chrome that could not be asked over CDP, which has
+  // no pids to go on. Returns how many there were.
+  const killByProfile = async () => {
+    const dir = path.resolve(profile);
+    const own = () => listChromes().filter((p) => {
+      const q = profileOf(p.cmd);
+      return q && samePath(path.resolve(q), dir);
+    });
+    const procs = own();
+    for (const p of procs) { try { process.kill(p.pid); } catch {} }
+    for (let i = 0; i < 20 && procs.length && own().length; i++) await sleep(250);
+    return procs.length;
   };
 
   const stoppedAnswering = async (tries) => {
@@ -239,13 +282,20 @@ export async function openChrome({ chrome, port, profile, width = 390, onEvent =
     await Promise.race([closeBrowser().catch(() => {}), sleep(5000)]);
     try { ws?.close(); } catch {}
     try { proc.kill(); } catch {}
-    let gone = await stoppedAnswering(12);
-    if (!gone && chromePids.length) {
-      for (const pid of chromePids) { try { process.kill(pid); } catch {} }
-      gone = await stoppedAnswering(20);
-      if (gone) console.log(`  WARN  headless Chrome on port ${port} stayed up after Browser.close -- its processes were killed`);
+    if (chromePids.length) {
+      let gone = await stoppedAnswering(12);
+      if (!gone) {
+        for (const pid of chromePids) { try { process.kill(pid); } catch {} }
+        gone = await stoppedAnswering(20);
+        if (gone) console.log(`  WARN  headless Chrome on port ${port} stayed up after Browser.close -- its processes were killed`);
+      }
+      if (!gone) console.log(`  WARN  headless Chrome on port ${port} still answers after Browser.close -- it is left running`);
+    } else {
+      // Chrome could not be asked over CDP, so the port says nothing: on a failed
+      // launch it may not be Chrome's at all. The process list is the evidence.
+      const killed = await killByProfile();
+      if (killed) console.log(`  WARN  Chrome could not be closed over CDP -- its ${killed} process(es) on this profile were killed`);
     }
-    if (!gone) console.log(`  WARN  headless Chrome on port ${port} still answers after Browser.close -- it is left running`);
     // Chrome's helper processes can hold the profile for a moment after the
     // browser exits. A cleanup failure never masks a result -- decided
     // 2026-11-01, with the sweep above as its other half -- but it is not silent
@@ -255,10 +305,34 @@ export async function openChrome({ chrome, port, profile, width = 390, onEvent =
     if (failed) console.log(`  WARN  the throwaway profile was not removed (${failed.code || failed.message})`);
   };
 
+  // The page Chrome opened, or null while it is not up yet. Anything other than
+  // JSON on the port is not this Chrome, and says what it is rather than failing
+  // later on "Unexpected token '<'".
+  const firstPage = async () => {
+    let res;
+    try {
+      res = await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(2000) });
+    } catch { return null; }
+    const type = res.headers.get('content-type') || '(no content type)';
+    if (!/json/i.test(type)) throw new Error(`CDP: port ${port} answered /json/list with ${type}, not JSON, so it is not this Chrome`);
+    const targets = await res.json();
+    return targets.find((t) => t.type === 'page') || null;
+  };
+
   try {
-    await sleep(2500);
-    const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(CDP_TIMEOUT) })).json();
-    ws = new WebSocket(targets.find((t) => t.type === 'page').webSocketDebuggerUrl);
+    const deadline = Date.now() + LAUNCH_TIMEOUT;
+    let page = null;
+    while (!page) {
+      if (Date.now() > deadline) {
+        throw new Error(port === null
+          ? `CDP: Chrome wrote no DevToolsActivePort to its profile within ${LAUNCH_TIMEOUT / 1000}s`
+          : `CDP: Chrome on port ${port} opened no page within ${LAUNCH_TIMEOUT / 1000}s`);
+      }
+      port ??= readPort();
+      if (port !== null) page = await firstPage();
+      if (!page) await sleep(50);
+    }
+    ws = new WebSocket(page.webSocketDebuggerUrl);
     ws.onmessage = (e) => {
       const m = JSON.parse(e.data);
       if (m.id && pending.has(m.id)) {
@@ -283,5 +357,5 @@ export async function openChrome({ chrome, port, profile, width = 390, onEvent =
     throw err;
   }
 
-  return { send, stats: () => ({ calls, slowest }), close };
+  return { send, stats: () => ({ calls, slowest, port }), close };
 }

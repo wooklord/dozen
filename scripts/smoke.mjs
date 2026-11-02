@@ -68,8 +68,9 @@ const want = (name) => {
 const ON_DATE_HEAD = (hasHero) => (hasHero ? 'On the date of the show' : 'On this date');
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const PORT = 8123 + Math.floor(Math.random() * 400);
-const DEVPORT = 9123 + Math.floor(Math.random() * 400);
+// Assigned by listen(0) below. It was a draw from a range until 0.1.94, and a range
+// can hold something else. See CLAUDE.md, "Why scripts/smoke.mjs never hits this".
+let PORT = null;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Throwaway profile in the OS temp dir, not the repo.
 const PROFILE = path.join(os.tmpdir(), 'dozen-smoke-' + Date.now());
@@ -140,12 +141,15 @@ const skip = (msg) => { skips++; console.log(`  SKIP  ${msg}`); };
 // listen callback as an unhandled rejection: the process died on a stack
 // trace, with no verdict and the browser left running.
 let browser = null;
-server.listen(PORT, () => run().catch(async (err) => {
-  fail(`the run stopped: ${err.message}`);
-  const scope = ONLY ? ` — SCOPED, not a full run: ${ONLY.join(', ')}` : '';
-  console.log(`\nSMOKE FAILED — ${failures} problem(s); the run stopped before its end${scope}`);
-  await finish();
-}));
+server.listen(0, () => {
+  PORT = server.address().port;
+  run().catch(async (err) => {
+    fail(`the run stopped: ${err.message}`);
+    const scope = ONLY ? ` — SCOPED, not a full run: ${ONLY.join(', ')}` : '';
+    console.log(`\nSMOKE FAILED — ${failures} problem(s); the run stopped before its end${scope}`);
+    await finish();
+  });
+});
 
 let finished = false;
 async function finish() {
@@ -159,7 +163,7 @@ async function finish() {
 async function run() {
   const runtimeErrors = [];
   browser = await openChrome({
-    chrome: CHROME, port: DEVPORT, profile: PROFILE,
+    chrome: CHROME, profile: PROFILE,
     onEvent: (m) => {
       if (m.method === 'Runtime.exceptionThrown') {
         const d = m.params.exceptionDetails;
@@ -6718,8 +6722,8 @@ async function run() {
       for (const e of [...new Set(runtimeErrors)]) fail(e);
     } else pass('none');
 
-    const { calls, slowest } = browser.stats();
-    console.log(`\nCDP: ${calls} calls, the slowest ${slowest.ms}ms (${slowest.method}); each times out at ${CDP_TIMEOUT / 1000}s`);
+    const { calls, slowest, port } = browser.stats();
+    console.log(`\nCDP: ${calls} calls on port ${port}, the slowest ${slowest.ms}ms (${slowest.method}); each times out at ${CDP_TIMEOUT / 1000}s`);
 
     // Skips are carried into the summary line. A run that could not check
     // something must not read as a run that checked everything, even when it is

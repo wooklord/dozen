@@ -141,6 +141,28 @@ test('only scripts/cdp.mjs launches Chrome', () => {
   }
 });
 
+test('Chrome and the local servers are assigned a port, never given one from a range', () => {
+  // Each script drew its DevTools and server ports from a range until 0.1.94, and a
+  // range can hold something else: an updater on 127.0.0.1:9180 stopped one run on
+  // "Unexpected token '<'" with 10 Chrome processes left. Chrome picks its own now
+  // and each server listens on 0, so a draw or a fixed port is the old fault back.
+  assert.match(read('scripts/cdp.mjs'), /^\s*'--remote-debugging-port=0',/m, 'scripts/cdp.mjs must let Chrome pick its own DevTools port');
+  for (const f of ['smoke.mjs', 'layout-diff.mjs', 'verify-deploy.mjs']) {
+    const src = read(`scripts/${f}`);
+    assert.doesNotMatch(src, /\bDEVPORT\b/, `scripts/${f} draws a DevTools port`);
+    assert.doesNotMatch(src, /openChrome\(\{[^}]*\bport\b/, `scripts/${f} hands openChrome a port`);
+    assert.doesNotMatch(src, /\bport\w*\s*=\s*\d+\s*\+\s*Math\.random|Math\.random\(\)[^;\n]*\bport\b|\bPORT\w*\s*=\s*\d/i, `scripts/${f} draws or fixes a port`);
+    for (const m of src.matchAll(/\.listen\(([^,)]*)/g)) {
+      assert.equal(m[1], '0', `scripts/${f} listens on ${m[1]}, not on the port the OS assigns`);
+    }
+  }
+  // Two scripts serve the app. A listen written some other way would leave the loop
+  // above with nothing to read, and it would pass.
+  for (const f of ['smoke.mjs', 'layout-diff.mjs']) {
+    assert.match(read(`scripts/${f}`), /\.listen\(0,/, `scripts/${f} must serve on the port listen(0) assigns`);
+  }
+});
+
 test('every throwaway profile carries a prefix the sweep owns', () => {
   // openChrome() sweeps what earlier runs left -- every Chrome on a profile
   // under the temp directory with one of SWEPT_PREFIXES, and every such

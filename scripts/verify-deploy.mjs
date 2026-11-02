@@ -71,14 +71,13 @@ async function checkRenderedUi() {
   ].filter(Boolean).find((p) => fs.existsSync(p));
   if (!CHROME) { console.log('  skip  rendered UI check (no Chrome found)'); return; }
 
-  const DEVPORT = 9500 + Math.floor(Math.random() * 400);
   const profile = path.join(os.tmpdir(), 'dozen-verify-' + Date.now());
 
   // Every call times out and close() shuts the real browser down
   // (scripts/cdp.mjs); a failed launch closes it before throwing.
   let browser = null;
   try {
-    browser = await openChrome({ chrome: CHROME, port: DEVPORT, profile });
+    browser = await openChrome({ chrome: CHROME, profile });
     const { send } = browser;
     const ev = async (expression) => (await send('Runtime.evaluate', { expression, returnByValue: true }))?.result?.value;
 
