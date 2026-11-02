@@ -427,6 +427,42 @@ statistics. No writes to any database. No contact with the other two repos.
   by a download whose `cd` ran in a different subshell — were each caught after the fact, not
   prevented. The status check is what turns "caught later" into "caught now".
 
+  **A path built from a variable fails closed (ruled 2026-11-01).** The rule above described the
+  habit that would have avoided the Program Files slip and prevented nothing. That slip, read back
+  from the transcript of 2026-10-21 23:06 UTC: the line opened with `cat > "$SCRATCH/edit-index.mjs"
+  2>/dev/null || true`, to clear the file, and assigned `SCRATCH` on the same line *after* it. The
+  path was absolute, in a variable that was still empty, so the redirect wrote an empty file at
+  `/edit-index.mjs`, which in Git Bash is `C:\Program Files\Git\edit-index.mjs`, and the
+  `2>/dev/null || true` silenced the only sign. `git status` cannot see a write outside the repo, so
+  the status check is blind to this whole class. **So a directory variable in a path is written
+  `"${SCRATCH:?}/name"` in Bash and `Join-Path (Resolve-Path $dir) name` in PowerShell.** Proved in a
+  throwaway shell, writing nothing: with `X` unset, `cat > "${X:?}/probe" 2>/dev/null || true`
+  prints `X: parameter null or not set` (the expansion fails before the command, so its stderr
+  redirect does not hide it), creates no file at `/probe` or anywhere, and the line continues past
+  the `|| true`; the guard stops the write, not the line. `Join-Path (Resolve-Path $d) 'probe'` with
+  `$d` empty throws `Cannot bind argument to parameter 'Path' because it is an empty string`, and
+  with `$d` null the same for null, where `"$d\probe"` reads `\probe`, the drive root.
+
+- **A removal is a command of its own, with a literal target, and never on a line that also names a
+  protected path (ruled 2026-11-01).** `rm`, `Remove-Item`, `del`, `rmdir`, anything that deletes.
+  On 2026-11-01 04:13 UTC one PowerShell line did four things: stop a leftover headless Chrome,
+  count the rest, `Remove-Item` the `dozen-smoke-*` profiles under `$env:TEMP`, and read Chrome's
+  version from `C:\Program Files\Google\Chrome\Application\chrome.exe`. The built-in safety check is
+  static: it paired the `Remove-Item` with the `C:\Program` token of that quoted, read-only path
+  later on the same line, splitting at the space in its own tokenizer, and refused the whole line,
+  `Stop-Process` included. A false positive against a safe command. Bundling a removal with
+  unrelated operations is what made the line ambiguous, to the check and to anyone reading it; a
+  removal alone on its line, naming its target literally, can be read by both. The retry that ran
+  a minute later had the removal taken out and deleted nothing, which is also the record of what
+  that line was worth: the Chrome was the point, the removal was a passenger.
+
+  **Both guardrails fired on the harmless half.** November blocked a safe command. October blocked
+  the cleanup, `rm -f /edit-index.mjs`, refused as a root-path removal, while the actual mistake,
+  the write that put the file there, had gone through two minutes earlier with its error silenced.
+  The guardrails stay, and they are not the fix: a check that stops the second half of a mistake
+  cannot stop the first. That is why these two rules are about how a command is written, not about
+  the check.
+
 ### The recurring failure: "what else could satisfy this?"
 
 **Every verification failure in this project has been the same failure.** Not
