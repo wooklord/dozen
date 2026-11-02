@@ -4,7 +4,7 @@
 // the copies had drifted: verify-deploy timed its calls out after its first
 // live route walk hung, and the other two never did.
 //
-// TWO THINGS THIS FILE EXISTS TO GET RIGHT (2026-10-28):
+// THREE THINGS THIS FILE EXISTS TO GET RIGHT (2026-10-28; the third 2026-11-01):
 //
 // 1. CLOSE THE BROWSER OVER CDP. On Windows the chrome.exe that spawn() starts
 //    hands off to a separate browser process and exits at once, so
@@ -31,8 +31,23 @@
 //    naming its method, and a dropped connection rejects every call waiting
 //    on it at once. A check that hangs is worse than one that fails, because
 //    it reports nothing at all.
-import { spawn } from 'node:child_process';
+//
+// 3. SWEEP WHAT EARLIER RUNS LEFT (2026-11-01, the dev's call). That close()
+//    warns and the verdict stands was Code's default on 2026-10-28, offered as
+//    the dev's call and left open until 2026-11-01, when it was decided with
+//    its other half: a verdict never depends on cleanup, and leftovers never
+//    accumulate. So before openChrome() spawns, sweepLeftovers() kills every
+//    Chrome whose command line carries a --user-data-dir under the temp
+//    directory with one of SWEPT_PREFIXES, removes every such directory, and
+//    prints "swept N browsers, M profiles", N the distinct profiles among the
+//    processes killed. Runs are sequential -- Carton's 60/minute limit already
+//    makes them so -- and the sweep assumes it: a run started beside another
+//    would sweep that run's Chrome, and the other run would fail loudly on its
+//    next CDP call, never silently.
+import { spawn, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 // The longest deliberate wait inside one call is smoke.mjs's 25s ceiling on
 // navigator.serviceWorker.ready; this is more than twice that. The smoke test
@@ -41,11 +56,111 @@ export const CDP_TIMEOUT = 60000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// The throwaway profiles the three scripts create, and the only ones the sweep
+// will ever kill a Chrome for or remove. tests/hygiene.test.mjs holds each
+// script's profile literal to this list, so a renamed or fourth prefix fails
+// there instead of escaping the sweep for good.
+export const SWEPT_PREFIXES = ['dozen-smoke-', 'dozen-layout-', 'dozen-verify-'];
+const TMP = path.resolve(os.tmpdir());
+const WIN = process.platform === 'win32';
+// Windows paths compare case-insensitively (the dev's call, 2026-11-01).
+const samePath = (a, b) => (WIN ? a.toLowerCase() === b.toLowerCase() : a === b);
+// The profiles this process launched itself, which the sweep leaves alone.
+const launched = new Set();
+
+// The profile a sweep may act on, or null: a directory straight under the temp
+// directory whose name starts with one of SWEPT_PREFIXES and which this process
+// did not launch.
+function sweptProfile(p, keep) {
+  if (!p) return null;
+  const dir = path.resolve(p);
+  if (!samePath(path.dirname(dir), TMP)) return null;
+  const name = path.basename(dir);
+  if (!SWEPT_PREFIXES.some((pre) => name.startsWith(pre))) return null;
+  for (const k of keep) if (samePath(path.resolve(k), dir)) return null;
+  return dir;
+}
+
+// The value of --user-data-dir on a command line, quoted or not, or null.
+function profileOf(cmd) {
+  const key = '--user-data-dir=';
+  const i = cmd.toLowerCase().indexOf(key);
+  if (i < 0) return null;
+  let from = i + key.length;
+  const quoted = cmd[i - 1] === '"' || cmd[from] === '"';
+  if (cmd[from] === '"') from++;
+  const rest = cmd.slice(from);
+  const n = quoted ? rest.indexOf('"') : rest.search(/\s/);
+  return n < 0 ? rest : rest.slice(0, n);
+}
+
+// Every Chrome process with its command line: Win32_Process on Windows, ps
+// elsewhere. A listing that fails says so, because a sweep that cannot see
+// processes would otherwise read "swept 0 browsers" on every run, for good.
+const PS_LIST = 'Get-CimInstance Win32_Process -Filter "Name=\'chrome.exe\'" | ForEach-Object { "$($_.ProcessId)`t$($_.CommandLine)" }';
+function listChromes() {
+  let out = '';
+  try {
+    out = WIN
+      ? execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(PS_LIST, 'utf16le').toString('base64')], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+      : execFileSync('ps', ['-eo', 'pid=,args='], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  } catch (err) {
+    console.log(`  WARN  the sweep could not list Chrome processes (${String(err.message).split('\n')[0]})`);
+    return [];
+  }
+  return out.split(/\r?\n/).map((line) => {
+    const m = line.match(/^\s*(\d+)[\t ]+(.*)$/);
+    return m ? { pid: Number(m[1]), cmd: m[2] } : null;
+  }).filter((p) => p && /chrome/i.test(p.cmd));
+}
+
+async function removeDir(dir, tries) {
+  let failed = null;
+  for (let i = 0; i < tries; i++) {
+    failed = null;
+    try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); return null; }
+    catch (err) { failed = err; await sleep(500); }
+  }
+  return failed;
+}
+
+// Kills every Chrome on a swept profile, removes every swept profile, and prints
+// one line. Nothing else: the user's own Chrome never carries such a path, and a
+// dozen-smoke-*.log beside the profiles is a file, not a profile. It keys on the
+// profile path and not on --headless because the helpers that outlast a browser
+// hold its profile and carry the path. A verdict never depends on this: a
+// directory it cannot remove is a WARN, and the run goes on.
+export async function sweepLeftovers(keep = launched) {
+  const procs = listChromes()
+    .map((p) => ({ ...p, dir: sweptProfile(profileOf(p.cmd), keep) }))
+    .filter((p) => p.dir);
+  const browsers = new Set(procs.map((p) => (WIN ? p.dir.toLowerCase() : p.dir)));
+  for (const p of procs) { try { process.kill(p.pid); } catch {} }
+  if (procs.length) {
+    const pids = new Set(procs.map((p) => p.pid));
+    for (let i = 0; i < 20 && listChromes().some((p) => pids.has(p.pid)); i++) await sleep(250);
+  }
+  let profiles = 0;
+  for (const e of fs.readdirSync(TMP, { withFileTypes: true })) {
+    if (!e.isDirectory()) continue;
+    const dir = sweptProfile(path.join(TMP, e.name), keep);
+    if (!dir) continue;
+    const failed = await removeDir(dir, 6);
+    if (failed) console.log(`  WARN  the sweep could not remove ${e.name} (${failed.code || failed.message})`);
+    else profiles++;
+  }
+  console.log(`swept ${browsers.size} browsers, ${profiles} profiles`);
+  return { browsers: browsers.size, profiles, processes: procs.length };
+}
+
 // Launches Chrome on `port` with a throwaway `profile` and connects to its
 // page. Resolves to { send, stats, close }; `onEvent` gets every protocol
 // event. If the connection fails, the browser is closed before the error is
-// thrown, so a failed launch leaves nothing running either.
+// thrown, so a failed launch leaves nothing running either. Before it spawns,
+// it sweeps what earlier runs left (3. above).
 export async function openChrome({ chrome, port, profile, width = 390, onEvent = null }) {
+  launched.add(profile);
+  await sweepLeftovers(launched);
   const proc = spawn(chrome, [
     '--headless=new', '--disable-gpu', '--no-first-run', '--hide-scrollbars',
     `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`,
@@ -132,15 +247,11 @@ export async function openChrome({ chrome, port, profile, width = 390, onEvent =
     }
     if (!gone) console.log(`  WARN  headless Chrome on port ${port} still answers after Browser.close -- it is left running`);
     // Chrome's helper processes can hold the profile for a moment after the
-    // browser exits; a cleanup failure must never mask a result, but it must
-    // not be silent either, or the profiles pile up again. Retried here as well as
-    // in rmSync, whose own retries gave up with EPERM on a profile free moments later.
-    let failed = null;
-    for (let i = 0; i < 40; i++) {
-      failed = null;
-      try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); break; }
-      catch (err) { failed = err; await sleep(500); }
-    }
+    // browser exits. A cleanup failure never masks a result -- decided
+    // 2026-11-01, with the sweep above as its other half -- but it is not silent
+    // either, or the profiles pile up again. Retried here as well as in rmSync,
+    // whose own retries gave up with EPERM on a profile free moments later.
+    const failed = await removeDir(profile, 40);
     if (failed) console.log(`  WARN  the throwaway profile was not removed (${failed.code || failed.message})`);
   };
 

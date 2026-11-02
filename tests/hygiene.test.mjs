@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ROUTES, REDIRECTS } from '../scripts/routes.mjs';
+import { SWEPT_PREFIXES } from '../scripts/cdp.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -137,6 +138,19 @@ test('only scripts/cdp.mjs launches Chrome', () => {
   assert.deepEqual(launching, [], `launches its own Chrome instead of going through scripts/cdp.mjs`);
   for (const f of ['smoke.mjs', 'layout-diff.mjs', 'verify-deploy.mjs']) {
     assert.match(read(`scripts/${f}`), /^import \{[^}]*\bopenChrome\b[^}]*\} from '\.\/cdp\.mjs';$/m, `scripts/${f} must open Chrome through scripts/cdp.mjs`);
+  }
+});
+
+test('every throwaway profile carries a prefix the sweep owns', () => {
+  // openChrome() sweeps what earlier runs left -- every Chrome on a profile
+  // under the temp directory with one of SWEPT_PREFIXES, and every such
+  // directory -- before it launches (2026-11-01). A script whose profile is
+  // named outside the list would leak past the sweep for good, and nothing on
+  // a green run would say so.
+  for (const f of ['smoke.mjs', 'layout-diff.mjs', 'verify-deploy.mjs']) {
+    const m = read(`scripts/${f}`).match(/path\.join\(os\.tmpdir\(\), '([^']+)' \+ Date\.now\(\)\)/);
+    assert.ok(m, `scripts/${f} must build its profile as path.join(os.tmpdir(), '<prefix>' + Date.now())`);
+    assert.ok(SWEPT_PREFIXES.includes(m[1]), `scripts/${f} names its profile "${m[1]}...", which is not in SWEPT_PREFIXES ${JSON.stringify(SWEPT_PREFIXES)} -- the sweep would never remove it`);
   }
 });
 

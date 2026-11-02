@@ -797,8 +797,10 @@ checks were verified this way:
     no `WARN`. With `Browser.close` skipped: 0 → 2 processes (one browser
     and its helper) and 1 profile left, with both `WARN` lines, `still
     answers after Browser.close` and `the throwaway profile was not removed
-    (EPERM)`. The verdict stayed `SMOKE PASSED`, as it must: a cleanup never
-    moves the result.
+    (EPERM)`. The verdict stayed `SMOKE PASSED`. That the cleanup warns and the
+    verdict stands was Code's default that day, offered as the dev's call and
+    left open until 2026-11-01, when it was decided with its other half, that
+    leftovers never accumulate: the sweep, the last bullet of this list.
   - a call Chrome never answers -- `Runtime.evaluate` awaiting `new
     Promise(() => {})` -- staged in each script in turn. Smoke: `FAIL  the
     run stopped: CDP Runtime.evaluate timed out after 60s with no reply from
@@ -1069,7 +1071,9 @@ checks were verified this way:
   2 of 2. The fault had stopped by itself and its cause was never established, so the
   kill is a response to a condition that may recur. It is proved by staging the condition
   instead of waiting for it, `Browser.close` swapped for `Browser.getVersion`, with the
-  verdict `SMOKE PASSED` both ways, as it must be. With the kill: `stayed up after
+  verdict `SMOKE PASSED` both ways, on the 2026-10-28 default that was still the dev's
+  open call (made on 2026-11-01: the sweep, the last bullet of this list). With the
+  kill: `stayed up after
   Browser.close -- its processes were killed`, 0 Chromes, the profile removed. Without:
   `still answers`, `EPERM`, 8 Chrome processes on that profile. Commit `9f3baf3`'s
   message predates this; the comment in `scripts/cdp.mjs` carries the correction.
@@ -1263,6 +1267,63 @@ checks were verified this way:
   change being comment-only. **A pill row renders only in a narrowed state and a sheet
   only while open, so that says the routes at rest did not move and nothing about either;**
   the pill row's figures are in `docs/design.md`, 0.1.91.
+- The sweep (2026-11-01, scripts only, no bump). **The dev's decision, closing a call that
+  had been open since 2026-10-28:** a verdict never depends on cleanup, and leftovers never
+  accumulate. The first half was Code's default when `scripts/cdp.mjs` was written, offered
+  as the dev's call and carried in this file at a ruling's weight until it was decided; the
+  second half is new. So before `openChrome()` spawns, on every smoke, layout-diff and
+  verify-deploy run, `sweepLeftovers()` kills every Chrome whose command line carries a
+  `--user-data-dir` under the temp directory with one of `SWEPT_PREFIXES` (`dozen-smoke-`,
+  `dozen-layout-`, `dozen-verify-`), removes every such directory, and prints `swept N
+  browsers, M profiles` as the run's first line, N the distinct profiles among the processes
+  killed. Nothing else: the user's own Chrome never carries such a path, and a file beside
+  the profiles is not a profile. It keys on the path and not on `--headless` because the
+  helpers that outlast a browser hold its profile and carry the path -- 11 of the 12
+  processes on each staged browser below. On Windows the path compares case-insensitively.
+  A listing that fails prints a `WARN`, because a sweep that cannot see processes would
+  otherwise read `swept 0 browsers` on every run, for good. The end-of-run `WARN` lines stay.
+  **Runs are sequential, and the sweep assumes it, with no guard (the dev's call).** Carton's
+  60/minute limit already makes them so; a run started beside another would sweep that run's
+  Chrome, and the other run would fail loudly on its next CDP call, never silently.
+  `tests/hygiene.test.mjs` holds each script's profile prefix to the list, so a renamed or
+  fourth prefix fails there instead of escaping the sweep.
+
+  Before any of it, the temp directory was listed and cleared of what earlier scratch probes
+  had left -- **79 `dozen-*` directories from 2026-09-02 to 2026-11-01, 267 MB, 75 of them
+  empty** -- in one removal naming all 79 literally, directories only; the 18 `dozen-*`
+  files beside them, five of them `dozen-smoke-run*.log` from 2026-10-25, stayed. None of
+  the 79 carried a script's prefix, so the sweep would never have reached them.
+
+  The proofs, each staged from a scratch Node script by exact string, the staged hash
+  confirmed different from the byte copy and the new line read back, the file restored
+  from the copy by hash:
+  - the dev's: `dozen-smoke-1`, a directory with a file in it, and `notdozen-smoke-1` left in
+    temp, then `--only stale-table`: first line `swept 0 browsers, 1 profiles`, `SMOKE
+    PASSED`, 13.8s; after it `dozen-smoke-1` gone, `notdozen-smoke-1` and the 18 files
+    present, 0 Chromes.
+  - processes: a headless Chrome launched by hand on `dozen-verify-7` and one on
+    `dozen-probe-7`, a prefix the sweep does not own, 12 processes each -- browser, GPU,
+    renderers, utilities and crashpad, every one carrying the path, the launcher having
+    quoted the argument -- then `--only stale-table`: `swept 1 browsers, 1 profiles`,
+    `SMOKE PASSED`, 12.7s; after it 0 processes on `dozen-verify-7` and its directory gone,
+    8 still on `dozen-probe-7` with its directory, and no other `chrome.exe` on the machine.
+    The probe was stopped by pid and its directory removed, each on a line of its own.
+  - the directory guard, by a direct call of `sweepLeftovers()`, the function `openChrome()`
+    calls, with the prefix list staged to `dozen-proofx-` so nothing real was in reach: with
+    the guard removed, a `dozen-proofx-1` directory and a `dozen-proofx-1.log` file both
+    went, `swept 0 browsers, 2 profiles`; with the guard back, `swept 0 browsers, 1
+    profiles` and the file left. That is the line between a profile and the five smoke logs.
+  - the hygiene test: `dozen-smoke-` renamed `dozen-smokey-` in `smoke.mjs`, 1 failure,
+    `names its profile "dozen-smokey-...", which is not in SWEPT_PREFIXES`.
+  - all three scripts print the line: layout-diff `HEAD vs working tree, 390px` read `swept 0
+    browsers, 0 profiles` and 9 routes identical, 80 to 1600 boxes, in 35s; verify-deploy
+    read it between its two fetch checks and its browser check, `DEPLOY VERIFIED -- live
+    BUILD is 0.1.91`, 19s.
+
+  Restored, by hash the same files: 267 passing, smoke 368 ok with 0 skips and no `WARN` in
+  529s, its first line `swept 0 browsers, 0 profiles`, and 0 Chromes and 0 profiles after
+  it. The `ok` count is 0.1.91's: the sweep line is not a check, so a full run gains one
+  line of output and no checks.
 
 Do this for every new check. It is the only thing that separates a real check
 from a comforting one.
@@ -1730,7 +1791,12 @@ copy that drifted would be the one checking production.
 the same reason, and is not a check either. The copies it replaced (2026-10-28)
 had drifted exactly that way: one timed its calls out, two never did, and none
 closed the browser it started. `tests/hygiene.test.mjs` fails on a script that
-launches its own.
+launches its own. Since 2026-11-01 it also sweeps what earlier runs left before
+it launches -- every Chrome on a `dozen-smoke-`, `dozen-layout-` or
+`dozen-verify-` profile under the temp directory, and every such directory --
+and prints `swept N browsers, M profiles` as the run's first line; the hygiene
+test holds each script's profile prefix to that list. The decision and its
+proofs are the last bullet under *The recurring failure*.
 
 **Only the smoke test and `node --test` gate a push.** The layout diff goes red
 on any *intended* layout change, which is most commits — as a gate it would
