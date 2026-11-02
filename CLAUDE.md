@@ -1798,6 +1798,18 @@ and prints `swept N browsers, M profiles` as the run's first line; the hygiene
 test holds each script's profile prefix to that list. The decision and its
 proofs are the last bullet under *The recurring failure*.
 
+**An archive snapshot for the smoke test was considered and dropped (2026-11-01).**
+The smoke test boots the app on a cold pull from The Carton every run, and the
+idea was a saved archive it could boot from instead. Two measurements settled
+it: a scoped run already boots and finishes in 11–12s (`stale-table`, `markup`),
+so the pull is not where the time goes; and ten checks fetch Carton directly to
+hold the app to raw rows (`shows`, `setlists`, `venues`, `songs`, `jamcharts`
+and one song page), with the `stale-table` section needing a real refresh, so a
+snapshot would not take Carton out of a run either. What it would have bought
+is runs back to back without the 25s gap for Carton's limit, and that was not
+worth a second data path. The header of `src/data/source.js` claimed a snapshot
+could be swapped in, with no code behind the claim, and was corrected with this.
+
 **Only the smoke test and `node --test` gate a push.** The layout diff goes red
 on any *intended* layout change, which is most commits — as a gate it would
 train you to ignore it.

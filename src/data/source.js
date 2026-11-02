@@ -1,7 +1,11 @@
 // THE ONLY MODULE THAT TOUCHES THE NETWORK.
 //
-// Keeping every fetch behind this one interface means the strategy (live API
-// vs. a committed snapshot) is swappable in one file.
+// Keeping every fetch behind this one interface means the smoke test, the gap
+// oracle and the unit tests reason about the network in one place. There is
+// no snapshot: the app pulls The Carton live, and a saved archive for the
+// smoke test to boot from was considered and dropped on 2026-11-01 (CLAUDE.md,
+// under "The checks, and when to run each"). Until then this header claimed a
+// committed snapshot could be swapped in here, with no code behind the claim.
 //
 // CORS was verified from a real page context: the API sends
 // Access-Control-Allow-Origin: *, so direct client-side fetches work.
