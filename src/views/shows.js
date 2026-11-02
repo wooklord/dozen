@@ -30,6 +30,7 @@ import {
   showPermalink,
   attribution,
   emptyState,
+  sectionHead,
   venueLine,
   venuePlace,
 } from '../ui/components.js';
@@ -205,10 +206,12 @@ export function renderShows(ctx) {
 
   // ---------------------------------------------------------------- helpers --
 
-  /** Section header carrying its own count, so a capped list is never silent. */
+  /** Section header carrying its own count, so a capped list is never silent.
+   *  Through sectionHead() since 0.1.92, so the one head rule reaches it; it
+   *  was a bare h2.section-title until then. */
   function countedHead(title, shown, total) {
     const label = shown < total ? `${title} (${shown} of ${total})` : `${title} (${total})`;
-    return el('h2.section-title', { text: label });
+    return sectionHead(label);
   }
 
   /** Years that actually have shows, newest first. Derived, never hardcoded. */

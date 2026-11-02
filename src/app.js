@@ -256,7 +256,7 @@ function themeControl() {
     const current = getTheme();
     const resolved = resolvedTheme(current);
     replace(wrap, [
-      el('div.section-title', { style: { marginBottom: '6px' }, text: 'Appearance' }),
+      el('h3.sheet-group-title', { text: 'Appearance' }),
       el(
         'div.segmented',
         { role: 'group', 'aria-label': 'Appearance' },
@@ -308,7 +308,7 @@ function openSettingsSheet() {
       // Ordering by interaction frequency, not by importance.
       themeControl(),
 
-      el('div.section-title', { style: { marginTop: '6px' }, text: 'Data' }),
+      el('h3.sheet-group-title', { text: 'Data' }),
       el('div.stat-grid', null, [
         el('div.stat', null, [
           statValue(i?.counts.setlistRows ?? 0),
@@ -380,7 +380,7 @@ function openSettingsSheet() {
       // How gap is counted: provenance, read once. Last, because it is
       // reference rather than something to act on.
       el('div.card', { style: { marginTop: '6px' } }, [
-        el('div.section-title', { style: { marginBottom: '6px' }, text: 'How gap is counted' }),
+        el('h3.sheet-group-title', { text: 'How gap is counted' }),
         el('p', {
           style: { margin: '0 0 8px', fontSize: 'var(--t-sm)' },
           text:

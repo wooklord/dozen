@@ -1283,16 +1283,20 @@ have shipped the wrong thing:**
    before any code, with the rule on every head and with the first head's rule suppressed**
    (`docs/design.md`, 0.1.92): the first head followed the hero card with 32px of shell between
    the card's edge and the rule, which read as a section opening, not a doubled edge. Item 6 then
-   put a head above the hero, and the same check applies to it. **Supersedes** the
+   put a head above the hero as the screen's first child, and that one's rule sat 16px under the
+   app header's own edge and read doubled, so **the head that opens a screen carries no rule**, by
+   the structural selector `.screen > .section-head:first-child`, never a caller option; every
+   head that follows content keeps it. **Supersedes** the
    `.section-title` comment of 0.1.45 ("13px is the same treatment at a size that holds its own
    above a card").
 6. **Home gets a head at the top, above the first card (the addendum, the dev's call):**
    `sectionHead('Upcoming show')` above the hero when the top card is a scheduled show. Between
    tours the top card is the latest played show, and the view already heads it "Most recent
    show", which is kept as the better word over "Latest show"; the bare `div.section-title`
-   reading "No upcoming shows" above the screen title in that branch becomes a `p.screen-sub`
-   line, since it is a status, not a section. "On this date" stays the route marker. The
-   no-upcoming branch renders only between tours and was not measured.
+   reading "No upcoming shows" above the screen title in that branch goes, since the title
+   "Nothing on the books" and its sub-line already say it and a status is not a section. "On
+   this date" stays the route marker. The no-upcoming branch renders only between tours and
+   was not measured.
 7. **Every section heading goes through `sectionHead()`, verified (the addendum).** The source
    was listed: the hand-built heads were Home's "Earlier in this run" (`div.section-title` in the
    run-only card), Home's "No upcoming shows" (item 6), and the Shows detail view's counted heads

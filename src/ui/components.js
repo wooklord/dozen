@@ -17,6 +17,26 @@ export function cartonLink(href, label = 'View on The Carton') {
   });
 }
 
+/**
+ * The screen's Carton deep links, one row above attribution() (0.1.92,
+ * docs/plan.md, "Song and show page presentation"): "On The Carton:" and one
+ * cartonLink() per [label, href], separated by a middot. Song detail, show
+ * detail and gap history link home here and nowhere else on the screen; each
+ * used to carry an inline link standing alone in a 44px box, and song detail
+ * one per entry card besides. The deep-link rule in CLAUDE.md asks for a link
+ * to the corresponding page on every view, which this row is.
+ */
+export function cartonRow(links) {
+  const row = el('nav.link-row.carton-row', { 'aria-label': 'On The Carton' }, [
+    el('span', { text: 'On The Carton:' }),
+  ]);
+  links.forEach(([label, href], i) => {
+    if (i) append(row, el('span', { 'aria-hidden': 'true', text: '·' }));
+    append(row, cartonLink(href, label));
+  });
+  return row;
+}
+
 // Carton's real URL shapes, verified against its sitemap and by request.
 // The `permalink` field is a bare filename -- it needs a section prefix, and
 // the WRONG prefix returns a 404 rather than redirecting:
@@ -172,7 +192,7 @@ export function openGapExplainer(index, { withFootnoteNote = true, atShow = fals
           })
         : null,
       el('div.card', null, [
-        el('div.section-title', { style: { marginBottom: '6px' }, text: 'Which shows count' }),
+        el('h3.sheet-group-title', { text: 'Which shows count' }),
         el(
           'ul.fn-list',
           { style: { margin: 0 } },
@@ -205,7 +225,7 @@ export function openGapExplainer(index, { withFootnoteNote = true, atShow = fals
       ]),
       withFootnoteNote
         ? el('div.card', null, [
-            el('div.section-title', { style: { marginBottom: '6px' }, text: "The Carton's own gap notes" }),
+            el('h3.sheet-group-title', { text: "The Carton's own gap notes" }),
             el('p', {
               style: { margin: 0, fontSize: 'var(--t-sm)', color: 'var(--ink-dim)' },
               text:
@@ -471,15 +491,51 @@ export function openFootnote(text, index) {
  */
 export function jamEntryCard(entry, onSong) {
   const note = jamNoteText(entry.note, entry.isRecommended);
+  return jamCard(
+    el('button.jam-card-song', {
+      type: 'button',
+      text: entry.songname,
+      onclick: () => onSong(entry.song_id),
+    }),
+    el('span.badge.badge-set', { text: setLabel(entry.settype, entry.setnumber) }),
+    null,
+    note,
+  );
+}
+
+/**
+ * The same card on song detail (0.1.92, docs/plan.md, "Song and show page
+ * presentation", item 4), from a raw jamcharts row: led by the show's date as
+ * a control to the app's own show page, the Every performance rows' pattern,
+ * with the venue line under it. The per-card Carton link went with the
+ * reshape: each led to a different show page, and the show page carries that
+ * show's link in its footer row. `showid`, no underscore, is the jamcharts
+ * table's own name for the show (docs/carton_schema.md).
+ */
+export function jamShowCard(entry, onShow) {
+  const note = jamNoteText(entry.jamchartnote, Number(entry.isrecommended) === 1);
+  return jamCard(
+    el('button.jam-card-date', {
+      type: 'button',
+      text: formatShowDate(entry.showdate),
+      onclick: () => onShow(Number(entry.showid)),
+    }),
+    el('span.badge.badge-set', { text: setLabel('Set', entry.setnumber) }),
+    venueLine(entry),
+    note,
+  );
+}
+
+/**
+ * The one jam entry card: a head holding the lead control and the set badge,
+ * an optional line under it, and the note in --ink-dim. Show detail, the jam
+ * notes sheet and song detail all render this, which is what lets one CSS
+ * rule put the green edge on every one of them.
+ */
+function jamCard(lead, setBadge, below, note) {
   return el('div.card.jam-card', null, [
-    el('div.jam-card-head', null, [
-      el('button.jam-card-song', {
-        type: 'button',
-        text: entry.songname,
-        onclick: () => onSong(entry.song_id),
-      }),
-      el('span.badge.badge-set', { text: setLabel(entry.settype, entry.setnumber) }),
-    ]),
+    el('div.jam-card-head', null, [lead, setBadge]),
+    below,
     note ? el('p.jam-card-note', { text: note }) : null,
   ]);
 }

@@ -40,7 +40,7 @@ import { WHEN_STATES } from '../src/util/when.js';
 // Three ways a scoped run could report health it never established, each closed:
 // a mistyped name fails here before Chrome starts, a run that executes no check
 // fails in endRun(), and its verdict line says it was scoped and how much ran.
-const SECTIONS = ['nav-states', 'show-detail', 'jam-button', 'jam-notes', 'sheet', 'markup', 'stale-table'];
+const SECTIONS = ['nav-states', 'show-detail', 'song-detail', 'section-heads', 'jam-button', 'jam-notes', 'sheet', 'markup', 'stale-table'];
 const ONLY = parseOnly(process.argv.slice(2));
 
 function parseOnly(args) {
@@ -2479,7 +2479,10 @@ async function run() {
           stats: !!hero.querySelector('.stat-grid'),
           actions: !!hero.querySelector('.card-actions'),
         } : null,
-        heroIsFirst: hero ? screen.firstElementChild === hero : null,
+        // Since 0.1.92 the screen opens with the "Upcoming show" head and the
+        // hero follows it directly; nothing else may come before the hero.
+        headFirst: screen.firstElementChild && screen.firstElementChild.matches('.section-head') ? (screen.firstElementChild.querySelector('.section-title') || {}).textContent : null,
+        heroIsFirst: hero ? !!screen.firstElementChild && screen.firstElementChild.nextElementSibling === hero : null,
         kickerIsSectionTitle: kicker ? kicker.classList.contains('section-title') : null,
         kickerSize: kicker ? parseFloat(getComputedStyle(kicker).fontSize) : null,
         titleSizes: titles.map((t) => parseFloat(getComputedStyle(t).fontSize)),
@@ -2492,9 +2495,11 @@ async function run() {
       const missing = Object.entries(h.holds || {}).filter(([, v]) => !v).map(([k]) => k);
       if (missing.length) {
         fail(`Home (${theme}): the hero card does not contain ${missing.join(', ')} — the show's parts are still loose on the page`);
+      } else if (h.headFirst !== 'Upcoming show') {
+        fail(`Home (${theme}): the screen opens with ${JSON.stringify(h.headFirst)}, not the "Upcoming show" head over the hero`);
       } else if (!h.heroIsFirst) {
-        fail(`Home (${theme}): something renders above the upcoming show`);
-      } else pass(`${theme}: one hero holding the date, venue, stats and actions, first on the screen`);
+        fail(`Home (${theme}): something renders between the "Upcoming show" head and the hero`);
+      } else pass(`${theme}: one hero holding the date, venue, stats and actions, under the "Upcoming show" head that opens the screen`);
     }
 
     const minTitle = Math.min(...(h.titleSizes.length ? h.titleSizes : [0]));
@@ -3884,7 +3889,8 @@ async function run() {
     const navigated = tileRead && (await evaluate(`(() => { document.querySelector('.screen button.stat-nav').click(); return true; })()`));
     await sleep(1100);
     const there = await readHistory();
-    const historyCarton = await evaluate(`(() => { const a = [...document.querySelectorAll('.screen a.carton-link')].find((x) => x.textContent.trim() === 'Song page on The Carton'); return a ? a.href : null; })()`);
+    // In the footer row since 0.1.92, reading "Song", as on song detail.
+    const historyCarton = await evaluate(`(() => { const a = [...document.querySelectorAll('.screen .carton-row a.carton-link')].find((x) => x.textContent.trim() === 'Song'); return a ? a.href : null; })()`);
     const reloaded = there.hash === '#/song/54/gaps' && (await reloadHistory());
     const backed = await tapBack();
     await sleep(1100);
@@ -4094,8 +4100,9 @@ async function run() {
   //     per-performance count of 2 is exercised and a fold per show would
   //     show. GREEN MEANS JAM CHART ONLY:
   //     on every screen visited, in both themes, a badge painted --jam is a
-  //     .badge-jam reading a jam label -- a count on show detail and nowhere
-  //     else -- every .badge-jam is painted --jam, and
+  //     .badge-jam reading a jam label -- a count on show detail's and song
+  //     detail's "Jam chart entries" heads and nowhere else -- every
+  //     .badge-jam is painted --jam, and
   //     Debut is the plain badge -- on Shadow's history and on the gap chart
   //     of Shadow's debut show. SKIPs if Carton is unreachable.
   // (2) THE TITLE CHIP: hidden, inert and unfocusable at load; hidden with the
@@ -4128,8 +4135,9 @@ async function run() {
     if (was === null) document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', was);
     return out; })()`);
   // "Jam chart" on song detail, "Jam" on Gap history; the entry count on show
-  // detail, and a bare number nowhere else, so a count turning up in a
-  // .badge-jam on another screen fails. Nothing else may wear the class.
+  // detail and (0.1.92) on song detail's "Jam chart entries" head, and a bare
+  // number nowhere else, so a count turning up in a .badge-jam on another
+  // screen fails. Nothing else may wear the class.
   const JAM_LABEL = /^(Jam chart|Jam)$/;
   const greenProblems = (where, scan, { debutsWanted = false, label = JAM_LABEL } = {}) => {
     const p = [];
@@ -4215,8 +4223,10 @@ async function run() {
         partialNights += [...nights.values()].filter((xs) => xs.length > 1 && xs.some(Boolean) && !xs.every(Boolean)).length;
         const bad = d.rows.filter((r) => (r.badge !== null) !== r.attr || (r.badge !== null && (r.badge !== 'Jam chart' || !r.ownLine)) || (r.attr ? !r.edge || r.edge.w !== 4 || r.edge.bg !== d.jam : !!r.edge));
         if (bad.length) { const r = bad[0]; p.push(`${tag}: ${bad.length} row(s) whose badge, line and edge disagree, e.g. show ${r.showId}: badge ${JSON.stringify(r.badge)}, data-jam ${r.attr}, own line ${r.ownLine}, edge ${r.edge ? `${r.edge.w}px ${r.edge.bg}` : 'none'} (--jam ${d.jam})`); }
+        // The "Jam chart entries" head's count badge (0.1.92) is the one bare
+        // number a song page may paint green.
         const scanD = await greenScan();
-        p.push(...greenProblems(`${tag} detail`, scanD));
+        p.push(...greenProblems(`${tag} detail`, scanD, { label: /^(Jam chart|\d+)$/ }));
 
         await evaluate(`location.hash = '#/song/${id}/gaps';`);
         await sleep(1200);
@@ -5225,12 +5235,18 @@ async function run() {
           const t = (n) => ((n || {}).textContent || '').trim();
           const screen = document.querySelector('.screen');
           const sections = [...screen.querySelectorAll(':scope > .section')];
-          const setlist = sections.find((s) => s.querySelector('.setlist-source'));
+          const setlist = sections.find((s) => t(s.querySelector(':scope > .section-head .section-title')) === 'Setlist');
           const chart = screen.querySelector(':scope > .section.gap-chart');
           const entries = sections.find((s) => t(s.querySelector('.section-title')) === 'Jam chart entries');
-          const link = chart && chart.querySelector('.gap-chart-source .carton-link');
-          const source = screen.querySelector('.setlist-source .carton-link');
+          // Both Carton links live in the footer row since 0.1.92; the setlist
+          // section and the chart carry none of their own.
+          const row = screen.querySelector(':scope > .carton-row');
+          const rowLinks = row ? [...row.querySelectorAll('a.carton-link')] : [];
+          const link = rowLinks.find((a) => a.href.includes('/gap-chart/'));
+          const source = rowLinks.find((a) => a.href.includes('/setlists/'));
           return {
+            row: row ? { beforeAttrib: !!row.nextElementSibling && row.nextElementSibling.matches('footer.attrib'), links: rowLinks.map(t), h: row.getBoundingClientRect().height,
+              stray: screen.querySelectorAll('a.carton-link').length - rowLinks.length, old: screen.querySelectorAll('.setlist-source, .gap-chart-source').length } : null,
             hash: location.hash,
             h1: t(screen.querySelector('h1.screen-title')),
             chart: !!chart,
@@ -5271,6 +5287,14 @@ async function run() {
             if (c.link !== 'How gap is counted') p.push(`the heading's link reads ${JSON.stringify(c.link)}`);
             if (!/^How many shows had passed since each song was last played, counted as of this date\./.test(c.note || '')) p.push(`the note under the heading reads ${JSON.stringify(c.note)}`);
             if (!c.source || c.carton !== c.source.replace('/setlists/', '/gap-chart/')) p.push(`the chart links to ${c.carton}, the setlist to ${c.source}`);
+            if (!c.row) p.push('no .carton-row on the screen');
+            else {
+              if (!c.row.beforeAttrib) p.push('the Carton row is not directly above the attribution');
+              if (JSON.stringify(c.row.links) !== JSON.stringify(['Setlist', 'Gap chart'])) p.push(`the row's links read ${JSON.stringify(c.row.links)}, expected ["Setlist","Gap chart"]`);
+              if (c.row.h < 44) p.push(`the row is ${c.row.h}px tall, under the 44px floor`);
+              if (c.row.stray) p.push(`${c.row.stray} Carton link(s) outside the row`);
+              if (c.row.old) p.push(`${c.row.old} .setlist-source or .gap-chart-source node(s) still on the page`);
+            }
             if (JSON.stringify(c.labels) !== JSON.stringify(c.setLabels)) p.push(`the chart's set labels are ${JSON.stringify(c.labels)}, the setlist's ${JSON.stringify(c.setLabels)}`);
             if (!c.rows.length) p.push('no chart rows');
             if (c.rows.some((r) => !r.songId)) p.push('a chart row carries no song id');
@@ -5356,7 +5380,7 @@ async function run() {
             const there = await evaluate(`(() => { const ch = document.querySelector('.screen button.chip[aria-label^="Back to"]'); return { hash: location.hash, chip: ch ? ch.textContent.trim() : null, aria: ch ? ch.getAttribute('aria-label') : null, name: ((document.querySelector('.screen .title-chip-name') || {}).textContent || '').trim() }; })()`);
             const tapped = await evaluate(`(() => { const ch = document.querySelector('.screen button.chip[aria-label^="Back to"]'); if (!ch) return false; ch.click(); return true; })()`);
             await sleep(1000);
-            const back = await evaluate(`({ hash: location.hash, show: !!document.querySelector('.screen .setlist-source') })`);
+            const back = await evaluate(`({ hash: location.hash, show: !!document.querySelector('.screen .section.gap-chart') })`);
             await evaluate('history.forward()');
             await sleep(1000);
             const fwd = await evaluate('location.hash');
@@ -5419,6 +5443,209 @@ async function run() {
           await sleep(300);
           if (p.length) for (const x of p) fail(`show detail chip: ${x}`);
           else pass(`show detail chip: hidden, inert and unfocusable at the top, shown once the venue line is under the header and not before, reading ${JSON.stringify(name)}, in a 0px bar that moves nothing, focus to the date heading, back to the top at once under reduced motion and smoothly without; the widest compact title, ${JSON.stringify(widest.name)}, wraps at 360 (${note})`);
+        }
+      }
+
+      // --- Song detail: the Carton row, the gap under the button, the cards ----
+      //
+      // docs/plan.md, "Song and show page presentation", items 1 and 4, on Laurel
+      // (song 275, 13 entries when ruled) and the suite's song 49, both themes.
+      // Read from the screen and held to itself: the row is the only Carton link
+      // on the page and sits directly above the attribution; the button's
+      // neighbour is the stat section at the section margin and nothing else;
+      // every entry card is a .jam-card with the 4px --jam edge, a date control,
+      // the venue line, a --ink-dim note and no link; the head's --jam badge
+      // counts the cards and the byline agrees. Then the first card's date is
+      // tapped and must open its show, headed the same date.
+      if (want('song-detail')) {
+        console.log('\nsong detail: the Carton row, the gap under the button, the entry cards:');
+        const READ_SONG = `(() => {
+          const t = (n) => ((n || {}).textContent || '').trim();
+          const tokenRgb = (name) => { const s = document.createElement('span'); s.style.color = 'var(' + name + ')'; document.body.appendChild(s); const c = getComputedStyle(s).color; s.remove(); return c; };
+          const R = (n) => { if (!n) return null; const r = n.getBoundingClientRect(); return { top: r.top + scrollY, bottom: r.bottom + scrollY, height: r.height }; };
+          const screen = document.querySelector('#main .screen');
+          const btn = screen.querySelector(':scope > button.btn.btn-block');
+          const next = btn ? btn.nextElementSibling : null;
+          const grid = next && next.matches('.section') ? next.querySelector('.stat-grid') : null;
+          const row = screen.querySelector(':scope > .carton-row');
+          const rowLinks = row ? [...row.querySelectorAll('a.carton-link')].map((a) => ({ text: t(a), href: a.href })) : [];
+          const outside = [...screen.querySelectorAll('a.carton-link')].filter((a) => !a.closest('.carton-row'));
+          const albums = outside.filter((a) => a.closest('.section') && t(a.closest('.section').querySelector('.section-title')) === 'Appears on');
+          const stray = outside.filter((a) => !albums.includes(a)).map((a) => ({ text: t(a), href: a.href, where: a.closest('.section') ? t(a.closest('.section').querySelector('.section-title')) : 'top' }));
+          const sec = [...screen.querySelectorAll(':scope > .section')].find((s) => t(s.querySelector(':scope > .section-head .section-title')) === 'Jam chart entries');
+          const badge = sec ? sec.querySelector(':scope > .section-head .badge') : null;
+          const jam = tokenRgb('--jam'); const inkDim = tokenRgb('--ink-dim');
+          const cards = sec ? [...sec.querySelectorAll(':scope > .card')].map((c) => { const b = getComputedStyle(c, '::before'); const date = c.querySelector('button.jam-card-date'); const note = c.querySelector('.jam-card-note'); return {
+            jamCard: c.classList.contains('jam-card'), edgeW: b.content === 'none' || b.content === 'normal' ? null : parseFloat(b.width), edgeBg: b.backgroundColor, edgeGreen: b.backgroundColor === jam,
+            date: t(date), dateIsButton: !!date, noteColor: note ? getComputedStyle(note).color : null, noteDim: !note || getComputedStyle(note).color === inkDim, links: c.querySelectorAll('a').length, venue: !!c.querySelector('.venue-line'), overflow: getComputedStyle(c).overflow }; }) : [];
+          const m = t(screen.querySelector('p.screen-sub')).match(/(\\d+) jam chart entr/);
+          return { h1: t(screen.querySelector('h1.screen-title')),
+            gap: btn && grid ? Math.round((R(grid).top - R(btn).bottom) * 10) / 10 : null, nextIsStats: !!grid,
+            row: row ? { h: R(row).height, beforeAttrib: !!row.nextElementSibling && row.nextElementSibling.matches('footer.attrib'), label: t(row).startsWith('On The Carton:'), links: rowLinks } : null,
+            stray, badge: badge ? { text: t(badge), jam: badge.classList.contains('badge-jam'), green: getComputedStyle(badge).color === jam } : null,
+            bylineCount: m ? Number(m[1]) : null, cards };
+        })()`;
+        for (const id of [275, 49]) {
+          for (const theme of ['dark', 'light']) {
+            await evaluate(`document.documentElement.setAttribute('data-theme', ${JSON.stringify(theme)}); location.hash = '#/song/${id}';`);
+            await sleep(1300);
+            const s = await evaluate(READ_SONG);
+            const tag = `song ${id} (${s.h1}, ${theme})`;
+            const p = [];
+            if (!s.nextIsStats) p.push('the button is not followed by the stat section');
+            else if (s.gap !== 24) p.push(`${s.gap}px from the button to the tiles, expected 24 -- the section margin and nothing else`);
+            if (!s.row) p.push('no .carton-row on the screen');
+            else {
+              if (!s.row.beforeAttrib) p.push('the Carton row is not directly above the attribution');
+              if (!s.row.label) p.push('the row does not open with "On The Carton:"');
+              if (s.row.links.length !== 1 || s.row.links[0].text !== 'Song' || !s.row.links[0].href.includes('/song/')) p.push(`the row's links are ${JSON.stringify(s.row.links.map((l) => [l.text, l.href]))}, expected one, "Song", to /song/`);
+              if (s.row.h < 44) p.push(`the row is ${s.row.h}px tall, under the 44px floor`);
+            }
+            if (s.stray.length) p.push(`${s.stray.length} Carton link(s) outside the row, e.g. ${JSON.stringify(s.stray[0])}`);
+            if (!s.cards.length) p.push('no entry cards -- this song was chosen for having entries');
+            else {
+              if (!s.badge) p.push('no badge on the "Jam chart entries" head');
+              else {
+                if (!s.badge.jam || !s.badge.green) p.push(`the head's badge is ${JSON.stringify(s.badge)}, not a .badge-jam painted --jam`);
+                if (Number(s.badge.text) !== s.cards.length) p.push(`the head's badge reads ${JSON.stringify(s.badge.text)}, ${s.cards.length} card(s)`);
+                if (s.bylineCount !== s.cards.length) p.push(`the byline counts ${s.bylineCount}, ${s.cards.length} card(s)`);
+              }
+              const bad = s.cards.filter((c) => !c.jamCard || c.edgeW !== 4 || !c.edgeGreen || !c.dateIsButton || !c.noteDim || c.links || !c.venue || c.overflow !== 'hidden');
+              if (bad.length) p.push(`${bad.length} of ${s.cards.length} card(s) off the shape, e.g. ${JSON.stringify(bad[0])}`);
+            }
+            if (p.length) for (const x of p) fail(`${tag}: ${x}`);
+            else pass(`${tag}: the row ("Song" to /song/) sits above the attribution and no other Carton link is on the page; 24px from the button to the tiles; ${s.cards.length} .jam-card(s) with the 4px --jam edge, a date control, the venue and a --ink-dim note; the head's --jam badge and the byline both count ${s.cards.length}`);
+          }
+        }
+        await evaluate(`document.documentElement.setAttribute('data-theme', 'dark'); location.hash = '#/song/275';`);
+        await sleep(1300);
+        const tapped = await evaluate(`(() => { const b = document.querySelector('#main .screen .section .card.jam-card button.jam-card-date'); if (!b) return null; const date = b.textContent.trim(); b.click(); return date; })()`);
+        await sleep(1200);
+        const landed = await evaluate(`({ hash: location.hash, h1: ((document.querySelector('#main .screen h1.screen-title') || {}).textContent || '').trim() })`);
+        if (!tapped) fail('song 275: no date control on the first card to tap');
+        else if (!/^#\/show\/\d+$/.test(landed.hash) || landed.h1 !== tapped) fail(`song 275: tapping the first card's date (${tapped}) landed on ${landed.hash}, headed ${JSON.stringify(landed.h1)}`);
+        else pass(`song 275: the first card's date (${tapped}) opens its show, ${landed.hash}, headed the same`);
+      }
+
+      // --- Section heads: one rule on every route and in the sheets ------------
+      //
+      // docs/plan.md, "Song and show page presentation", items 5 to 7. Every
+      // .section-head on every route in ROUTES, in both themes: the title at
+      // --t-md, 700, uppercase, in --ink-dim; the head with a 1px --line rule
+      // above and 12px under it. And no .section-title anywhere outside a
+      // .section-head -- the line the addendum asked for, which is what catches
+      // a hand-built head on any screen. Home's first head reads "Upcoming show"
+      // over the hero ("Most recent show" between tours) and "On this date" is
+      // still on the page. Then the sheets: the Shows When sheet, the Settings
+      // sheet and the gap explainer keep the sheet scale -- the title at 15px,
+      // the group labels at 11px -- and hold no .section-title at all.
+      if (want('section-heads')) {
+        console.log('\nsection heads: every route, both themes, and the sheets:');
+        const READ_HEADS = `(() => {
+          const t = (n) => ((n || {}).textContent || '').trim();
+          const tokenRgb = (name) => { const s = document.createElement('span'); s.style.color = 'var(' + name + ')'; document.body.appendChild(s); const c = getComputedStyle(s).color; s.remove(); return c; };
+          const inkDim = tokenRgb('--ink-dim'); const line = tokenRgb('--line');
+          const heads = [...document.querySelectorAll('#main .section-head')].map((h) => { const title = h.querySelector('.section-title'); const cs = title ? getComputedStyle(title) : null; const hs = getComputedStyle(h); return {
+            title: t(title), hasTitle: !!title, size: cs ? cs.fontSize : null, weight: cs ? cs.fontWeight : null, transform: cs ? cs.textTransform : null, color: cs ? cs.color : null, dim: !!cs && cs.color === inkDim,
+            opensScreen: h.parentElement.matches('#main .screen') && h.parentElement.firstElementChild === h,
+            rule: hs.borderTopWidth, ruleColor: hs.borderTopColor, ruleLine: hs.borderTopColor === line, pad: hs.paddingTop }; });
+          const loose = [...document.querySelectorAll('.section-title')].filter((n) => !n.closest('.section-head')).map((n) => JSON.stringify(t(n)) + ' in ' + (n.closest('.sheet') ? 'a sheet' : (n.parentElement.className || n.parentElement.tagName)));
+          return { heads, loose, first: heads[0] ? heads[0].title : null, hasOnThisDate: heads.some((h) => /^On this date/.test(h.title)) };
+        })()`;
+        // The routes that carry section heads at rest. Songs, Jams, Picks, the
+        // gap history and the compact Shows landing render none (the Shows
+        // detail view's counted heads appear with a venue query, read below), so
+        // "no head" is right there and wrong on these four; either way round
+        // fails, so a route that gains or loses its heads is named here.
+        const HEADED = new Set(['#/home', '#/song/49', '#/venue/73', '#/show/1728657865']);
+        const headProblems = (where, r, headed) => {
+          const p = [];
+          if (headed && !r.heads.length) p.push(`${where}: no .section-head on the screen`);
+          if (!headed && r.heads.length) p.push(`${where}: ${r.heads.length} .section-head(s) on a route listed as carrying none: ${JSON.stringify(r.heads.map((h) => h.title))}`);
+          for (const h of r.heads) {
+            const off = [];
+            if (!h.hasTitle) off.push('no .section-title inside');
+            if (h.size !== '15px') off.push(`${h.size}, not 15px`);
+            if (h.weight !== '700') off.push(`weight ${h.weight}`);
+            if (h.transform !== 'uppercase') off.push(`text-transform ${h.transform}`);
+            if (!h.dim) off.push(`${h.color}, not --ink-dim`);
+            // The head that opens a screen -- Home's, the screen's first child
+            // under the app header -- carries no rule; every other head does.
+            if (h.opensScreen) {
+              if (h.rule !== '0px' || h.pad !== '0px') off.push(`opens the screen but carries rule ${h.rule}, padding-top ${h.pad} -- under the app header's edge that reads doubled`);
+            } else {
+              if (h.rule !== '1px' || !h.ruleLine) off.push(`rule ${h.rule} ${h.ruleColor}, not 1px --line`);
+              if (h.pad !== '12px') off.push(`padding-top ${h.pad}, not 12px`);
+            }
+            if (off.length) p.push(`${where}: head ${JSON.stringify(h.title)}: ${off.join('; ')}`);
+          }
+          if (r.loose.length) p.push(`${where}: ${r.loose.length} .section-title outside a .section-head: ${r.loose.join(', ')}`);
+          return p;
+        };
+        for (const theme of ['dark', 'light']) {
+          await evaluate(`document.documentElement.setAttribute('data-theme', ${JSON.stringify(theme)});`);
+          for (const r of ROUTES) {
+            await evaluate(`location.hash = ${JSON.stringify(r.hash)};`);
+            await sleep(1100);
+            const read = await evaluate(READ_HEADS);
+            const where = `${r.hash} (${theme})`;
+            const p = headProblems(where, read, HEADED.has(r.hash));
+            if (r.hash === '#/home') {
+              if (!/^(Upcoming show|Most recent show)$/.test(read.first || '')) p.push(`${where}: the first head reads ${JSON.stringify(read.first)}, expected "Upcoming show" over the hero (or "Most recent show" between tours)`);
+              if (!read.hasOnThisDate) p.push(`${where}: no "On this date" head -- the route marker`);
+            }
+            if (p.length) for (const x of p) fail(x);
+            else if (!read.heads.length) pass(`${where}: no section heads on this route, and no .section-title loose on it`);
+            else pass(`${where}: ${read.heads.length} head(s) at 15px/700/uppercase in --ink-dim with the 1px --line rule and 12px under it, none loose${r.hash === '#/home' ? `, the first "${read.first}" opening the screen with no rule` : ''}`);
+          }
+          // The Shows detail view's counted heads, "Venues (N)", render with a
+          // venue query: the one hand-built h2 the addendum found, through
+          // sectionHead() since 0.1.92.
+          await setShowsView('detail');
+          await setShowsQuery('Toad');
+          const shows = await evaluate(READ_HEADS);
+          const whereShows = `#/shows, detail view with a venue query (${theme})`;
+          const ps = headProblems(whereShows, shows, true);
+          if (shows.heads.length && !shows.heads.some((h) => /^Venues \(/.test(h.title))) ps.push(`${whereShows}: no "Venues (N)" head among ${JSON.stringify(shows.heads.map((h) => h.title))}`);
+          if (ps.length) for (const x of ps) fail(x);
+          else pass(`${whereShows}: ${shows.heads.length} head(s) at 15px/700/uppercase in --ink-dim with the rule, "${shows.heads[0].title}" among them, none loose`);
+          await setShowsQuery('');
+          await setShowsView('compact');
+        }
+        await evaluate(`document.documentElement.setAttribute('data-theme', 'dark');`);
+        const READ_SHEET = `(() => { const t = (n) => ((n || {}).textContent || '').trim(); const sh = document.querySelector('.sheet'); if (!sh) return null; const h2 = sh.querySelector('h2');
+          return { heading: t(h2), h2Size: h2 ? getComputedStyle(h2).fontSize : null, groups: [...sh.querySelectorAll('.sheet-group-title')].map((g) => ({ text: t(g), size: getComputedStyle(g).fontSize })), loose: [...sh.querySelectorAll('.section-title')].map(t) }; })()`;
+        const closeSheetNow = async () => { await evaluate(`(() => { const b = document.querySelector('.sheet-backdrop'); if (b) b.click(); })()`); await sleep(500); };
+        const sheets = [];
+        await atShows();
+        const whenOpened = await evaluate(`(() => {${SHOWS_JS} const lead = leadBy('when'); if (!lead) return false; lead.click(); return !!document.querySelector('.sheet'); })()`);
+        await sleep(600);
+        sheets.push(['the Shows When sheet', whenOpened ? await evaluate(READ_SHEET) : null, 'Year']);
+        await closeSheetNow();
+        await evaluate(`location.hash = '#/home';`);
+        await sleep(1200);
+        const settingsOpened = await evaluate(`(() => { const b = document.querySelector('.header-status .icon-btn-bordered'); if (!b) return false; b.click(); return true; })()`);
+        await sleep(800);
+        sheets.push(['the Settings & data sheet', settingsOpened ? await evaluate(READ_SHEET) : null, 'Appearance']);
+        await closeSheetNow();
+        await evaluate(`location.hash = '#/song/49';`);
+        await sleep(1300);
+        const explainerOpened = await evaluate(`(() => { const s = [...document.querySelectorAll('.screen button.stat')].find((x) => ((x.querySelector('.stat-label') || {}).textContent || '').trim() === 'shows since last'); if (!s) return false; s.click(); return true; })()`);
+        await sleep(800);
+        sheets.push(['the gap explainer', explainerOpened ? await evaluate(READ_SHEET) : null, 'Which shows count']);
+        await closeSheetNow();
+        for (const [name, s, firstGroup] of sheets) {
+          const p = [];
+          if (!s) p.push('did not open');
+          else {
+            if (s.h2Size !== '15px') p.push(`its title ${JSON.stringify(s.heading)} is ${s.h2Size}, not the sheet scale's 15px`);
+            if (!s.groups.length || s.groups[0].text !== firstGroup) p.push(`its first group label is ${JSON.stringify(s.groups[0] && s.groups[0].text)}, expected ${JSON.stringify(firstGroup)}`);
+            const off = s.groups.filter((g) => g.size !== '11px');
+            if (off.length) p.push(`${off.length} group label(s) not at 11px, e.g. ${JSON.stringify(off[0])}`);
+            if (s.loose.length) p.push(`${s.loose.length} .section-title inside it: ${JSON.stringify(s.loose)}`);
+          }
+          if (p.length) for (const x of p) fail(`${name}: ${x}`);
+          else pass(`${name}: titled ${JSON.stringify(s.heading)} at 15px, ${s.groups.length} group label(s) at 11px, no .section-title`);
         }
       }
 

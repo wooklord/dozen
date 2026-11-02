@@ -239,26 +239,48 @@ a {
   margin-top: var(--s-5);
 }
 
+/* A section opens with a rule (0.1.92): 1px of --line across the column and
+   12px under it, above every head, so a break reads as a break deep in a
+   scroll. sectionHead() is the only builder, so no screen can opt out.
+
+   EXCEPT THE HEAD THAT OPENS A SCREEN, structurally: Home's "Upcoming show"
+   is the screen's first child, and its rule sat 16px under the app header's
+   own bottom edge -- two full-width lines with nothing between, screenshot at
+   360 dark and read as doubled. A head that follows the hero card (32px of
+   shell between the card's edge and the rule) read as a section opening and
+   keeps it. The selector is the screen's first child, not a caller option. */
 .section-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--s-3);
   margin-bottom: var(--s-2);
+  border-top: 1px solid var(--line);
+  padding-top: var(--s-3);
+}
+.screen > .section-head:first-child {
+  border-top: 0;
+  padding-top: 0;
 }
 
-/* One step up from --t-xs as of 0.1.45. At 11px uppercase with 0.08em
-   tracking these read as fine print rather than as headings; 13px is the same
-   treatment at a size that holds its own above a card. Applies to EVERY
+/* --t-md in --ink-dim (0.1.92; 13px in --ink-label from 0.1.45 to 0.1.91).
+   At 13px the same uppercase treatment held its own above a card and lost to
+   the 15px text around it deep in a scroll: "Where it has landed" and "Jam
+   chart entries" went unseen on a phone, and show detail's "Setlist", the
+   same rule, only read stronger for sitting under the venue line. --ink-dim on
+   the shell measures 8.99 dark and 7.09 light, above --ink-label's 6.85 and
+   6.01, so section labels stay brighter than Carton links. Applies to EVERY
    section title, deliberately -- "Last time here" and "On this date" are the
    same element as the rest, and a special case for two of them is how a type
-   scale starts drifting. */
+   scale starts drifting. The scale: 19px screen title in --ink; 15px sheet
+   title in --ink, sentence case; this, 15px uppercase in --ink-dim; 11px
+   sheet group and stat labels in --ink-label. */
 .section-title {
-  font-size: var(--t-sm);
+  font-size: var(--t-md);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ink-label);
+  color: var(--ink-dim);
   margin: 0;
 }
 
@@ -942,15 +964,16 @@ button.gap-figure:active {
 
 /* GREEN MEANS JAM CHART, AND ONLY THAT (0.1.85). The jam badge -- "Jam chart"
  * on song detail's performances, "Jam" on Gap history, the entry count on
- * show detail -- wears --jam for its text and its whole border, the colour the
+ * show detail's and (0.1.92) song detail's "Jam chart entries" head -- wears
+ * --jam for its text and its whole border, the colour the
  * setlist's jam titles and the jam key already wear. Until 0.1.85 this class
  * was YOLK and carried Debut and Longest as well as a jam badge nothing
  * rendered; Debut is the plain badge now, and Longest is .badge-accent below.
  *
  * Text and border are one token, so both are the measured pairs "jam on
  * surface" (rows), "jam on surface-up" (a pressed or flashing row) and "jam on
- * shell" (show detail's section head) in scripts/contrast.mjs, every one of
- * them clearing 4.5:1, past the 3:1 a border needs. */
+ * shell" (the section heads' count badges) in scripts/contrast.mjs, every one
+ * of them clearing 4.5:1, past the 3:1 a border needs. */
 .badge-jam {
   color: var(--jam);
   border-color: var(--jam);
@@ -1078,10 +1101,14 @@ button.gap-figure:active {
 
 /* A jam chart performance on song detail (0.1.85): a green edge down the
  * row, the heat bar's width and place, beside the "Jam chart" badge that says
- * it in words. Only that list carries one -- Gap history's left edge is the
- * heat bar, so its rows carry the badge alone. --jam on --surface, measured
- * 9.54:1 dark and 6.52:1 light, past the 3:1 a graphic needs. */
-.row-shell[data-jam="true"]::before {
+ * it in words. Gap history's left edge is the heat bar, so its rows carry the
+ * badge alone. Since 0.1.92 the same edge, in the same rule, marks every jam
+ * entry card (.jam-card: show detail, the jam notes sheet and song detail),
+ * which carried no green until then; the card clips it to its corners. --jam
+ * on --surface, measured 9.54:1 dark and 6.52:1 light, past the 3:1 a
+ * graphic needs. */
+.row-shell[data-jam="true"]::before,
+.jam-card::before {
   content: "";
   position: absolute;
   left: 0;
@@ -1881,6 +1908,10 @@ button.gap-figure:active {
    in the stylesheet, where the other three rules are. */
 .jam-card {
   margin-bottom: var(--s-2);
+  /* The green edge is a ::before down the left (the rows' rule, above the
+     tabs); the card positions it and clips it to its rounded corners. */
+  position: relative;
+  overflow: hidden;
 }
 
 .jam-card-head {
@@ -1890,15 +1921,25 @@ button.gap-figure:active {
   gap: var(--s-2);
 }
 
-.jam-card-song {
-  color: var(--jam);
+.jam-card-song,
+.jam-card-date {
   font-weight: 600;
   text-align: left;
   padding: 0;
   min-height: 0;
   border-bottom: 1px solid transparent;
 }
-.jam-card-song:active {
+.jam-card-song {
+  color: var(--jam);
+}
+/* Song detail's lead (0.1.92): the show's date as a control to the show page,
+   the same control as the song title above minus the green, which marks a jam
+   title and nothing else. */
+.jam-card-date {
+  color: var(--ink);
+}
+.jam-card-song:active,
+.jam-card-date:active {
   border-bottom-color: currentColor;
 }
 
@@ -2144,20 +2185,29 @@ button.fn-marker::after {
   color: var(--ink);
 }
 
-/* The Carton link sitting under a setlist card. It is a source note for the
-   card directly above it, not a free-standing action, so it hangs off that
-   card: 2px of clearance, with the link's own 44px tap target supplying the
-   rest of the breathing room. Anything more and it starts to look like the
-   heading of the section below. */
-.setlist-source {
-  margin-top: 2px;
+/* The screen's Carton deep links, one row above the attribution (0.1.92,
+   docs/plan.md, "Song and show page presentation"): "On The Carton:" and a
+   link per destination, on song detail, show detail and gap history. The
+   links take the attribution's own treatment, 13px underlined --ink-dim,
+   because this row is part of the credit and competes with no content; the
+   inline .carton-link treatment above stays for links beside content on Home,
+   Shows, Venue and Jams. 44px tall through the link's own min-height, a
+   section's margin above it. It replaced .setlist-source and .gap-chart-source
+   (each a link hanging 2px under its block in a 44px box) and the link that
+   stood under song detail's button in a box of its own. */
+.carton-row {
+  margin-top: var(--s-5);
+  font-size: var(--t-sm);
+  color: var(--ink-faint);
 }
-
-/* The gap chart's own Carton link, under its last list on show detail
-   (0.1.90): the same source note as the setlist's, at the same 2px. Its own
-   class, so .setlist-source still names the one node the route marker reads. */
-.gap-chart-source {
-  margin-top: 2px;
+.carton-row .carton-link {
+  font-size: var(--t-sm);
+  color: var(--ink-dim);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.carton-row .carton-link:active {
+  color: var(--ink);
 }
 
 /* ------------------------------------------------- loading: the 12 cells --- */

@@ -2012,11 +2012,34 @@ graphic held to 3:1), on the shell 10.18 and 6.06 (the count badge). Every pair 
 `scripts/contrast.mjs`.
 
 **Home at 360 dark, before any code, with the rule on every head and with the first head's rule
-suppressed.** Home's screen is the hero card, then two sections, "Previous shows" and "On this date
-(Nov 6)". With the rule on every head the first head's rule sat 32px under the hero's bottom edge
-(24px section margin and the hero's 8px) with the title 12px under the rule; read as a section
-opening, not a doubled edge, so there is no first-head exception. The shots are in the session's
-scratch directory, not the repo, as screenshot captures are (`CLAUDE.md`, scratch checks).
+suppressed.** Home's screen was the hero card, then two sections, "Previous shows" and "On this
+date (Nov 6)". With the rule on every head the first head's rule sat 32px under the hero's bottom
+edge (24px section margin and the hero's 8px) with the title 12px under the rule; read as a section
+opening, not a doubled edge. **Then the addendum put "Upcoming show" above the hero as the screen's
+first child, and the same shot on the built page read differently:** its rule sat 16px under the
+app header's own bottom edge, two full-width lines with nothing between, and that is doubled. So
+the head that opens a screen carries no rule, by the structural selector `.screen >
+.section-head:first-child`, not a caller option; "Previous shows" and every later head keep it.
+The shots are in the session's scratch directory, not the repo, as screenshot captures are
+(`CLAUDE.md`, scratch checks).
+
+**Built, and read back.** The `song-detail` smoke section reads 24px from the button to the
+tiles on Laurel and One Stop Shop in both themes, the row 44px tall directly above the
+attribution with its one link, no other Carton link on the page, 13 and 8 `.jam-card`s with a
+4px `--jam` edge, a date control, the venue line and a `--ink-dim` note, and the head's badge
+and the byline both counting them; the first card's date opens its show. `section-heads` reads
+every head on Home, song detail, the venue and the show at 15px, 700, uppercase, `--ink-dim`,
+with the 1px `--line` rule and 12px under it, Home's "Upcoming show" opening the screen with
+none; the Shows detail view's "Venues (1)" under a venue query the same; the three sheets titled
+at 15px with their group labels at 11px and no `.section-title`. `layout-diff` against the docs
+commit at 390 dark, 390 light and 360 dark reads the same three times: Home 76 of 81 boxes,
+song detail 303 of 312, gap history 291 of 298, the venue 14 of 28, the show 55 of 64; Songs,
+Shows, Jams and Picks identical, carrying no head. Stylesheets 244 rules against 248: the row,
+its link, the opening head and the date control. Heights on the built pages were not re-read;
+the injection figures above are the record, and the full run's 396 checks hold the structure.
+
+**Not measured:** a real phone, and the no-upcoming branch of Home, which renders only between
+tours.
 
 ## Attribution
 

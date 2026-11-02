@@ -5,7 +5,7 @@ import { el, append, icon, ICONS } from '../ui/dom.js';
 import {
   setlistBlock,
   attribution,
-  cartonLink,
+  cartonRow,
   showPermalink,
   gapChartPermalink,
   sectionHead,
@@ -70,11 +70,10 @@ export function renderShow(ctx, showId) {
   if (tour) append(screen, el('p.show-tour', { text: `Part of ${tour}` }));
   const rows = index.setlistByShow.get(Number(show.show_id)) || [];
 
-  // Directly under the setlist, inside the same section, in both branches: the
-  // link is a pointer to the source of THIS setlist, so it belongs against the
-  // setlist rather than up in the action row. When no setlist was recorded it
-  // matters more, not less -- it is where the reader goes to check.
-  const sourceLink = () => el('div.link-row.setlist-source', null, [cartonLink(showPermalink(show))]);
+  // The links to this show's setlist and gap chart on The Carton are one row at
+  // the foot of the screen (0.1.92, cartonRow below). Until then the setlist's
+  // hung under its card at 2px and the chart's under its rows, each in a 44px
+  // box of its own.
 
   // The jam key and the "Jam chart entries" section are NOT built here.
   // setlistBlock returns the section beside the setlist, built by the same
@@ -107,7 +106,6 @@ export function renderShow(ctx, showId) {
       el('div.section', null, [
         sectionHead('Setlist', el('span.badge.badge-set', { text: showStructure(index, show.show_id) || '' })),
         el('div.card', null, [block.setlist, showNotes()]),
-        sourceLink(),
       ]),
     );
   } else {
@@ -116,7 +114,6 @@ export function renderShow(ctx, showId) {
       el('div.section', null, [
         sectionHead('Setlist'),
         emptyState('The Carton has no setlist recorded for this show.'),
-        sourceLink(),
       ]),
     );
   }
@@ -224,10 +221,6 @@ export function renderShow(ctx, showId) {
       // set in the setlist, and a check that counts a show's sets reads it.
       append(section, el('div.gap-chart-set', null, [el('div.gap-chart-label', { text: g.label }), list]));
     }
-    append(
-      section,
-      el('div.link-row.gap-chart-source', null, [cartonLink(gapChartPermalink(show), 'Gap chart on The Carton')]),
-    );
     append(screen, section);
   }
 
@@ -245,20 +238,14 @@ export function renderShow(ctx, showId) {
   // is what the screen is opened to read. Gap chart was the third control here
   // until 0.1.90, when the chart became a section of this screen.
   //
-  // BELOW THE JAM SECTION, NOT DIRECTLY UNDER THE SETLIST CARD. Two things
-  // already own that spot and neither should be pushed off it:
+  // BELOW THE JAM SECTION, NOT DIRECTLY UNDER THE SETLIST CARD: the gap chart
+  // and the jam chart entries read AGAINST the setlist, in played order, and a
+  // button row between them would break the correspondence those sections are
+  // built on. (Until 0.1.92 the setlist's Carton link also hung under the card,
+  // which was the first reason given here.)
   //
-  //  - The Carton link is a source note for the setlist card, hanging off it
-  //    at 2px (.setlist-source). It is UNTOUCHED -- same place, same 10px/400
-  //    --ink-faint, still inside the setlist section. Nothing was promoted and
-  //    nothing crowds it: the button row is not its neighbour, the gap chart
-  //    section or the section gap is.
-  //  - The gap chart and the jam chart entries read AGAINST the setlist, in
-  //    played order. A button row between them would break the correspondence
-  //    those sections are built on.
-  //
-  // So the row goes after all of it, before the attribution: every control on
-  // this screen follows every piece of content on it.
+  // So the row goes after all of it, before the Carton row and the attribution:
+  // every control on this screen follows every piece of content on it.
   //
   // Venue info wears the small-button treatment (0.1.36) so the row reads as
   // one set, and drops out entirely when the venue has no usable Maps query --
@@ -275,6 +262,7 @@ export function renderShow(ctx, showId) {
     ]),
   );
 
+  append(screen, cartonRow([['Setlist', showPermalink(show)], ['Gap chart', gapChartPermalink(show)]]));
   append(screen, attribution());
   return screen;
 }

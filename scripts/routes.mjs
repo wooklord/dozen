@@ -30,8 +30,11 @@
 // section's title since 0.1.90, when the chart's route was retired; until then
 // it was that route's heading and this screen's button. Contriving a string
 // for it would be worse than saying plainly that its unique marker is
-// structural: `.setlist-source` is emitted in exactly one place in the app
-// (the chart's Carton link under it is `.gap-chart-source`, on purpose).
+// structural: `.section.gap-chart`, the chart's own section, is emitted in
+// exactly one place in the app (views/show.js). Until 0.1.92 it was
+// `.setlist-source`, the setlist's Carton link, which moved into the footer
+// row with the chart's; the section is what the screen is, so it is the better
+// marker.
 export const ROUTES = [
   { hash: '#/home', expect: 'On this date' },
   { hash: '#/songs', expect: 'songs played live' },
@@ -63,7 +66,7 @@ export const ROUTES = [
   // precisely the two screens with a track record. Since 0.1.90 the chart is a
   // section of show detail, so this one entry walks both, and the chart's old
   // hash is a redirect below.
-  { hash: '#/show/1728657865', expect: 'Gap chart', selector: '.setlist-source' },
+  { hash: '#/show/1728657865', expect: 'Gap chart', selector: '.section.gap-chart' },
 ];
 
 // Redirects must land somewhere real, not merely change the hash.

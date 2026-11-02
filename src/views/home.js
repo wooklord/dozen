@@ -174,6 +174,11 @@ function renderNextShow(screen, { index, navigate }, show, today) {
       cartonLink(showPermalink(show)),
     ]),
   ]);
+  // The screen's first head, above the card it names (0.1.92, the addendum to
+  // "Song and show page presentation"): the hero IS the upcoming show, and
+  // until then no heading on the screen said so. Between tours
+  // renderNoUpcoming() heads its card "Most recent show" instead.
+  append(screen, sectionHead('Upcoming show'));
   append(screen, hero);
 
   // --- Previous shows: ONE section, was two (0.1.74) -------------------------
@@ -240,7 +245,7 @@ function renderNextShow(screen, { index, navigate }, show, today) {
   // list keeps the label that marks it as the exception.
   const runBlock = runRows.length
     ? el('div', { style: { marginTop: earlierVisits.length || lastVisit ? '12px' : '0' } }, [
-        el('div.section-title', { text: 'Earlier in this run' }),
+        sectionHead('Earlier in this run'),
         structureList(runRows),
       ])
     : null;
@@ -307,7 +312,9 @@ function renderNextShow(screen, { index, navigate }, show, today) {
 function renderNoUpcoming(screen, { index, navigate }, today) {
   const latest = index.countedShows[index.countedShows.length - 1];
 
-  append(screen, el('div.section-title', { text: 'No upcoming shows' }));
+  // "No upcoming shows" stood above the title as a bare .section-title until
+  // 0.1.92: the title and its sub-line say it, every section head now goes
+  // through sectionHead(), and the card below is headed "Most recent show".
   append(screen, el('h1.screen-title', { text: 'Nothing on the books' }));
   append(
     screen,

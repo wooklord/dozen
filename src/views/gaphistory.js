@@ -12,7 +12,7 @@
 import { el, append, replace, icon, ICONS, openSheet } from '../ui/dom.js';
 import {
   attribution,
-  cartonLink,
+  cartonRow,
   songPermalink,
   emptyState,
   statTile,
@@ -125,8 +125,9 @@ export function renderGapHistory(ctx, songId) {
   );
   // Every figure here is the Show Gap column of this song's page on The
   // Carton, so that page is where the screen links home (CLAUDE.md,
-  // "Attribution is required").
-  append(screen, el('div', { style: { marginTop: '4px' } }, cartonLink(songPermalink(song), 'Song page on The Carton')));
+  // "Attribution is required") -- in the footer row since 0.1.92, as on song
+  // detail; it stood here in a 44px box of its own until then.
+  const cartonRowHere = () => cartonRow([['Song', songPermalink(song)]]);
 
   // --- Headline stats -------------------------------------------------------
   // The same three figures song detail carries, so nothing read there changes
@@ -148,6 +149,7 @@ export function renderGapHistory(ctx, songId) {
 
   if (!entries.length) {
     append(screen, emptyState('This song is in the catalog but has never been played.'));
+    append(screen, cartonRowHere());
     append(screen, attribution());
     return screen;
   }
@@ -226,6 +228,7 @@ export function renderGapHistory(ctx, songId) {
   append(screen, countLine);
   const listWrap = el('div');
   append(screen, listWrap);
+  append(screen, cartonRowHere());
   append(screen, attribution());
 
   function paint() {

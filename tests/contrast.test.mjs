@@ -266,6 +266,8 @@ test('EVERY TOKEN A RULE USES IS AUDITED SOMEWHERE', () => {
     // The jam edge (0.1.85), a graphic in the same sense: measured as a
     // foreground in PAIRS, `jam on surface`, held there to 4.5.
     '.row-shell[data-jam="true"]::before': 'the 4px jam edge on a song detail performance row; nothing renders on it',
+    // The same edge on every jam entry card (0.1.92), the same rule.
+    '.jam-card::before': 'the 4px jam edge on a jam entry card; nothing renders on it',
   };
 
   // Tokens that are not a colour on a ground at all.

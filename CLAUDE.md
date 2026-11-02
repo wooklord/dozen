@@ -909,7 +909,8 @@ checks were verified this way:
   notes block became one function and the verdict another, so a full run executes
   the same code in the same order, and `git diff -w` shows only the wrappers, the
   gates, and two helpers moved above them. **Only `jam-button` (since 0.1.88),
-  `jam-notes`, `sheet`, `markup`, `stale-table` and `nav-states` can be scoped.** About
+  `jam-notes`, `sheet`, `markup`, `stale-table`, `nav-states`, `show-detail`, `song-detail` and
+  `section-heads` can be scoped.** About
   fifty names cross the sections before them, so wrapping those would change the full
   run to save time on it; a section joins when a proof needs it and it can stand alone
   (`show-detail` joined in 0.1.90, `nav-states` in 0.1.91). Green, against 380s for a full run: `stale-table` 12s, `markup` 11s,
@@ -1324,6 +1325,76 @@ checks were verified this way:
   529s, its first line `swept 0 browsers, 0 profiles`, and 0 Chromes and 0 profiles after
   it. The `ok` count is 0.1.91's: the sweep line is not a check, so a full run gains one
   line of output and no checks.
+- The 0.1.92 checks (song and show page presentation, 2026-11-01): two new scoped sections,
+  `song-detail` and `section-heads`, additions to `show-detail`, the badge gating widened, and
+  the Home hierarchy line reading the head that now opens the screen. Each scoped proof was
+  staged from a scratch Node script by exact string, the staged hash confirmed different from
+  the byte copy and the new line read back, the file restored from the copy by hash with
+  `git status --short` after it, 25s apart for Carton's limit. Green first: `song-detail` 7
+  checks in 18–22s, `section-heads` 25 in 47–50s, `show-detail` 8 in 69s.
+
+  `song-detail`, on Laurel (275) and One Stop Shop (49), both themes:
+  - the link put back under the button: smoke 8, `the button is not followed by the stat
+    section` and `1 Carton link(s) outside the row, e.g. {"text":"View on The Carton" ...
+    "where":"top"}` on each song and theme.
+  - a Carton link left on each card: smoke 8, `13 Carton link(s) outside the row ... "where":
+    "Jam chart entries"` and `13 of 13 card(s) off the shape ... "links":1`.
+  - the edge staged at 3px: smoke 4, `13 of 13 card(s) off the shape ... "edgeW":3`.
+  - the head's count off by one: smoke 4, `the head's badge reads "14", 13 card(s)`.
+  - the note left in `--ink`: smoke 4, `"noteColor":"rgb(245, 239, 230)","noteDim":false`.
+
+  `section-heads`, every route in both themes, the Shows detail view with a venue query, and
+  the three sheets:
+  - Home's "Upcoming show" head removed (the addendum's proof): smoke 2, `#/home (dark): the
+    first head reads "Previous shows", expected "Upcoming show" over the hero`. The Home
+    hierarchy line in the full run reads the same head and was not staged separately: the same
+    comparison, on the same node.
+  - a hand-built head, `countedHead()` back to a bare `h2.section-title` (the addendum's other
+    proof): smoke 4, `#/shows, detail view with a venue query (dark): 1 .section-title outside
+    a .section-head: "Venues (1)" in section` and `no .section-head on the screen`.
+  - the ink left `--ink-label`: smoke 22, every head on every headed route, `head "Upcoming
+    show": rgb(163, 155, 143), not --ink-dim`.
+  - the rule removed: smoke 20, every head but the one that opens Home, `rule 0px ... not 1px
+    --line; padding-top 0px, not 12px`.
+  - one route opted out, the venue page's head hand-built with its rule off: smoke 2,
+    `#/venue/73 (dark): head "Every show (13)": rule 0px ...`, and nothing on any other route.
+
+  `show-detail`:
+  - the setlist's source link put back under its card: smoke 2, `1 Carton link(s) outside the
+    row` and `1 .setlist-source or .gap-chart-source node(s) still on the page`.
+
+  And two that no scoped run could reach:
+  - the contrast coverage test on the card edge's `--jam` background went red on the build's
+    first `node --test`, `background --jam (.jam-card::before)`, before its exemption was
+    written beside the row edge's; it is the one new token-on-a-ground and the row's pair
+    measures it.
+  - `section-heads` as first written assumed every route carries a head and went red on five
+    that render none (Songs, Shows at rest, Jams, Picks, gap history); it holds a route to
+    heads or to none by name now, so a route gaining or losing its heads is named either way.
+  - the route marker's selector left at `.setlist-source` in `scripts/routes.mjs`, proved
+    through `layout-diff` rather than a full run, since all three consumers read the one list:
+    `layout-diff failed: working tree: #/show/1728657865 never rendered its marker ("Gap
+    chart")`, exit 1 in 30s. **Its first run failed for the wrong reason** -- `Could not load
+    the archive Rate limit exceeded`, the two cold boots landing inside the minute after a
+    screenshot run -- and was not counted; it was run again after a 70s gap.
+  - the badge gating left narrow on song detail, a full run (574s): smoke 4, `jam marking: song
+    54 (Shadow) detail (dark): .badge-jam reads "14", not a jam label here`, the same on Buying
+    Time and in light, and nothing else.
+
+  **Dropped, each with its reason:** the row's accessible name and the `nav` landmark, the same
+  markup the row check reads; the gap history's row, the same `cartonRow()` and the existing
+  `the history's Carton link` comparison, which now reads the row; the Home hierarchy line, the
+  same first-head comparison as the removed-head proof; the show page's `Gap chart` link
+  alone, the same two-link comparison the source-link proof shows firing.
+
+  Restored, by hash the same files: 267 passing, smoke 396 ok with 0 skips and no `WARN` in
+  578s, against 368 on 0.1.91: the three sections' 40 lines, the Home hierarchy line reworded,
+  and the show-detail line gaining the row. `layout-diff ab577a0`, 390 dark, 390 light and
+  360 dark, reads the same three times: `#/home` 76 of 81 boxes, `#/song/49` 303 of 312,
+  `#/song/54/gaps` 291 of 298, `#/venue/73` 14 of 28, the charted show 55 of 64; Songs, Shows,
+  Jams and Picks identical, having no section heads; stylesheets 244 rules against 248. **The
+  dev expected every route to change; the four without a head did not, and that is the
+  measure of where the head rule reaches.**
 
 Do this for every new check. It is the only thing that separates a real check
 from a comforting one.
@@ -1769,8 +1840,8 @@ landed". The second is the worse of the two because it passes.
 | Command | Speed | Network | Run it |
 |---|---|---|---|
 | `node --test` | instant | none | always, before anything else |
-| `node scripts/smoke.mjs` | ~9 min (526s at 0.1.91, 490s at 0.1.90, 404s at 0.1.89, 407s at 0.1.88, 386s at 0.1.87, 380s at 0.1.86, 356s at 0.1.85, so this row's old "~1 min" had gone stale well before 0.1.86) | Carton (cold pull) | **before every push** |
-| `node scripts/smoke.mjs --only <section>` | 11–120s (`nav-states` 29–54s at 0.1.91; `show-detail` 69–118s, `jam-button` ~80s and `jam-notes` ~70s at 0.1.90, with the boot; `jam-notes` reaches each sheet through the Shows tab now) | Carton (cold pull) | for a red proof, re-running only the section the check lives in. **Never the gate for a push:** the full run is. An unknown name or a run of zero checks fails, and the verdict says it was scoped |
+| `node scripts/smoke.mjs` | ~10 min (578s at 0.1.92, 526s at 0.1.91, 490s at 0.1.90, 404s at 0.1.89, 407s at 0.1.88, 386s at 0.1.87, 380s at 0.1.86, 356s at 0.1.85, so this row's old "~1 min" had gone stale well before 0.1.86) | Carton (cold pull) | **before every push** |
+| `node scripts/smoke.mjs --only <section>` | 11–120s (`song-detail` 18–22s, `section-heads` 47–50s and `show-detail` 69s at 0.1.92; `nav-states` 29–54s at 0.1.91; `show-detail` 69–118s, `jam-button` ~80s and `jam-notes` ~70s at 0.1.90, with the boot; `jam-notes` reaches each sheet through the Shows tab now) | Carton (cold pull) | for a red proof, re-running only the section the check lives in. **Never the gate for a push:** the full run is. An unknown name or a run of zero checks fails, and the verdict says it was scoped |
 | `node scripts/gap-oracle.mjs` | ~1 min | Carton (cold pull + 20 song pages) | after any change to gap arithmetic, to the show universe in `buildIndex`, or to `gapHistory()`; it compares every Show Gap cell on 20 Carton song pages against the app's own `gapAtShow()`, and the gap history's one-entry-per-show fold (0.1.83) against the same pages grouped by show, and **SKIPs, never passes,** when Carton is unreachable. The smoke test carries a one-song spot check of the same parity |
 | `node scripts/contrast.mjs` | instant | none | when eyeballing a colour; the assertions already run in `node --test` |
 | `node scripts/deadcss.mjs` | instant | none | when a CSS rule looks inert; lists every declaration the cascade can never let win. The assertions already run in `node --test` (`tests/deadcss.test.mjs`) |

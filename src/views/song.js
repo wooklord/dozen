@@ -8,11 +8,12 @@
 import { el, append, replace, icon, ICONS } from '../ui/dom.js';
 import {
   attribution,
+  cartonRow,
   sectionHead,
   emptyState,
   cartonLink,
   songPermalink,
-  showPermalink,
+  jamShowCard,
   statTile,
   statValue,
   currentGapTile,
@@ -21,7 +22,7 @@ import {
   heatFor,
   titleChip,
 } from '../ui/components.js';
-import { SLOT_LABELS, SLOTS, setLabel, longestGap, gapHistory, jamNoteText } from '../data/index.js';
+import { SLOT_LABELS, SLOTS, setLabel, longestGap, gapHistory } from '../data/index.js';
 import { openGapHistory, gapStrip } from './gaphistory.js';
 import { formatShowDate, formatShowDateShort } from '../util/dates.js';
 import { isPicked, togglePick } from '../scratchpad.js';
@@ -79,8 +80,8 @@ export function renderSong(ctx, songId) {
     [icon(picked ? ICONS.check : ICONS.plus, 18), picked ? 'In your picks' : 'Add to picks'],
   );
   append(screen, pickBtn);
-
-  append(screen, el('div', { style: { marginTop: '4px' } }, cartonLink(songPermalink(song))));
+  // The screen's Carton link is in the footer row (0.1.92, cartonRow below); it
+  // stood here in a 44px box of its own between the button and the tiles.
 
   // The same figure the Songs list ranks by under "Longest gap" -- the larger
   // of the longest closed gap and the current one -- so a figure seen there
@@ -232,29 +233,20 @@ export function renderSong(ctx, songId) {
   }
 
   // --- Jam chart entries ----------------------------------------------------
+  // The show page's card (0.1.92, docs/plan.md, "Song and show page
+  // presentation"): the green edge, the set badge and the note in --ink-dim,
+  // led here by the show's date as a control to that show, with the venue line
+  // under it. The head carries the same --jam count badge the show page's
+  // does, beside the byline's count. The per-card Carton links went: each led
+  // to a different show page, and the show page carries that show's link.
   if (song.jamcharts.length) {
     const jamSection = el('div.section');
-    append(jamSection, sectionHead('Jam chart entries'));
+    append(
+      jamSection,
+      sectionHead('Jam chart entries', el('span.badge.badge-jam', { text: String(song.jamcharts.length) })),
+    );
     for (const j of song.jamcharts.slice().sort((a, b) => b.showdate.localeCompare(a.showdate))) {
-      append(
-        jamSection,
-        el('div.card', { style: { marginBottom: '8px' } }, [
-          el('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '8px' } }, [
-            el('div', { style: { fontWeight: '600' }, text: formatShowDate(j.showdate) }),
-            el('span.badge.badge-set', { text: setLabel('Set', j.setnumber) }),
-          ]),
-          venueLine(j),
-          j.jamchartnote
-            ? el('p', {
-                style: { margin: '8px 0 0', fontSize: 'var(--t-sm)' },
-                text: jamNoteText(j.jamchartnote, Number(j.isrecommended) === 1),
-              })
-            : null,
-          // jamcharts.permalink is the same bare filename as shows.permalink
-          // and needs the /setlists/ prefix too.
-          j.permalink ? cartonLink(showPermalink({ permalink: j.permalink }), 'Carton') : null,
-        ]),
-      );
+      append(jamSection, jamShowCard(j, (id) => navigate(`#/show/${id}`)));
     }
     append(screen, jamSection);
   }
@@ -311,6 +303,7 @@ export function renderSong(ctx, songId) {
   }
   append(screen, histSection);
 
+  append(screen, cartonRow([['Song', songPermalink(song)]]));
   append(screen, attribution());
   return screen;
 }
