@@ -14,9 +14,10 @@ import {
   venueInfoButton,
   titleChip,
   openGapExplainer,
+  gapFigure,
   heatFor,
 } from '../ui/components.js';
-import { showStructure, tourName, gapChartForShow } from '../data/index.js';
+import { showStructure, tourName, gapChartForShow, gapChartApplies } from '../data/index.js';
 import { openGapHistory } from './gaphistory.js';
 import { formatShowDate, formatShowDateShort } from '../util/dates.js';
 
@@ -134,8 +135,12 @@ export function renderShow(ctx, showId) {
   //
   // One entry per song, not per performance, is gapChartForShow()'s rule: a
   // repeat carries "N× tonight" rather than the same figure twice.
+  //
+  // A show the chart does not apply to gets no section at all, no heading and no
+  // empty state: gapChartApplies() has the rule and the one show it leaves out
+  // today. The Carton row below keeps its "Gap chart" link either way.
   const chart = rows.length ? gapChartForShow(index, show.show_id) : [];
-  if (chart.length) {
+  if (gapChartApplies(chart)) {
     const maxGap = chart.reduce((m, e) => Math.max(m, e.gap ?? 0), 1);
     const groups = [];
     for (const e of chart) {
@@ -199,20 +204,15 @@ export function renderShow(ctx, showId) {
               // debut date's position on a debut row; here it is a badge
               // (ruling 2026-10-24, decision 1), the plain badge since 0.1.85:
               // green means jam chart only.
+              //
+              // Through gapFigure(), so a single null prints its dash. This was a
+              // button built by hand until 0.1.94, printing String(e.gap).
               e.isDebut
                 ? el('div.gap-figure', null, [el('span.badge', { text: 'Debut' })])
-                : el(
-                    'button.gap-figure',
-                    {
-                      type: 'button',
-                      'aria-label': `${e.gap} shows since previously played. How gap is counted`,
-                      onclick: (ev) => {
-                        ev.stopPropagation();
-                        openGapExplainer(index, { atShow: true });
-                      },
-                    },
-                    [el('div.gap-num.num', { text: String(e.gap) }), el('div.gap-unit', { text: 'shows' })],
-                  ),
+                : gapFigure(e.gap, 'shows', index, {
+                    atShow: true,
+                    spoken: e.gap === null ? 'no gap counted' : `${e.gap} shows since previously played`,
+                  }),
             ]),
           ]),
         );

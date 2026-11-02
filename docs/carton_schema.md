@@ -306,7 +306,8 @@ Played by Eggy", lists 10 performances and not that one, and notes separately th
 also been performed by Dani Battat 1 time". Its Show Gap column is computed over Eggy shows only —
 counting the show puts every 2026 gap one too high. The app excludes `artist_id ≠ 1` from the gap universe and from song
 performance counts, and nothing else (ruling 2026-10-24, decision 2). Rows with no `artist_id`
-are treated as Eggy.
+are treated as Eggy. The show has no gap chart section since 0.1.94 (`gapChartApplies()`, `docs/plan.md`);
+how far the rest of the exclusion goes stays open.
 
 ### A song's slug is not always its name (measured 2026-10-24)
 

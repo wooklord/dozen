@@ -41,7 +41,7 @@ import { localToday } from '../src/util/dates.js';
 // Three ways a scoped run could report health it never established, each closed:
 // a mistyped name fails here before Chrome starts, a run that executes no check
 // fails in endRun(), and its verdict line says it was scoped and how much ran.
-const SECTIONS = ['nav-states', 'show-detail', 'song-detail', 'home', 'section-heads', 'jam-button', 'jam-notes', 'sheet', 'markup', 'stale-table'];
+const SECTIONS = ['nav-states', 'show-detail', 'song-detail', 'home', 'section-heads', 'other-artist', 'jam-button', 'jam-notes', 'sheet', 'markup', 'stale-table'];
 // The between-tours rehearsal, `--between-tours`, alone or with --only (0.1.94).
 // Home has two branches and the calendar picks one, so the branch the calendar is
 // not on is read by a stage inside `home` and `section-heads`, and every other
@@ -5142,6 +5142,37 @@ async function run() {
         if (opened !== 'How gap is counted') fail(`show ${SHOW}: the heading's link opened ${JSON.stringify(opened)}, not the explainer`);
         else pass(`show ${SHOW}: "How gap is counted" in the heading opens the explainer`);
 
+        // The figure, through gapFigure() since 0.1.94: its spoken name, and the sentence
+        // about a show's chart, which is all that helper's atShow option carries. Read
+        // here and on a Songs row, where the same helper must not say it.
+        const AT_SHOW = 'On a show’s gap chart';
+        const READ_FIGURE = (sel) => `(() => {
+          const b = document.querySelector(${JSON.stringify(sel)});
+          if (!b) return null;
+          const out = { aria: b.getAttribute('aria-label'), num: ((b.querySelector('.gap-num') || {}).textContent || '').trim() };
+          b.click();
+          const sheet = document.querySelector('.sheet');
+          out.open = !!sheet;
+          out.says = !!sheet && sheet.textContent.includes(${JSON.stringify(AT_SHOW)});
+          for (const x of document.querySelectorAll('.sheet-backdrop')) x.click();
+          return out;
+        })()`;
+        const chartFigure = await evaluate(READ_FIGURE('.screen .gap-chart button.gap-figure'));
+        await sleep(400);
+        await evaluate(`location.hash = '#/songs';`);
+        await sleep(1100);
+        const songsFigure = await evaluate(READ_FIGURE('.screen .row-shell button.gap-figure'));
+        await sleep(400);
+        await evaluate(`location.hash = '#/show/${SHOW}';`);
+        await sleep(1100);
+        if (!chartFigure || !chartFigure.open) fail(`show ${SHOW}: a chart figure did not open the explainer (${JSON.stringify(chartFigure)})`);
+        else if (!chartFigure.says) fail(`show ${SHOW}: the explainer from a chart figure does not say "${AT_SHOW}"`);
+        else if (chartFigure.aria !== `${chartFigure.num} shows since previously played. How gap is counted`) fail(`show ${SHOW}: a chart figure reading ${chartFigure.num} is named ${JSON.stringify(chartFigure.aria)}`);
+        else pass(`show ${SHOW}: a chart figure is named ${JSON.stringify(chartFigure.aria)}, and its explainer says "${AT_SHOW}"`);
+        if (!songsFigure || !songsFigure.open) fail(`Songs: a row's figure did not open the explainer (${JSON.stringify(songsFigure)})`);
+        else if (songsFigure.says) fail(`Songs: the explainer from a row's figure says "${AT_SHOW}", and this figure is not read at a show`);
+        else pass(`Songs: the explainer from a row's figure leaves out the sentence about a show's chart`);
+
         // (a) Every row against that song's gap history: the figure, the Debut
         // badge and the fold, read from the history's row for THIS show. Both
         // screens read gapAtShow(), which scripts/gap-oracle.mjs holds to Carton's
@@ -5912,6 +5943,380 @@ async function run() {
           if (p.length) for (const x of p) fail(`${name}: ${x}`);
           else pass(`${name}: titled ${JSON.stringify(s.heading)} at 15px, ${s.groups.length} group label(s) at 11px, no .section-title`);
         }
+      }
+
+      // --- The other artist's show, and the songs it lists (0.1.94) -----------------
+      //
+      // docs/plan.md, "Gap chart, Home between tours, and ports", item 1. One show in
+      // the archive is by another artist, outside the gap universe since 0.1.78, and
+      // its gap chart printed "null" on every row from that day until this build. No
+      // walk opened it: they read charted shows and named ones. So this opens it and
+      // every screen that reads a gap for it or for its songs, and reads the WHOLE
+      // page on each with its own scan, beside the literal watch, so that a line names
+      // the screen it failed on.
+      //
+      // Every id here comes from the raw rows. A hard-coded show would pass for as long
+      // as it stayed the only one and read nothing on the next. The whole-archive sweep
+      // at the end is what covers a show nobody thought of, in about 1.5s.
+      if (want('other-artist')) {
+        const SCAN_JS = String.raw`
+          const LIT = /\b(null|undefined|NaN)\b|\[object Object\]/;
+          const scan = (root) => {
+            const hits = [];
+            const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+            for (let n = w.nextNode(); n; n = w.nextNode()) {
+              const p = n.parentElement;
+              if (p && p.closest('script,style,template,noscript')) continue;
+              if (LIT.test(n.nodeValue)) hits.push(n.nodeValue.trim().slice(0, 60));
+            }
+            for (const e of root.querySelectorAll('[aria-label],[title],[placeholder],[alt]')) {
+              for (const a of ['aria-label', 'title', 'placeholder', 'alt']) {
+                const v = e.getAttribute(a);
+                if (v && LIT.test(v)) hits.push(a + ': ' + v.slice(0, 60));
+              }
+            }
+            return hits;
+          };
+          const t = (n) => ((n || {}).textContent || '').trim();
+        `;
+        const ESCAPE = `document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));`;
+        const page = async (hash) => { await evaluate(`location.hash = ${JSON.stringify(hash)};`); await sleep(1100); };
+        const printed = async (where, root = 'document.body') => {
+          const hits = await evaluate(`(() => { ${SCAN_JS} const r = ${root}; return r ? scan(r) : [${JSON.stringify(`(nothing to scan: ${root})`)}]; })()`);
+          if (!Array.isArray(hits)) { fail(`other artist, ${where}: the scan did not run`); return false; }
+          if (hits.length) fail(`other artist, ${where}: ${JSON.stringify(hits.slice(0, 3))} on the page (${hits.length})`);
+          return !hits.length;
+        };
+        const isEggyRow = (r) => r.artist_id == null || Number(r.artist_id) === 1;
+
+        console.log('\nthe other artist: the scan, and what the raw rows name:');
+        // The control: without it, the scan reading clean on every screen below proves
+        // nothing about any of them. Detached, or the literal watch reads it as a fault.
+        const fired = await evaluate(`(() => { ${SCAN_JS}
+          const probe = document.createElement('div');
+          probe.innerHTML = '<span>undefined</span>';
+          return scan(probe).includes('undefined');
+        })()`);
+        if (!fired) fail('other artist: the scan\'s control did not fire, so it proves nothing');
+        else pass('the scan sees a planted "undefined"');
+
+        const others = await evaluateAsync(`(async () => {${IDB_JS}
+          const a = await readKey('archive.v1');
+          return a.shows.filter((r) => !(r.artist_id == null || Number(r.artist_id) === 1))
+            .map((r) => ({ show_id: Number(r.show_id), showdate: String(r.showdate), artist: r.artist, venue_id: Number(r.venue_id), permalink: r.permalink }));
+        })()`);
+        const otherPlayed = others.filter((x) => x.showdate <= branch.today);
+        const withRows = others.filter((x) => (nightRows.get(x.show_id) || []).length);
+        if (!withRows.length) skip(`other artist: the raw rows hold no other-artist show with a setlist (${others.length} without one), so its chart, songs and screens went unread`);
+
+        for (const other of withRows) {
+          const id = other.show_id;
+          const rows = nightRows.get(id);
+          const wantTitles = rows.map((r) => squeeze(r.songname));
+          const tag = `show ${id}`;
+
+          console.log(`\nthe other artist: ${other.artist}, ${other.showdate}:`);
+          const READ_SHOW_PAGE = `(() => { ${SCAN_JS}
+            const main = document.querySelector('#main .screen');
+            return { h1: t(main.querySelector('h1')), charts: main.querySelectorAll('.gap-chart').length,
+              empties: main.querySelectorAll('.empty').length,
+              heads: [...main.querySelectorAll('.section-head .section-title')].map(t),
+              titles: [...main.querySelectorAll('.setlist-song')].map((n) => n.textContent),
+              links: [...main.querySelectorAll(':scope > .carton-row a.carton-link')].map((a) => a.href) };
+          })()`;
+          const showProblems = async (r) => {
+            const p = [];
+            const date = await wantDate(other.showdate);
+            if (r.h1 !== date) p.push(`the page's h1 reads ${JSON.stringify(r.h1)}, the raw row gives ${JSON.stringify(date)}`);
+            if (JSON.stringify(r.titles.map(squeeze)) !== JSON.stringify(wantTitles)) p.push(`its titles read ${JSON.stringify(r.titles)}, the raw rows give ${JSON.stringify(wantTitles)}`);
+            if (r.charts) p.push(`${r.charts} .gap-chart section(s) on a show the chart does not apply to`);
+            if (r.empties) p.push(`${r.empties} empty state(s), and the chart's absence should say nothing`);
+            if (JSON.stringify(r.heads) !== JSON.stringify(['Setlist'])) p.push(`its heads read ${JSON.stringify(r.heads)}, expected only "Setlist"`);
+            const wantLinks = [`https://thecarton.net/setlists/${other.permalink}`, `https://thecarton.net/gap-chart/${other.permalink}`];
+            if (JSON.stringify(r.links) !== JSON.stringify(wantLinks)) p.push(`its Carton row links ${JSON.stringify(r.links)}, expected ${JSON.stringify(wantLinks)}`);
+            return p;
+          };
+          await page(`#/show/${id}`);
+          const shown = await evaluate(READ_SHOW_PAGE);
+          const sp = await showProblems(shown);
+          if (sp.length) for (const x of sp) fail(`other artist, ${tag}: ${x}`);
+          else pass(`${tag}: ${shown.h1} with its ${shown.titles.length} raw title(s), no chart section, no empty state, and both Carton links`);
+          if (await printed(`${tag}`)) pass(`${tag}: nothing printed as a literal on the page`);
+
+          await page('#/songs');
+          await page(`#/gapchart/${id}`);
+          const redirected = await evaluate(`({ hash: location.hash, charts: document.querySelectorAll('#main .gap-chart').length })`);
+          if (redirected.hash !== `#/show/${id}` || redirected.charts) fail(`other artist, the old chart route: reached ${redirected.hash} with ${redirected.charts} chart section(s)`);
+          else if (await printed('the old chart route')) pass(`#/gapchart/${id} lands on the show, with no chart and nothing printed`);
+
+          // --- its songs ---------------------------------------------------------
+          const songIds = [...new Set(rows.map((r) => Number(r.song_id)))];
+          const nameOf = new Map(rows.map((r) => [Number(r.song_id), squeeze(r.songname)]));
+          const eggyRowsOf = (song) => noteRows.filter((r) => Number(r.song_id) === song && isEggyRow(r));
+          const onlyHere = songIds.filter((s) => !eggyRowsOf(s).length);
+          const shared = songIds.filter((s) => eggyRowsOf(s).length);
+          console.log(`\nthe other artist: its ${songIds.length} song(s), ${onlyHere.length} played nowhere else:`);
+          const READ_TILES = `(() => { ${SCAN_JS}
+            const main = document.querySelector('#main .screen');
+            const back = main.querySelector('button.chip[aria-label^="Back to"]');
+            return { h1: t(main.querySelector('h1')), back: back ? back.getAttribute('aria-label') : null,
+              tiles: [...main.querySelectorAll('.stat')].map((s) => [t(s.querySelector('.stat-label')), t(s.querySelector('.stat-value'))]),
+              at: main.querySelectorAll('[data-show-id]').length, here: main.querySelectorAll('[data-show-id="${id}"]').length };
+          })()`;
+          const tile = (read, label) => (read.tiles.find(([l]) => l === label) || [])[1];
+          for (const song of songIds) {
+            const name = nameOf.get(song);
+            const only = onlyHere.includes(song);
+            const eggy = eggyRowsOf(song);
+            for (const [screen, hash] of [['detail', `#/song/${song}`], ['history', `#/song/${song}/gaps`]]) {
+              await page(hash);
+              const r = await evaluate(READ_TILES);
+              const where = `${name} (${song}) ${screen}`;
+              const p = [];
+              // The history's h1 is the screen's name, and its back chip the song's.
+              if (screen === 'detail' && r.h1 !== name) p.push(`the page's h1 reads ${JSON.stringify(r.h1)}`);
+              if (screen === 'history' && (r.h1 !== 'Gap history' || r.back !== `Back to ${name}`)) p.push(`the page reads ${JSON.stringify(r.h1)}, its back chip ${JSON.stringify(r.back)}`);
+              if (r.here) p.push(`${r.here} row(s) for the other artist's show, which is not a performance of the song`);
+              const times = tile(r, eggy.length === 1 ? 'time played' : 'times played');
+              if (times !== String(eggy.length)) p.push(`${JSON.stringify(times)} times played, the raw rows give ${eggy.length} by this band`);
+              if (only) {
+                const wantTiles = screen === 'detail' ? ['—', '0', '—', '—', '—'] : ['—', '—', '0'];
+                const got = r.tiles.map(([, v]) => v);
+                if (JSON.stringify(got) !== JSON.stringify(wantTiles)) p.push(`its tiles read ${JSON.stringify(got)}, expected ${JSON.stringify(wantTiles)}`);
+              } else {
+                if (!r.at) p.push('no performance rows to read, so "no row for that show" proved nothing');
+                if (!/^\d+$/.test(tile(r, 'shows since last') || '')) p.push(`"shows since last" reads ${JSON.stringify(tile(r, 'shows since last'))}, expected a figure`);
+              }
+              if (p.length) for (const x of p) fail(`other artist, ${where}: ${x}`);
+              else if (await printed(where)) pass(`${where}: ${only ? r.tiles.map(([, v]) => v).join(', ') : `${times} by this band, no row for the show`}, nothing printed`);
+            }
+          }
+
+          // --- the explainer, from a song's tile ------------------------------------
+          await page(`#/song/${songIds[0]}`);
+          const opened = await evaluate(`(() => { const b = [...document.querySelectorAll('#main button.stat')].find((x) => ((x.querySelector('.stat-label') || {}).textContent || '').trim() === 'shows since last'); if (!b) return false; b.click(); return true; })()`);
+          await sleep(500);
+          const sheetText = opened ? await evaluate(`(() => { const s = document.querySelector('.sheet'); return s ? s.textContent : null; })()`) : null;
+          if (!sheetText) fail(`other artist: the explainer did not open from ${nameOf.get(songIds[0])}'s tile`);
+          else if (!sheetText.includes(`${otherPlayed.length}by another artist — not counted`)) fail(`other artist, the explainer: no row reading ${otherPlayed.length} by another artist, from the raw rows; it reads ${JSON.stringify(sheetText.slice(0, 240))}`);
+          else if (await printed('the explainer', `document.querySelector('.sheet')`)) pass(`the explainer counts ${otherPlayed.length} show(s) by another artist, and prints nothing as a literal`);
+          await evaluate(ESCAPE);
+          await sleep(300);
+
+          // --- Songs: every sort and filter, through the real sheets -----------------
+          await page('#/songs');
+          const READ_SONGS = `(() => { ${SCAN_JS}
+            const rows = [...document.querySelectorAll('#main .row-shell[data-song-id]')];
+            return { ids: rows.map((r) => Number(r.dataset.songId)),
+              dashed: rows.filter((r) => ${JSON.stringify(shared)}.includes(Number(r.dataset.songId)) && r.textContent.includes('—')).map((r) => t(r).slice(0, 60)),
+              hits: scan(document.querySelector('#main')) };
+          })()`;
+          const stateProblems = (what, r) => {
+            const p = [];
+            const listed = onlyHere.filter((s) => r.ids.includes(s));
+            if (listed.length) p.push(`${what} lists ${JSON.stringify(listed.map((s) => nameOf.get(s)))}, played by this band 0 times`);
+            if (r.dashed.length) p.push(`${what} reads a dash on ${JSON.stringify(r.dashed)}`);
+            if (r.hits.length) p.push(`${what}: ${JSON.stringify(r.hits.slice(0, 3))} on the page`);
+            return p;
+          };
+          const leadCount = await evaluate(`document.querySelectorAll('#main .chip-lead').length`);
+          const states = {};
+          const songsProblems = [];
+          for (let which = 0; which < leadCount; which++) {
+            const openLead = `document.querySelectorAll('#main .chip-lead')[${which}].click();`;
+            await evaluate(openLead);
+            await sleep(350);
+            const names = await evaluate(`[...document.querySelectorAll('.sheet .sheet-option-name')].map((n) => n.textContent)`);
+            await evaluate(ESCAPE);
+            await sleep(250);
+            states[which] = names.length;
+            for (let i = 0; i < names.length; i++) {
+              await evaluate(openLead);
+              await sleep(300);
+              await evaluate(`document.querySelectorAll('.sheet .sheet-option')[${i}].click();`);
+              await sleep(500);
+              songsProblems.push(...stateProblems(`Songs, ${which ? 'filter' : 'sort'} "${names[i]}"`, await evaluate(READ_SONGS)));
+            }
+            await evaluate(openLead);
+            await sleep(300);
+            await evaluate(`document.querySelectorAll('.sheet .sheet-option')[0].click();`);
+            await sleep(400);
+          }
+          const setSearch = (q) => evaluate(`(() => { const i = document.querySelector('#main input'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ${JSON.stringify(q)}); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+          for (const s of onlyHere) {
+            await setSearch(nameOf.get(s));
+            await sleep(400);
+            songsProblems.push(...stateProblems(`Songs, a search for "${nameOf.get(s)}"`, await evaluate(READ_SONGS)));
+          }
+          await setSearch('');
+          await sleep(300);
+          if (leadCount !== 2 || !states[0] || !states[1]) songsProblems.push(`the Songs bar offered ${leadCount} lead chip(s), ${states[0]} sort(s) and ${states[1]} filter(s), so its states went unread`);
+          if (songsProblems.length) for (const x of songsProblems) fail(`other artist, ${x}`);
+          else pass(`Songs, ${states[0]} sorts, ${states[1]} filters and ${onlyHere.length} search(es): the ${onlyHere.length} song(s) played nowhere else never listed, the ${shared.length} shared reading figures, nothing printed`);
+
+          // --- Picks, each song added through its own button ---------------------------
+          const savedPicks = await evaluate(`localStorage.getItem('dozen.picks.v1')`);
+          await evaluate(`localStorage.removeItem('dozen.picks.v1');`);
+          if (!(await rebootAt('#/home', `document.querySelector('#main .screen')`))) fail('other artist, Picks: the page did not come back after its list was cleared');
+          const unadded = [];
+          for (const song of songIds) {
+            await page(`#/song/${song}`);
+            const added = await evaluate(`(() => { const b = [...document.querySelectorAll('#main button.btn-block')].find((x) => /Add to picks/.test(x.textContent)); if (!b) return false; b.click(); return true; })()`);
+            await sleep(150);
+            if (!added) unadded.push(nameOf.get(song));
+          }
+          await page('#/picks');
+          const picksRead = await evaluate(`[...document.querySelectorAll('#main .pick-item')].map((r) => r.textContent.replace(/\\s+/g, ' ').trim())`);
+          const pp = [];
+          if (unadded.length) pp.push(`no "Add to picks" button on ${JSON.stringify(unadded)}`);
+          if (picksRead.length !== songIds.length) pp.push(`${picksRead.length} row(s) for ${songIds.length} song(s)`);
+          for (const song of songIds) {
+            const row = picksRead.find((x) => x.includes(nameOf.get(song)));
+            if (!row) { pp.push(`no row for ${nameOf.get(song)}`); continue; }
+            const ok = onlyHere.includes(song) ? row.includes('Never played') : /\d+ shows since last/.test(row);
+            if (!ok) pp.push(`${nameOf.get(song)} reads ${JSON.stringify(row)}`);
+          }
+          if (pp.length) for (const x of pp) fail(`other artist, Picks: ${x}`);
+          else if (await printed('Picks')) pass(`Picks: the ${onlyHere.length} song(s) played nowhere else read "Never played", the ${shared.length} shared a figure, nothing printed`);
+          if (savedPicks === null) await evaluate(`localStorage.removeItem('dozen.picks.v1');`);
+          else await evaluate(`localStorage.setItem('dozen.picks.v1', ${JSON.stringify(savedPicks)});`);
+          if (!(await rebootAt('#/home', `document.querySelector('#main .screen')`))) fail('other artist, Picks: the page did not come back after its list was restored');
+
+          // --- the screens that read no gap for this show ------------------------------
+          await page('#/jams');
+          const jamListed = await evaluate(`[...document.querySelectorAll('#main [data-song-id]')].map((n) => Number(n.dataset.songId))`);
+          const onJams = onlyHere.filter((s) => jamListed.includes(s));
+          if (onJams.length) fail(`other artist, Jams: lists ${JSON.stringify(onJams)}, and no song by this band alone has a chart entry here`);
+          else if (await printed('Jams')) pass('Jams: none of them listed, nothing printed');
+          await page('#/shows');
+          if (await printed('Shows')) pass('Shows: nothing printed');
+          await page(`#/venue/${other.venue_id}`);
+          if (await printed('the venue page')) pass(`venue ${other.venue_id}: nothing printed`);
+          await page('#/home');
+          if (await printed('Home')) pass('Home: nothing printed');
+          await evaluate(`(() => { const b = document.querySelector('.header-status .icon-btn-bordered'); if (b) b.click(); })()`);
+          await sleep(500);
+          if (await printed('the Settings sheet', `document.querySelector('.sheet')`)) pass('Settings: nothing printed');
+          await evaluate(ESCAPE);
+          await sleep(300);
+        }
+
+        // --- The two charts the rule keeps -------------------------------------------
+        //
+        // "No row has a gap" reads as the rule and would have hidden these (docs/plan.md,
+        // correction (a)). Derived from the raw rows, so "a debut" here means no earlier
+        // performance by this band in the table, not what the chart says about itself.
+        console.log('\nthe charts of nothing but debuts:');
+        const firstBy = new Map();
+        for (const r of noteRows) {
+          if (!isEggyRow(r)) continue;
+          const song = Number(r.song_id);
+          const d = String(r.showdate);
+          if (!firstBy.has(song) || d < firstBy.get(song)) firstBy.set(song, d);
+        }
+        const allDebut = [...nightRows.entries()].filter(([, rows]) => rows.every((r) => isEggyRow(r) && firstBy.get(Number(r.song_id)) === String(r.showdate)));
+        if (!allDebut.length) fail('other artist: the raw rows hold no show of nothing but debuts, so the rule that keeps their charts went unread');
+        for (const [showId, rows] of allDebut) {
+          await page(`#/show/${showId}`);
+          const c = await evaluate(`(() => { ${SCAN_JS}
+            const s = document.querySelector('#main .gap-chart');
+            if (!s) return null;
+            return { rows: s.querySelectorAll('[data-song-id]').length, debuts: [...s.querySelectorAll('.gap-figure .badge')].map(t), nums: [...s.querySelectorAll('.gap-num')].map(t) };
+          })()`);
+          const songs = new Set(rows.map((r) => Number(r.song_id))).size;
+          if (!c) fail(`other artist, show ${showId} (${rows[0].showdate}): every row is a debut, and the chart is gone`);
+          else if (c.rows !== songs || c.debuts.length !== songs || c.debuts.some((x) => x !== 'Debut') || c.nums.length) fail(`other artist, show ${showId} (${rows[0].showdate}): ${songs} song(s), ${c.rows} row(s), badges ${JSON.stringify(c.debuts)}, figures ${JSON.stringify(c.nums)}`);
+          else pass(`show ${showId} (${rows[0].showdate}): the chart stays, ${songs} row(s), each "Debut"`);
+        }
+
+        // --- A single null in a chart that renders, and in a history -------------------
+        //
+        // No such row exists in today's data: the census reads 0 mixed nulls. So a
+        // private index is broken in the page and the real views render from it,
+        // detached, leaving the app's own index and the screen alone.
+        console.log('\na single null gap:');
+        const dash = await evaluateAsync(`(async () => { ${SCAN_JS}
+          const { readArchive } = await import('/src/data/cache.js');
+          const D = await import('/src/data/index.js');
+          const Show = await import('/src/views/show.js');
+          const Hist = await import('/src/views/gaphistory.js');
+          const index = D.buildIndex(await readArchive());
+          const ctx = { index, navigate() {}, onLeave() {} };
+          const chart = D.gapChartForShow(index, 1728657865);
+          const gapped = chart.filter((e) => e.gap !== null);
+          const victim = gapped[0];
+          const keep = gapped[1];
+          const song = index.songsById.get(Number(keep.song_id));
+          const hist = D.gapHistory(index, Number(keep.song_id));
+          const target = hist.entries[hist.entries.length - 1];
+          index.songsById.delete(Number(victim.song_id));
+          const node = Show.renderShow(ctx, 1728657865);
+          const rows = [...node.querySelectorAll('.gap-chart [data-song-id]')];
+          const row = rows.find((r) => Number(r.dataset.songId) === Number(victim.song_id));
+          const fig = row ? row.querySelector('.gap-figure') : null;
+          const out = { name: victim.songname, rows: rows.length, num: t(row && row.querySelector('.gap-num')), aria: fig ? fig.getAttribute('aria-label') : null,
+            tag: fig ? fig.tagName : null, literal: row ? scan(row) : null,
+            others: rows.filter((r) => r !== row).map((r) => t(r.querySelector('.gap-figure'))) };
+          index.showOrdinal.delete(Number(target.show_id));
+          const hNode = Hist.renderGapHistory({ ...ctx }, Number(keep.song_id));
+          const hRow = hNode.querySelector('[data-show-id="' + Number(target.show_id) + '"]');
+          out.history = { song: song && song.name, show: Number(target.show_id), num: t(hRow && hRow.querySelector('.gap-num')), literal: hRow ? scan(hRow) : null };
+          return out;
+        })()`);
+        const dp = [];
+        if (dash.num !== '—') dp.push(`the row for ${dash.name} reads ${JSON.stringify(dash.num)}, expected "—"`);
+        if (dash.tag !== 'BUTTON') dp.push(`its figure is a ${dash.tag}, not the button that explains it`);
+        if (!dash.aria || /null|undefined/.test(dash.aria)) dp.push(`its figure is named ${JSON.stringify(dash.aria)}`);
+        if (dash.literal === null || dash.literal.length) dp.push(`the row prints ${JSON.stringify(dash.literal)}`);
+        const offRows = dash.others.filter((x) => !/^(\d+shows|Debut)$/.test(x));
+        if (dash.rows < 2 || offRows.length) dp.push(`${dash.rows} row(s), and the rest read ${JSON.stringify(offRows)}`);
+        if (dash.history.num !== '—') dp.push(`the history's row for show ${dash.history.show} reads ${JSON.stringify(dash.history.num)}, expected "—"`);
+        if (dash.history.literal === null || dash.history.literal.length) dp.push(`the history's row prints ${JSON.stringify(dash.history.literal)}`);
+        if (dp.length) for (const x of dp) fail(`other artist, a single null: ${x}`);
+        else pass(`a broken index reads "—" on ${dash.name}, named ${JSON.stringify(dash.aria)}, with ${dash.others.length} other row(s) right, and "—" on ${dash.history.song}'s history row`);
+
+        // --- Everything, detached --------------------------------------------------------
+        //
+        // The walks read the shows somebody thought of. Every show, song and history in
+        // the archive rendered from a private index, and the counts held to the raw
+        // tables so a sweep that stopped early cannot read as a clean one.
+        console.log('\nthe whole archive, rendered detached:');
+        const sweep = await evaluateAsync(`(async () => { ${SCAN_JS}
+          const { readArchive } = await import('/src/data/cache.js');
+          const D = await import('/src/data/index.js');
+          const Show = await import('/src/views/show.js');
+          const Song = await import('/src/views/song.js');
+          const Hist = await import('/src/views/gaphistory.js');
+          const a = await readArchive();
+          const index = D.buildIndex(a);
+          const ctx = { index, navigate() {}, onLeave() {} };
+          const out = { rawShows: a.shows.length, rawSongs: index.songsById.size, shows: 0, songs: 0, hists: 0, threw: [], hits: {} };
+          const planted = document.createElement('div');
+          planted.innerHTML = '<span>null</span>';
+          out.control = scan(planted).length;
+          const t0 = performance.now();
+          const go = (kind, id, fn) => {
+            try {
+              const h = scan(fn());
+              if (h.length) out.hits[kind + ':' + id] = h.slice(0, 3);
+              out[kind]++;
+            } catch (e) { out.threw.push(kind + ':' + id + ' ' + e.message); }
+          };
+          for (const id of index.showsById.keys()) go('shows', id, () => Show.renderShow(ctx, id));
+          for (const id of index.songsById.keys()) go('songs', id, () => Song.renderSong(ctx, id));
+          for (const id of index.songsById.keys()) go('hists', id, () => Hist.renderGapHistory(ctx, id));
+          out.ms = Math.round(performance.now() - t0);
+          out.threw = out.threw.slice(0, 5);
+          return out;
+        })()`);
+        const hitKeys = Object.keys(sweep.hits);
+        if (sweep.control !== 1) fail(`other artist, the sweep: its control read ${sweep.control} hit(s) on a planted "null", so it proves nothing`);
+        else if (sweep.shows !== sweep.rawShows || sweep.songs !== sweep.rawSongs || sweep.hists !== sweep.rawSongs) fail(`other artist, the sweep: rendered ${sweep.shows} of ${sweep.rawShows} shows, ${sweep.songs} and ${sweep.hists} of ${sweep.rawSongs} songs; threw ${JSON.stringify(sweep.threw)}`);
+        else if (hitKeys.length) fail(`other artist, the sweep: ${hitKeys.length} screen(s) print a literal, e.g. ${hitKeys.slice(0, 3).map((k) => `${k} ${JSON.stringify(sweep.hits[k])}`).join('; ')}`);
+        else pass(`every screen in the archive renders with nothing printed: ${sweep.shows} shows, ${sweep.songs} songs, ${sweep.hists} histories, in ${sweep.ms}ms`);
+
+        await evaluate(`location.hash = '#/home';`);
+        await sleep(800);
       }
 
       // --- The jam key and the Jam notes button --------------------------------

@@ -246,9 +246,10 @@ export function openGapExplainer(index, { withFootnoteNote = true, atShow = fals
  * `spoken` is what a screen reader gets. It defaults to the visible text,
  * which is right whenever the unit reads as a noun ("12 shows"), and is passed
  * in where the unit is a compressed phrase instead: "SINCE PLAYED" fits a 58px
- * column and says nothing aloud.
+ * column and says nothing aloud. `atShow` is for a figure read at one show,
+ * which the explainer words differently.
  */
-export function gapFigure(value, unit, index, { spoken } = {}) {
+export function gapFigure(value, unit, index, { spoken, atShow = false } = {}) {
   const said = spoken || `${value === null ? 'no' : value} ${unit}`;
   return el(
     'button.gap-figure',
@@ -257,7 +258,7 @@ export function gapFigure(value, unit, index, { spoken } = {}) {
       'aria-label': `${said}. How gap is counted`,
       onclick: (e) => {
         e.stopPropagation();
-        openGapExplainer(index);
+        openGapExplainer(index, { atShow });
       },
     },
     [

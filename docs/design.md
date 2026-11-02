@@ -2113,9 +2113,30 @@ route until 0.1.90 put the chart on the show page. A
 show with setlist rows dated after the phone's today takes the same path, and no such row exists
 today. The literal watch never saw it, because no walk opens this show. The fix touches the open
 ruling on how far that show's exclusion goes (`docs/plan.md`, decision 2 of the gap-convention
-reversal), so it is the dev's.
+reversal), so it is the dev's. **Fixed in 0.1.94,** the section below, on the dev's ruling of
+2026-11-02; the broader exclusion stays open.
 
 **Not measured:** a real phone.
+
+### The gap chart leaves a show it does not apply to (0.1.94)
+
+Show 1770761863, the one `artist_id` 2 show (Dani Battat, 2026-02-10), has no gap chart section since
+this build. No heading and no empty state, because the chart does not apply there, which is a different
+thing from a chart with nothing in it. Its setlist and its Carton row stay, the row's "Gap chart" link
+with them, as upcoming shows already have. `gapChartApplies()` holds when a row has a gap or is a debut,
+so the two all-debut charts, 2013-02-23 and 2024-06-18, keep reading "Debut".
+
+A single null in a chart that does render prints "—", named "no gap counted. How gap is counted". The
+chart's figure comes from `gapFigure()` now, with `atShow` carrying the one sentence the explainer adds at
+a show and `spoken` carrying its name. No row takes this path in today's data; a show with setlist rows
+dated after the phone's today would. The same dash the gap history already prints.
+
+`layout-diff 71b307f`, 390 dark, 390 light and 360 dark, reads the same three times: 9 routes identical,
+7 to 1600 boxes, stylesheets 248 rules with one fingerprint on both sides. The charted show's 64 boxes
+did not move, so the figure's move to the helper changed nothing there. **That says nothing about show
+1770761863, which is on no route list.** The `other-artist` section is what reads it.
+
+**Not measured:** a real phone, and the live read of show 1770761863. Both are the dev's, after the push.
 
 ## Attribution
 

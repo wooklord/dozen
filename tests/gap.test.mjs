@@ -14,6 +14,7 @@ import {
   buildIndex,
   gapAtShow,
   gapChartForShow,
+  gapChartApplies,
   longestObservedGap,
   longestGap,
   compareByLongestGap,
@@ -178,6 +179,21 @@ test('another artist’s show is outside the universe and its rows are not perfo
   assert.ok(a.performances.every((p) => Number(p.show_id) !== 8));
   assert.equal(a.lastPlayed, '2020-06-01');
   assert.equal(a.showsSinceLastPlayed, 0);
+});
+
+test('the gap chart applies to a show with a gap or a debut, and to no other', () => {
+  // Show 8 is another artist's: it has a row, and neither a gap nor a debut.
+  const other = gapChartForShow(index, 8);
+  assert.ok(other.length > 0);
+  assert.ok(other.every((e) => e.gap === null && !e.isDebut));
+  assert.equal(gapChartApplies(other), false);
+  assert.equal(gapChartApplies([]), false);
+  // "No row has a gap" would have been the wrong rule: every row here is a debut,
+  // as on 2013-02-23 and 2024-06-18, and that chart reads right.
+  assert.equal(gapChartApplies([{ gap: null, isDebut: true }]), true);
+  // One null among real rows keeps the chart, and that row prints a dash.
+  assert.equal(gapChartApplies([{ gap: null, isDebut: false }, { gap: 3, isDebut: false }]), true);
+  assert.equal(gapChartApplies([{ gap: 0, isDebut: false }]), true);
 });
 
 test('a debut is NOT gap 0', () => {

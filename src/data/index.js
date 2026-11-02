@@ -751,6 +751,18 @@ export function gapAtShow(index, songId, showId) {
 }
 
 /**
+ * Whether a show's gap chart has anything to say: at least one row with a gap or
+ * a debut. A show outside the gap universe has rows and neither, and its chart
+ * printed "null" on every row from 0.1.78 until 0.1.94 (docs/plan.md).
+ *
+ * NOT "some row has a gap". Two shows are nothing but debuts, 2013-02-23 and
+ * 2024-06-18, and their charts read "Debut" correctly.
+ */
+export function gapChartApplies(chart) {
+  return chart.some((e) => e.gap !== null || e.isDebut);
+}
+
+/**
  * Every song played at a given show with its gap at that moment -- the
  * per-show gap chart. Distinct from archive-wide rotation.
  */

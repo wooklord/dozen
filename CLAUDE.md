@@ -491,6 +491,7 @@ then passes for the wrong reason, and reports health it never established.
 | `--only` failing a run of "zero checks" (0.1.91 to 0.1.92, caught 2026-11-02) | that **a scoped run executed its section** | **the boot's two literal-watch lines**, added in 0.1.91 and counted among the checks, so the guard read 2 whatever ran. And Carton's rate limit answers with a well-formed envelope and no rows, so the gate above every section closed without a throw and without a line. A proof with a fault staged read `SMOKE PASSED — SCOPED, not a full run: home, 2 checks`, exit 0. It was caught by the run taking 8s, not by its verdict, and a runner reading only the exit code would have recorded the fault as uncaught. The guard counts from the sections' start now, and the gate prints a SKIP |
 | A plain `.chip` in the border sweep, answered by the first one the sweep met (0.1.46 to 0.1.93, caught 2026-11-02) | that **every plain chip carries the button's edge** | **Home's "Change" chip**, for as long as Home had one. Between tours the first `.chip` is the Sort chip on Songs, whose amber edge is on purpose: red on a correct app, because the check had only ever been shown one chip, and the same mistake in the other direction would pass an unstyled chip. It names the chip it wants now, on a song page that always has one |
 | Whether Home has a hero, read off the screen, to decide what Home should show (0.1.93, caught 2026-11-02) | that **Home rendered the branch the archive calls for** | **a Home that lost its hero**, which reads exactly like between tours. Staged: the hero forced off on a day with shows, the branch read off the screen, `SMOKE PASSED` with 4 checks and 3 SKIPs. With the branch read from the raw rows the same fault fails 17 lines. `homeBranch()` is the only thing that decides now |
+| A stop tool answering "Successfully stopped" on a chain of background runs (2026-11-02, 0.1.94) | that **the runs had stopped** | **the outer shell stopping**, with the script it had launched still going. It ran beside the next scoped proofs for about nine minutes, its sweep taking their Chrome and its cold pulls taking Carton's minute. A green read `no open connection to Chrome` and a proof `executed zero checks`. The output read wrong, and a listing of the test processes named the script. After a stop the processes are listed before the next run is trusted, and everything from that window was thrown away and run again |
 
 The shape is always a **proxy**: the check tests a side effect rather than the
 thing itself, and the side effect has more than one cause. The row that polls for
@@ -913,10 +914,10 @@ checks were verified this way:
   the same code in the same order, and `git diff -w` shows only the wrappers, the
   gates, and two helpers moved above them. **Only `jam-button` (since 0.1.88),
   `jam-notes`, `sheet`, `markup`, `stale-table`, `nav-states`, `show-detail`, `song-detail`,
-  `home` and `section-heads` can be scoped.** About
+  `home`, `section-heads` and `other-artist` can be scoped.** About
   fifty names cross the sections before them, so wrapping those would change the full
   run to save time on it; a section joins when a proof needs it and it can stand alone
-  (`show-detail` joined in 0.1.90, `nav-states` in 0.1.91, `home` in 0.1.93). Green, against 380s for a full run: `stale-table` 12s, `markup` 11s,
+  (`show-detail` joined in 0.1.90, `nav-states` in 0.1.91, `home` in 0.1.93, `other-artist` in 0.1.94). Green, against 380s for a full run: `stale-table` 12s, `markup` 11s,
   `sheet` 18s, `jam-notes` 34s.
   The three ways a scoped run could report health it never established:
   - an unknown name: `--only nope`, a bare `--only`, `--only ""`, `--onyl
@@ -1291,7 +1292,10 @@ checks were verified this way:
   otherwise read `swept 0 browsers` on every run, for good. The end-of-run `WARN` lines stay.
   **Runs are sequential, and the sweep assumes it, with no guard (the dev's call).** Carton's
   60/minute limit already makes them so; a run started beside another would sweep that run's
-  Chrome, and the other run would fail loudly on its next CDP call, never silently.
+  Chrome, and the other run would fail loudly on its next CDP call, never silently. Measured by
+  accident on 2026-11-02, and it read as written: `no open connection to Chrome` on the run whose
+  Chrome went, and Carton's limit closing the gate on another, `--only show-detail executed zero
+  checks` (the table above, the stop tool's row).
   `tests/hygiene.test.mjs` holds each script's profile prefix to the list, so a renamed or
   fourth prefix fails there instead of escaping the sweep.
 
@@ -1478,7 +1482,8 @@ checks were verified this way:
 
   **Found and not fixed: show 1770761863 prints "null" on its gap chart,** today, on all five rows.
   `docs/design.md`, 0.1.93, has it. It is the literal watch's blind spot as much as the chart's: the
-  watch reads what a walk opens, and no walk opens this show.
+  watch reads what a walk opens, and no walk opens this show. **Fixed in 0.1.94,** the bullet headed
+  "The 0.1.94 checks"; the `other-artist` section walks this show now.
 
   **A run lost to a port, not counted.** `lghub_updater` holds `127.0.0.1:9180`, inside the smoke
   test's random DevTools range. One proof drew it: Chrome bound IPv6, `openChrome` read the updater's
@@ -1586,6 +1591,89 @@ checks were verified this way:
   **Dropped, each with its reason:** the h1 reworded, the same exact text comparison as the head;
   each hero-only block's gate on its own, one helper, and the rehearsal reads them all; a repeat per
   theme, since the walk reads no colour and `section-heads` reads both.
+- The 0.1.94 checks (the gap chart leaves a show it does not apply to, a single null prints a dash,
+  2026-11-02): a new scoped section, `other-artist`, which walks every screen that show and its five
+  songs reach and scans each one's text and accessible names for a printed literal; two lines in
+  `show-detail` on the figure; a unit test on `gapChartApplies()`. Each proof staged from a scratch
+  Node script by exact string, the staged hash confirmed different and the new text read back before
+  the run, the file restored from a byte copy by hash, `git status --short` confirmed, 25s apart. Each
+  is `--only other-artist` unless marked. Green: 26 checks in about 58s.
+
+  The chart and the dash:
+  - the gate back to `chart.length`: smoke 3, `1 .gap-chart section(s) on a show the chart does not
+    apply to`, `its heads read ["Setlist","Gap chart"], expected only "Setlist"`, and the old route's
+    line.
+  - the gate reading only `e.gap !== null`, correction (a) in `docs/plan.md`: 1 unit failure; smoke 2,
+    `show 1633187309 (2013-02-23): every row is a debut, and the chart is gone`, and the same on
+    1718902938.
+  - the gate reading only `e.isDebut` (`node --test` only): 1 unit failure.
+  - the figure hand-built again with `String(e.gap)`: smoke 3, `the row for Apology reads "null",
+    expected "—"`, and the name `null shows since previously played. How gap is counted`. No row takes
+    this path in today's data, so the section breaks a private index in the page and renders the real
+    views from it, detached.
+  - both together, the reproduction of 0.1.93: smoke 10, among them `["null","null","null"] on the page
+    (10)`.
+
+  The sweep:
+  - the song tile's `?? '—'` removed: smoke 7, `Freeway Flowers (359) detail: its tiles read
+    ["null","0","—","—","—"]`, and the whole-archive line, `10 screen(s) print a literal, e.g. songs:36
+    ["null"]`.
+  - the history's longest tile as `longest?.gap`: smoke 7, `its tiles read ["—","undefined","0"]`, and
+    the whole-archive line.
+  - the history's row guard removed: smoke 2, `the history's row for show 1771345234 reads "null",
+    expected "—"`.
+  - Picks' null branch removed: smoke 4, `Freeway Flowers reads "2Freeway Flowersnull shows since last"`.
+  - the zero-performance filter removed: smoke 13, Songs `lists ["Freeway Flowers","You Can Close Your
+    Eyes","Windblown Eyes"], played by this band 0 times`.
+  - the artist row filter removed: smoke 39, `Thorns (313) detail: 1 row(s) for the other artist's show`
+    and `"11" times played, the raw rows give 10 by this band`.
+  - the explainer's artist row removed: smoke 1, `no row reading 1 by another artist`.
+
+  The check's own branches, each of which would pass silently on a mistake:
+  - the walk opening the wrong show: smoke 5, `the page's h1 reads "Tue, Dec 31, 2024", the raw row
+    gives "Tue, Feb 10, 2026"`.
+  - the whole-archive sweep cut to 10 shows: smoke 1, `rendered 10 of 805 shows, 370 and 370 of 370
+    songs; threw []`.
+  - the scan's pattern matching nothing: smoke 2, `the scan's control did not fire` and `its control
+    read 0 hit(s) on a planted "null"`.
+  - no other-artist show in the raw rows: **exit 0 by design,** 13s, 5 checks and 1 SKIP, `the raw rows
+    hold no other-artist show with a setlist`, the verdict saying the check went unverified.
+
+  **Beyond the plan's list, `--only show-detail`, 8 checks in about 70s,** added when a read of the
+  whole diff found that nothing checked the figure's `atShow` sentence:
+  - `atShow` dropped: smoke 1, `the explainer from a chart figure does not say "On a show’s gap chart"`.
+  - `atShow = true` as the helper's default: smoke 1, `Songs: the explainer from a row's figure says "On
+    a show’s gap chart", and this figure is not read at a show`.
+  - `spoken` dropped: smoke 1, `a chart figure reading 4 is named "4 shows. How gap is counted"`.
+
+  **The section's first run went red on its own mistakes, before any fault was staged:** the history's
+  h1 is "Gap history", so the song's name is read from its back chip; song detail has five tiles, not
+  four; a selector with quotes broke the scan's own string, which is why a scan that did not run now
+  says so; and the control planted its "undefined" in `document.body`, where the literal watch rightly
+  failed it. It is detached now.
+
+  **Dropped, each with its reason:**
+  - Jams' guard: unreachable on this data, since no song Jams lists has a null gap, so the fault would
+    leave every line green and say nothing.
+  - Shows, the venue page, Home and Settings: the same whole-page scan through the same helper, with no
+    gap read on the path.
+  - the explainer's literal: the same scan.
+  - a repeat per theme: nothing in the section reads a colour.
+  - the gap oracle, not run: the arithmetic, the universe and `gapHistory()` did not change.
+
+  **A stop that did not stop.** The first chain of final runs was stopped with the stop tool, to add
+  the `atShow` check. It reported success and the script carried on for about nine minutes beside the
+  scoped runs (the table above). Everything in that window was thrown away, and the green and the three
+  `show-detail` proofs were run again, `swept 0 browsers` on each. The 15 `other-artist` proofs and the
+  commit before this one finished before that chain started.
+
+  The final files: 272 passing; smoke 429 ok with 0 skips and no `WARN` in 678s, against 395 in 613s on
+  0.1.93. Of the 34 more lines, 26 are `other-artist`'s, 2 are the figure's, and by subtraction 6 are
+  the between-tours walks of the commit before, which no full run was taken on alone. `--between-tours`:
+  `SMOKE PASSED — BETWEEN-TOURS REHEARSAL, not the push gate — all routes rendered`, 0 failures, 405 ok
+  and 7 SKIPs in 627s, against 377 and 7 on the commit before: those same 28 lines. The whole-archive
+  line reads `every screen in the archive renders with nothing printed: 805 shows, 370 songs, 370
+  histories`, in 1.1 to 1.3s. `layout-diff 71b307f`: `docs/design.md`, 0.1.94.
 
 Do this for every new check. It is the only thing that separates a real check
 from a comforting one.
@@ -2032,9 +2120,9 @@ landed". The second is the worse of the two because it passes.
 | Command | Speed | Network | Run it |
 |---|---|---|---|
 | `node --test` | instant | none | always, before anything else |
-| `node scripts/smoke.mjs` | ~10 min (613s at 0.1.93, 578s at 0.1.92, 526s at 0.1.91, 490s at 0.1.90, 404s at 0.1.89, 407s at 0.1.88, 386s at 0.1.87, 380s at 0.1.86, 356s at 0.1.85, so this row's old "~1 min" had gone stale well before 0.1.86) | Carton (cold pull) | **before every push** |
-| `node scripts/smoke.mjs --only <section>` | 11–120s (`home` 61s at 0.1.93; `song-detail` 18–22s, `section-heads` 47–50s and `show-detail` 69s at 0.1.92; `nav-states` 29–54s at 0.1.91; `show-detail` 69–118s, `jam-button` ~80s and `jam-notes` ~70s at 0.1.90, with the boot; `jam-notes` reaches each sheet through the Shows tab now) | Carton (cold pull) | for a red proof, re-running only the section the check lives in. **Never the gate for a push:** the full run is. An unknown name or a run of zero checks fails, and the verdict says it was scoped |
-| `node scripts/smoke.mjs --between-tours` | about the full run's; combines with `--only` | Carton (cold pull) | when Home or anything on it changes. Carton's shows table is answered without its future-dated rows, to the page and to the script, so every check reads the branch the calendar has not reached yet. **Never the gate for a push,** and its verdict says so. It fails if the strip did not take |
+| `node scripts/smoke.mjs` | ~11 min (678s at 0.1.94, 613s at 0.1.93, 578s at 0.1.92, 526s at 0.1.91, 490s at 0.1.90, 404s at 0.1.89, 407s at 0.1.88, 386s at 0.1.87, 380s at 0.1.86, 356s at 0.1.85, so this row's old "~1 min" had gone stale well before 0.1.86) | Carton (cold pull) | **before every push** |
+| `node scripts/smoke.mjs --only <section>` | 11–120s (`other-artist` 58s and `show-detail` 70s at 0.1.94; `home` 61s at 0.1.93; `song-detail` 18–22s, `section-heads` 47–50s and `show-detail` 69s at 0.1.92; `nav-states` 29–54s at 0.1.91; `show-detail` 69–118s, `jam-button` ~80s and `jam-notes` ~70s at 0.1.90, with the boot; `jam-notes` reaches each sheet through the Shows tab now) | Carton (cold pull) | for a red proof, re-running only the section the check lives in. **Never the gate for a push:** the full run is. An unknown name or a run of zero checks fails, and the verdict says it was scoped |
+| `node scripts/smoke.mjs --between-tours` | about the full run's (627s at 0.1.94); combines with `--only` | Carton (cold pull) | when Home or anything on it changes. Carton's shows table is answered without its future-dated rows, to the page and to the script, so every check reads the branch the calendar has not reached yet. **Never the gate for a push,** and its verdict says so. It fails if the strip did not take |
 | `node scripts/gap-oracle.mjs` | ~1 min | Carton (cold pull + 20 song pages) | after any change to gap arithmetic, to the show universe in `buildIndex`, or to `gapHistory()`; it compares every Show Gap cell on 20 Carton song pages against the app's own `gapAtShow()`, and the gap history's one-entry-per-show fold (0.1.83) against the same pages grouped by show, and **SKIPs, never passes,** when Carton is unreachable. The smoke test carries a one-song spot check of the same parity |
 | `node scripts/contrast.mjs` | instant | none | when eyeballing a colour; the assertions already run in `node --test` |
 | `node scripts/deadcss.mjs` | instant | none | when a CSS rule looks inert; lists every declaration the cascade can never let win. The assertions already run in `node --test` (`tests/deadcss.test.mjs`) |
